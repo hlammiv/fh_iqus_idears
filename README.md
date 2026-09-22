@@ -30,8 +30,10 @@ not on this machine, and put a hard memory guard on it.
 ## Headline
 
 - Mitigated NISQ saturates: **m = 6.7 → 8.5 from n = 10³ to 10⁸.** Ten decades of
-  qubits buy ~1.3× in lattice size, and by Takagi *et al.* this holds for *any*
-  mitigation strategy once the run has to fit in a week.
+  qubits buy ~1.3× in lattice size. This is the cost of one specified estimator
+  (gatewise PEC) under a week-long sampling cap — *not* a proven bound on every
+  mitigation strategy; see `METHODS.md` §2 for what the lower-bound literature
+  actually covers.
 - The unmitigated p = 10⁻³ device never reaches m = 4 at any n.
 - **Classical band m = 24–56.** NISQ+PEC and STAR both sit below it at every n,
   so the slide's "logical advantage = FT overtakes NISQ" marks the wrong crossing.

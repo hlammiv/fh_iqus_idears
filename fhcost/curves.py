@@ -77,7 +77,7 @@ def extrapolation_table(n: float = 1e6, cfg: Config = DEFAULT) -> list[tuple]:
     for k in (1, 2):
         rows.append((f"  + ZNE order {k}", nisq.max_m(n, cfg, f"zne{k}"), "(a) noise"))
     pec = nisq.max_m(n, cfg, "pec")
-    rows.append(("  + PEC (optimal mitigation)", pec, "(a) noise"))
+    rows.append(("  + PEC (as implemented)", pec, "(a) noise"))
     for k in (2, 3, 4):
         c = cfg.but(trotter_order_k=k)
         rows.append((f"  + PEC + MPF order {2*k}", nisq.max_m(n, c, "pec"),

@@ -110,13 +110,70 @@ Solving N_req ≤ N_max gives **m ∝ (ln n / p)^{4/9}** — slower than logarit
 Extra qubits buy only parallel copies, and copies enter through a logarithm.
 
 This is the slide's "NISQ saturates" box made quantitative, and it is *stronger*
-than the slide claims: Takagi, Endo, Benjamin & Mitarai (npj QI **8**, 114 (2022))
+than the slide claims: Takagi, Endo, Minagawa & Gu (npj QI **8**, 114 (2022))
 prove the sampling overhead is exponential in Λ for **any** mitigation strategy,
 so this ceiling is not an artifact of PEC. The user's constraint — any mitigation
 is allowed, but the run must fit in a week — is exactly what makes it bind.
 
 Measured result: **m = 6.7 at n = 10³ → 8.5 at n = 10⁸.** Ten decades of qubits
 buy ~1.3× in lattice size. The *unmitigated* device does not reach m = 4 at any n.
+
+### What the lower-bound literature actually gives (review #4)
+
+Takagi, Endo, **Minagawa & Gu**, npj QI **8**, 114 (2022) — an earlier version of
+this document credited the wrong two authors — prove a worst-case
+estimator-spread lower bound, exponential in circuit **depth**, for a defined
+class of mitigation protocols under a layered local-depolarizing noise model.
+
+That is not what the plotted curve is. The curve is the cost of **one specified
+implementation** (gatewise PEC) as a function of **gate count**, for this state
+and observable. Depth and gate count scale differently in m, so the theorem does
+not license the curve's m-dependence; a worst-case bound does not say this
+instance is hard; and the PEC-optimality result is for a particular dephasing
+setting, so PEC is not "optimal mitigation" here in any proven sense. The curve
+is now labelled "PEC (as implemented)".
+
+### Measured: which gates actually damp the observable
+
+The cone model charges every gate in the causal cone. Measured against the
+Phasecraft/Quantinuum circuit — 2415 two-qubit gates, their own quoted
+`p = 1e-3`, raw against exact (FLO is exact at U=0) — the observed attenuation is
+`Lambda = 0.20`, against **2.58** from the cone model. A **12.9x overcharge**.
+
+The mechanism was checked on their data rather than assumed:
+`Lambda(ZZ)/Lambda(Z) = 1.91`, where damping proportional to operator weight
+predicts 2 and uniform-per-gate predicts 1. A depolarizing error damps the
+observable only where the Heisenberg-evolved operator has support.
+`damping_model = "support"` implements `w_obs/q` and reproduces the measurement
+to 8%. It is **not** the default: one measurement fixes the value at one
+operating point, not the scaling, and `support_growth = 0` cannot hold at long
+times. See `OPEN_ITEMS.md` O5, and note this partially supersedes review #9.
+
+### The 160-shot tension, resolved
+
+Their 56-qubit run reaches ~0.005 absolute on C^zz with 160 shots per point,
+where this model prices mitigation at `exp(4 p G)`. Decomposing against their
+actual circuit (m = 28, t = 2):
+
+| factor | ratio |
+|---|---|
+| Trotter step count — 417 here vs **4** there | **104x** |
+| per-gate attenuation — 1.067 vs measured 0.083 per pG | **12.9x** |
+| per-step gate count — 420 here vs 604 there | 0.70x (ours optimistic) |
+| cone fraction | 0.33x |
+| **net overestimate of Lambda** | **311x** |
+
+Two by-products. `c_g = 15` gets its first external check: their compiled circuit
+is 21.6 two-qubit gates per site per step, so ours is 30% optimistic but the right
+order. And a `strategy = "expcal"` arm, costed at TFLO+GPR's measured effective
+overhead of 0.08 — *below* one, since GPR borrows statistics across correlated
+time points — and drawn only out to the largest `Lambda` demonstrated (0.20),
+reaches **nothing** under this model's workload, yet reaches `m = 20` at
+`n = 10^6` the moment the experiment's step density is adopted.
+
+**So the whole distance between this model and a real experiment is the Trotter
+step count.** Not the mitigation scheme, not the channel conventions, not the
+damping geometry.
 
 ### A correction: attenuation is not the cancellation one-norm
 
@@ -453,7 +510,7 @@ Kivlichan et al., PRL **120**, 110501 (2018) ·
 Derby, Klassen, Bausch & Cubitt, PRB **104**, 035118 (2021) ·
 Temme, Bravyi & Gambetta, PRL **119**, 180509 (2017) ·
 van den Berg, Minev, Kandala & Temme, Nat. Phys. **19**, 1116 (2023) ·
-Takagi, Endo, Benjamin & Mitarai, npj QI **8**, 114 (2022) ·
+Takagi, Endo, Minagawa & Gu, npj QI **8**, 114 (2022) ·
 Quek, França, Khatri, Meyer & Eisert, Nat. Phys. **20**, 1648 (2024) ·
 Akahoshi et al., PRX Quantum **5**, 010337 (2024) ·
 Low, Kliuchnikov & Wiebe, arXiv:1907.11679 · Vazquez et al., Quantum **7**, 1067 (2023) ·

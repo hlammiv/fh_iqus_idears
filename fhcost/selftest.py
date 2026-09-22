@@ -207,6 +207,30 @@ def main() -> int:
     check("lowering the injection error DOES",
           ftqc.max_m_star(1e6, ck) / nisq.max_m(1e6, ck, "pec") > 2 * r0)
 
+    # --- review finding #4: claims, and the measured damping model ---
+    SUP = DEFAULT.but(encoding="jw", damping_model="support",
+                      tmax_mode="const", tmax_const=2.0, U_over_J=0)
+    cc = hubbard.counts(28.0, SUP)
+    check("support fraction = observable weight / register",
+          abs(cc["damp_frac"] - 4.0 / 56.0) < 1e-9, f"{cc['damp_frac']:.4f}")
+    lam_their = nisq.lambda_of(28.0, SUP) / cc["g_total"] * 2415
+    check("support model reproduces the MEASURED attenuation",
+          abs(lam_their - 0.20) < 0.05,
+          f"predicts {lam_their:.3f} on their 2415-gate circuit, observed 0.200")
+    check("the cone model overcharges that circuit ~13x",
+          abs(1.067e-3 * 2415 / 0.20 - 12.9) < 0.5)
+    check("switching damping model leaves the PEC convention alone",
+          nisq.log_gamma_sq(8.0, DEFAULT.but(damping_model="support"))
+          / hubbard.counts(8.0, DEFAULT.but(damping_model="support"))["g_cone"]
+          == nisq.log_gamma_sq(8.0) / hubbard.counts(8.0)["g_cone"])
+    # the demonstrated (TFLO+GPR) arm is drawn only where there is evidence
+    check("demonstrated mitigation reaches nothing at our step count",
+          nisq.max_m(1e6, DEFAULT.but(damping_model="support"), "expcal") == 0)
+    check("...but reaches m ~ 20 at the experiment's step count",
+          nisq.max_m(1e6, DEFAULT.but(damping_model="support",
+                                      trotter_mode="fixed_density"), "expcal") > 10,
+          "so the gap to experiment is the Trotter step count, not the mitigation")
+
     print("\nftqc.py -- Pinnacle QLDPC arm (arXiv:2602.11457)")
     import math as _m
     for (nc, k, d, dt, npb), want in zip(ftqc.GB_CODES,

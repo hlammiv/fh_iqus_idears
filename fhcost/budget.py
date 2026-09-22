@@ -82,7 +82,26 @@ class Config:
     s_sig: float = 0.1            # |<Z_i(t)Z_j(0)>_c| at the light-cone front.
                                   # THE largest un-pinned number in the model: it enters
                                   # twice (shots ~ 1/s^2, Trotter r ~ s^{-1/2}), net m ~ s^{2/9}.
-    lightcone_frac: float = 1.0 / 3.0   # causal cone is 1/3 of the space-time box in d=2
+    # WHICH GATES ACTUALLY DAMP THE OBSERVABLE
+    #   "cone"    -- every gate in the causal cone, weighted by lightcone_frac.
+    #                Geometric; what this model originally assumed.
+    #   "support" -- only gates whose qubits overlap the Heisenberg-evolved
+    #                observable's SUPPORT. Measured: on the Phasecraft/Quantinuum
+    #                circuit (2415 two-qubit gates, their quoted p = 1e-3) the
+    #                observed attenuation is Lambda = 0.20, against 2.58 from the
+    #                cone model -- a 12.9x overcharge. The mechanism was checked
+    #                by a weight test on their own data: Lambda(ZZ)/Lambda(Z) =
+    #                1.91, where damping-proportional-to-operator-weight predicts
+    #                2 and uniform-per-gate predicts 1.
+    damping_model: str = "cone"   # "cone" | "support"  -- see OPEN_ITEMS.md O5
+    w_obs0: float = 4.0           # qubits in the observable's support
+                                  # (C^zz on nearest neighbours: 2 sites x 2 spins)
+    support_growth: float = 0.0   # extra support per gate layer. FITTED to a SINGLE
+                                  # circuit and consistent with zero there; the true
+                                  # value cannot be zero at long times, when the
+                                  # operator must eventually fill the lattice. This is
+                                  # the least-constrained input in the model.
+    lightcone_frac: float = 1.0 / 3.0   # "cone" model only
     depol_factor: float = 16.0 / 15.0   # ATTENUATION only: a non-identity Pauli is damped
                                   # by (1 - 16p/15) per 2-qubit depolarizing gate (7 of the
                                   # 15 non-identity Paulis commute, 8 anticommute). This is
@@ -167,6 +186,17 @@ class Config:
     # antiferromagnetic correlation. The paper reports melting at t ~ 0.4-0.7, that
     # melting is SLOWER for larger U, and that the residual is LARGER for larger U.
     # The residual magnitude is not quoted numerically there, so it is parameterised.
+    # Experiment-calibrated mitigation (TFLO + GPR), anchored to arXiv:2510.26300.
+    # They reach ~0.005 absolute on C^zz with 160 shots x 20 time points = 3200
+    # shots, against 1/delta^2 = 4e4 for naive shot noise on a bounded observable.
+    # So the effective sampling overhead is ~0.08, i.e. BELOW one: GPR borrows
+    # statistics across correlated time points and TFLO removes bias by training
+    # on a classically simulable free-fermion point. There is no exponential cost
+    # here at all -- but it is bias-limited, and the bias is characterised only out
+    # to the Lambda they actually ran at.
+    exp_cal_overhead: float = 0.08   # measured effective sampling overhead
+    exp_cal_lambda_max: float = 0.20  # largest Lambda demonstrated. Beyond this the
+                                  # method is UNCHARACTERISED, not known to fail.
     bias_frac: float = 0.5        # share of the relative tolerance reserved for RESIDUAL
                                   # BIAS; the rest is the statistical half-width. Sampling
                                   # cannot repair bias, so a strategy whose bias exceeds

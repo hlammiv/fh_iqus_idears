@@ -10,9 +10,20 @@ mitigation_ceiling.py, read-only source, not imported)
 
   where Gamma = exp(Lambda) is the probabilistic-error-cancellation sampling
   overhead, and Richardson ZNE is strictly worse because it pays the LARGEST
-  noise-scaling node. Takagi, Endo, Benjamin & Mitarai, npj QI 8, 114 (2022)
-  prove the exponential is unavoidable for ANY mitigation strategy, so
-  Gamma = exp(Lambda) is an optimistic envelope, not an artifact of PEC.
+  noise-scaling node.
+
+  WHAT THE LOWER-BOUND LITERATURE DOES AND DOES NOT GIVE US
+  Takagi, Endo, Minagawa & Gu, npj QI 8, 114 (2022) prove a worst-case
+  estimator-spread lower bound, exponential in circuit DEPTH, for a defined class
+  of mitigation protocols under a layered local-depolarizing noise model. That is
+  NOT the same as the curve plotted here, which is the cost of one specified
+  implementation (gatewise PEC) as a function of GATE COUNT for this particular
+  state and observable. Depth and gate count scale differently in m, so the
+  theorem does not license this curve's m-dependence; a worst-case bound does not
+  say this instance is hard; and their PEC-optimality result is for a particular
+  dephasing setting, so PEC is not "optimal mitigation" here in any proven sense.
+  Treat the plotted curve as a costing of PEC-as-implemented, and the theorem as
+  separate, weaker, and differently quantified support for the general shape.
 
 TWO DIFFERENT ESTIMATORS, TWO DIFFERENT COSTS
   These are not interchangeable and the model must not blur them:
@@ -91,6 +102,11 @@ def residual_bias(lam: float, strategy: str) -> float:
         return 0.0                      # unbiased given exact noise characterisation
     if strategy == "none":
         return 1.0 - math.exp(-lam)     # raw attenuation
+    if strategy == "expcal":
+        # Demonstrated to agree with exact results out to the Lambda they ran at;
+        # beyond that we have no evidence either way, so the curve simply stops
+        # rather than being extrapolated.
+        return 0.0
     if strategy.startswith("zne"):
         nodes = richardson_nodes(_k_of(strategy))
         cs = richardson_coeffs(nodes)
@@ -110,6 +126,8 @@ def cost_factor(strategy: str, lam: float = 0.0, lg2: float = 0.0) -> float:
     """
     if strategy == "none":
         return 1.0
+    if strategy == "expcal":
+        return 1.0                      # placeholder; handled in time_required
     if strategy == "pec":
         if lg2 > 700.0:
             return math.inf                          # beyond any conceivable budget
@@ -149,12 +167,15 @@ def log_gamma_sq(m: float, cfg: Config = DEFAULT) -> float:
 def time_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> float:
     """Wall clock on ONE copy to hit the statistical target. inf if bias-blocked."""
     lam = lambda_of(m, cfg)
+    if strategy == "expcal" and lam > cfg.exp_cal_lambda_max:
+        return math.inf                 # outside the demonstrated range
     if residual_bias(lam, strategy) > cfg.bias_frac * cfg.eps:
         return math.inf                 # no shot count repairs this
     c = counts(m, cfg)
     delta = signal_at(m, cfg) * (1.0 - cfg.bias_frac) * cfg.eps
     l1 = multiproduct_l1(cfg.trotter_order_k)
-    f = cost_factor(strategy, lam, log_gamma_sq(m, cfg))
+    f = (cfg.exp_cal_overhead if strategy == "expcal"
+         else cost_factor(strategy, lam, log_gamma_sq(m, cfg)))
     if not math.isfinite(f):
         return math.inf
     return cfg.n_times * l1 * l1 * f * c["t_circuit"] / delta ** 2

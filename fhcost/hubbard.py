@@ -53,6 +53,11 @@ def cone_sites(m: float, t: float, cfg: Config = DEFAULT) -> float:
     return min(float(m), (2.0 * cfg.v * t + 1.0) ** 2)
 
 
+def qubits_per_site_total(m: float, cfg: Config = DEFAULT) -> float:
+    """Qubits in one copy of the register (used as the denominator for support)."""
+    return qubits_per_copy(m, cfg)
+
+
 def qubits_per_copy(m: float, cfg: Config = DEFAULT) -> float:
     """Physical/logical qubits to hold one copy of the lattice."""
     # + n_ancilla for the Hadamard test: <Z_i(t) Z_j(0)> is a TWO-TIME correlator
@@ -152,15 +157,21 @@ def counts(m: float, cfg: Config = DEFAULT) -> dict:
     """Everything the downstream models need, in one dict."""
     r = trotter_steps(m, cfg)
     t = t_max(m, cfg)
+    depth = r * step_depth(m, cfg)
     # routing_power adds powers of L = sqrt(m): a compiled NN-grid circuit needs
     # SWAP networks that a per-site gate estimate does not see.
     route = m ** (0.5 * cfg.routing_power)
     g_total = cfg.c_g * m * r * route
-    # gates inside the causal cone -- what the noise actually corrupts. The cone
-    # is 1/3 of the space-time box in d=2, so this is a prefactor, not a scaling:
-    # at t_max the cone already spans the lattice (see module docstring).
-    g_cone = cfg.lightcone_frac * cfg.c_g * cone_sites(m, t, cfg) * r * route
-    depth = r * step_depth(m, cfg)
+    # Fraction of the circuit's gates that actually damp the observable.
+    if cfg.damping_model == "support":
+        # only gates overlapping the Heisenberg-evolved operator's support
+        frac = min(1.0, (cfg.w_obs0 + cfg.support_growth * depth)
+                   / qubits_per_site_total(m, cfg))
+    elif cfg.damping_model == "cone":
+        frac = cfg.lightcone_frac * cone_sites(m, t, cfg) / max(m, 1e-12)
+    else:
+        raise ValueError(f"unknown damping_model {cfg.damping_model!r}")
+    g_cone = cfg.c_g * m * r * route * frac
     return {
         "m": m,
         "t_max": t,
@@ -173,7 +184,8 @@ def counts(m: float, cfg: Config = DEFAULT) -> dict:
         # matters where it can reach the observable, so this must carry the SAME
         # light-cone factor as g_cone -- applying it to one and not the other
         # penalises STAR by exactly 3x.
-        "n_rot_cone": cfg.lightcone_frac * cfg.c_rot * cone_sites(m, t, cfg) * r * route,
+        "n_rot_cone": cfg.c_rot * m * r * route * frac,
+        "damp_frac": frac,
         "depth": depth,
         "t_circuit": depth * cfg.dt_gate + cfg.dt_meas,
     }

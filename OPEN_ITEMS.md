@@ -62,6 +62,49 @@ Every ZNE conclusion rests on `s(lambda) = s(0) exp(-lambda Lambda)`. A response
 with less curvature raises every bias ceiling. Measuring the real noise response
 of a small compiled Hubbard circuit would settle it.
 
+### O5. Which gates damp the observable — measured, but the scaling is not
+*Raised while working #4. Partially supersedes review #9.*
+
+Measured on the Phasecraft/Quantinuum circuit (2415 two-qubit gates, their quoted
+`p = 1e-3`): observed attenuation `Lambda = 0.20`, against **2.58** from the cone
+model — a **12.9x overcharge**. The mechanism was checked on their own data by a
+weight test: `Lambda(ZZ)/Lambda(Z) = 1.91`, where damping proportional to operator
+weight predicts 2 and uniform-per-gate predicts 1. So a depolarizing error damps
+the observable only where the Heisenberg-evolved operator has support.
+
+`damping_model = "support"` implements this and reproduces the measurement to 8%
+(0.184 vs 0.200). **It is not the default**, because the single measurement
+constrains the *value* at one operating point but not the *scaling*:
+`support_growth = 0` is a one-point fit and cannot be right at long times, when
+the operator must eventually fill the lattice. Adopting it by default would be
+extrapolating an unvalidated law in the direction that flatters the results.
+
+Effect where it does apply: the discount goes as `w_obs/q ~ 1/m`, so it is large
+for a small observable in a big register (their case, 13x) and modest at the m
+this model actually reaches (1.21x at `n = 1e6`).
+
+**Relation to review #9.** The reviewer showed the cone fraction should be 2/3,
+not 1/3 — a 2x correction *unfavourable* to the results. The measurement says the
+cone framing is the wrong quantity and overcharges by ~13x, *favourably*. Both
+cannot stand. #9 remains open for the rest of its content (the integration
+geometry, cluster-truncation matching, and the velocity taxonomy); only the
+question of which gates damp is addressed here, and by measurement rather than
+by geometry.
+
+### O6. The demonstrated-mitigation arm reaches nothing at our step count
+`strategy = "expcal"` costs TFLO+GPR at its measured effective overhead (0.08 —
+*below* one, because GPR borrows statistics across correlated time points) and is
+drawn only out to the largest `Lambda` actually demonstrated, 0.20. Under this
+model's workload it reaches **nothing**: `Lambda(m=4) = 2.87`. Adopt the
+experiment's fixed step density `r = 4 tau` and it immediately reaches `m = 20`
+at `n = 1e6`.
+
+So the whole distance between this model and a real 56-qubit experiment is the
+**Trotter step count** (134 vs 4 at m=4), not the mitigation scheme, not the
+channel conventions, and not the damping geometry. That makes review #5 — which
+asks for an actual error bound behind the step count — the highest-value item
+remaining.
+
 ## Review status
 
 | # | finding | status |
@@ -69,11 +112,11 @@ of a small compiled Hubbard circuit would settle it.
 | 1 | initial state and connected correlator incompatible | **fixed** — matched to arXiv:2510.26300 |
 | 2 | ZNE feasibility omits residual bias | **fixed** — bias-limited, not variance-limited |
 | 3 | gatewise PEC overhead uses the wrong coefficient | **fixed** — attenuation separated from one-norm |
-| 4 | mitigation theorem is overstated | open |
+| 4 | mitigation theorem is overstated | **fixed** — citation corrected, claims downgraded, demonstrated arm added |
 | 5 | multiproduct gains lack an error bound | open |
 | 6 | Pinnacle calibration needs reconstruction | open |
 | 7 | FT resource and error accounting incomplete | open |
 | 8 | classical band is heuristic, not a ceiling | open |
-| 9 | light-cone geometry inconsistent (1/3 vs 2/3) | open |
+| 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured (O5); geometry, cluster matching and velocities still open |
 | 10 | error components do not combine to the tolerance | open |
 | 11 | implementation and reporting issues | open |

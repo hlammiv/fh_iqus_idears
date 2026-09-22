@@ -45,7 +45,7 @@ Each row changes ONE input from the baseline.
 | NISQ, unmitigated | 0.0 | baseline |
 | &nbsp;&nbsp;+ ZNE order 1 | 0.0 | (a) noise |
 | &nbsp;&nbsp;+ ZNE order 2 | 0.0 | (a) noise |
-| &nbsp;&nbsp;+ PEC (optimal mitigation) | 5.3 | (a) noise |
+| &nbsp;&nbsp;+ PEC (as implemented) | 5.3 | (a) noise |
 | &nbsp;&nbsp;+ PEC + MPF order 4 | 20.1 | (b) Trotter, ||c||_1=1.67 |
 | &nbsp;&nbsp;+ PEC + MPF order 6 | 34.8 | (b) Trotter, ||c||_1=3.13 |
 | &nbsp;&nbsp;+ PEC + MPF order 8 | 46.1 | (b) Trotter, ||c||_1=6.21 |
