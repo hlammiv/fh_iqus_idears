@@ -57,6 +57,8 @@ def qubits_per_copy(m: float, cfg: Config = DEFAULT) -> float:
     """Physical/logical qubits to hold one copy of the lattice."""
     # + n_ancilla for the Hadamard test: <Z_i(t) Z_j(0)> is a TWO-TIME correlator
     # and cannot be read off a prepare-evolve-measure circuit.
+    # only the two-time correlator needs a Hadamard-test ancilla; the experiment's
+    # equal-time C^zz is read straight out of the occupation basis
     anc = cfg.n_ancilla if cfg.observable == "two_time" else 0
     if cfg.encoding == "compact":       # Derby-Klassen, ~1.5 qubits per mode
         return 3.0 * m + anc
@@ -65,22 +67,61 @@ def qubits_per_copy(m: float, cfg: Config = DEFAULT) -> float:
     raise ValueError(f"unknown encoding {cfg.encoding!r}")
 
 
-def eps_absolute(cfg: Config = DEFAULT) -> float:
-    """eps on the slide is RELATIVE; the Trotter/synthesis budgets are absolute."""
-    return cfg.eps * cfg.s_sig
+def t_melt(cfg: Config = DEFAULT) -> float:
+    """Time for the initial triplet order to melt. Slower at larger U."""
+    return cfg.t_melt0 * (1.0 + cfg.U_over_J / 4.0) / 2.0
+
+
+def s_residual(cfg: Config = DEFAULT) -> float:
+    """Late-time antiferromagnetic residual of C^zz_nn. Larger at larger U."""
+    return cfg.s_res_min + cfg.s_res_slope * (cfg.U_over_J / 4.0)
+
+
+def signal(t: float, cfg: Config = DEFAULT) -> float:
+    """|C^zz_nn(t)|: 1 at t=0 (exact triplet value), decaying to the AF residual.
+
+    This is the knob that makes short- and long-time runs genuinely different
+    problems, and their relative difficulty moves with U/J: raising U both slows
+    the melt (spin dynamics set by the superexchange 4J^2/U) and raises the
+    residual, so long-time targets get EASIER in signal while the circuit gets
+    harder. The two effects pull opposite ways.
+    """
+    if cfg.signal_regime == "fixed":
+        return cfg.s_sig
+    if cfg.signal_regime == "short":
+        return cfg.s_short
+    res = s_residual(cfg)
+    if cfg.signal_regime == "long":
+        return res
+    return res + (cfg.s_short - res) * math.exp(-t / max(t_melt(cfg), 1e-9))
+
+
+def signal_at(m: float, cfg: Config = DEFAULT) -> float:
+    """The signal at the longest time this lattice is evolved to."""
+    return max(signal(t_max(m, cfg), cfg), 1e-6)
+
+
+def eps_absolute(cfg: Config = DEFAULT, m: float | None = None) -> float:
+    """eps is RELATIVE; the Trotter/synthesis budgets are absolute.
+
+    An absolute floor is applied so the target stays finite where the signal
+    passes through zero (review finding #10).
+    """
+    s = cfg.s_sig if m is None else signal_at(m, cfg)
+    return cfg.eps * max(s, cfg.s_res_min)
 
 
 def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None) -> float:
     """Second-order (or 2k-order multiproduct) Trotter step count."""
     if eps_trot is None:
-        eps_trot = 0.3 * eps_absolute(cfg)   # Trotter's share of the ABSOLUTE budget
+        eps_trot = 0.3 * eps_absolute(cfg, m)   # Trotter's share of the ABSOLUTE budget
     t = t_max(m, cfg)
     if t <= 0:
         return 1.0
     if cfg.trotter_mode == "fixed_density":
-        # arch_comparison's convention: a fixed step density, r = ceil(4*tau).
-        # Their own WORKING_DECISIONS.md records that r = 4 fails the small-patch
-        # Trotter checks, so this is a floor, not a calibrated value.
+        # Alternative convention: a fixed step density, r = ceil(4*tau), rather
+        # than a bound-derived count. It is not calibrated to the accuracy target,
+        # so treat it as a floor.
         return max(1.0, math.ceil(cfg.steps_per_tau * t))
     W2 = w_commutator(cfg) * (cone_sites(m, t, cfg) if cfg.trotter == "lightcone" else m)
     k = max(1, int(cfg.trotter_order_k))

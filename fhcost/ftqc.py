@@ -40,7 +40,7 @@ OTHER CORRECTIONS FOLDED IN
 from __future__ import annotations
 import math
 from .budget import Config, DEFAULT
-from .hubbard import counts, step_depth, eps_absolute, multiproduct_l1, t_max
+from .hubbard import counts, step_depth, eps_absolute, multiproduct_l1, t_max, signal_at
 from .nisq import M_MIN
 
 ROSS_SELINGER = 3.0        # T gates per Rz = 3 log2(1/eps) (Ross & Selinger 2016)
@@ -60,7 +60,7 @@ def magic_cost(cfg: Config = DEFAULT) -> tuple[float, float]:
 
 
 def star_theta(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
-    """(sum of |rotation angles|, rotation count) in arch_comparison's convention.
+    """(sum of |rotation angles|, rotation count), angle-weighted convention.
 
     Termwise second-order evolution at U/J = 4: Theta = (5L^2 - 4L) tau and
     R = [16 L(L-1) + 2L^2 - 2] r + 1.  Their angle-dependent STAR law charges
@@ -88,14 +88,15 @@ def storage_per_logical(d: int, cfg: Config = DEFAULT) -> float:
     return cfg.routing * 2.0 * d * d
 
 
-def n_shots_total(cfg: Config = DEFAULT) -> float:
+def n_shots_total(cfg: Config = DEFAULT, m: float | None = None) -> float:
     """Shots for relative error eps on a signal of magnitude s, over T times.
 
     Multiproduct extrapolation amplifies shot noise by ||c||_1^2; that cost is
     charged here so the depth saving is reported NET, not gross.
     """
     l1 = multiproduct_l1(cfg.trotter_order_k)
-    return cfg.n_times * l1 * l1 / (cfg.s_sig * cfg.eps) ** 2
+    sig = cfg.s_sig if m is None else signal_at(m, cfg)
+    return cfg.n_times * l1 * l1 / (sig * cfg.eps) ** 2
 
 
 def t_counts(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
@@ -103,7 +104,7 @@ def t_counts(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
     c = counts(m, cfg)
     r = c["steps"]
     n_distinct = max(c["n_rot"] / max(m, 1.0), 1.0)      # distinct angles
-    eps_syn = 0.3 * eps_absolute(cfg) / max(n_distinct, 1.0)
+    eps_syn = 0.3 * eps_absolute(cfg, m) / max(n_distinct, 1.0)
     n_syn = ROSS_SELINGER * math.log2(1.0 / eps_syn)
     lg = math.log2(max(m, 2.0))
     n_t = r * cfg.c_rot * (4.0 * (m - 1.0) + lg * n_syn)
@@ -115,7 +116,7 @@ def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
     """Footprint and per-shot runtime for lattice size m under full FT."""
     q_L = 2.0 * m + cfg.n_ancilla              # Jordan-Wigner; see module docstring
     n_t, d_t = t_counts(m, cfg)
-    eps_L = 0.3 * eps_absolute(cfg)
+    eps_L = 0.3 * eps_absolute(cfg, m)
     for d in range(3, cfg.d_max, 2):
         rounds = d_t * d                        # PER SHOT
         if q_L * rounds * p_logical(d, cfg) > eps_L:
@@ -132,9 +133,8 @@ def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
 
 
 def max_m_surface(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
-    n_tot = n_shots_total(cfg)
-
     def ok(m):
+        n_tot = n_shots_total(cfg, m)
         pt = surface_point(m, cfg)
         if pt is None or pt["phys"] > n:
             return False
@@ -169,7 +169,7 @@ def star_point(m: float, cfg: Config = DEFAULT) -> dict | None:
     c = counts(m, cfg)
     q_L = 2.0 * m + cfg.n_ancilla
     n_rot = max(c["n_rot"], 1.0)
-    eps_L = 0.3 * eps_absolute(cfg)
+    eps_L = 0.3 * eps_absolute(cfg, m)
     for d in range(3, cfg.d_max, 2):
         rounds = c["steps"] * cfg.star_rounds_per_step * d
         if q_L * rounds * p_logical(d, cfg) > eps_L:
@@ -191,7 +191,7 @@ def max_m_star(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
         copies = n / pt["phys"]
         if copies < 1:
             return False
-        need_log = math.log(n_shots_total(cfg)) + 2 * pt["lam"]
+        need_log = math.log(n_shots_total(cfg, m)) + 2 * pt["lam"]
         have_log = math.log(cfg.budget_s * copies / pt["t_shot"])
         return need_log <= have_log
     if not ok(M_MIN):
@@ -269,7 +269,7 @@ def pinnacle_point(m: float, cfg: Config = DEFAULT) -> dict | None:
     """
     q_L = 2.0 * m + cfg.n_ancilla
     n_t, d_t = t_counts(m, cfg)
-    eps_L = 0.3 * eps_absolute(cfg)
+    eps_L = 0.3 * eps_absolute(cfg, m)
     for (n_code, k, d, dt, n_pb) in GB_CODES:
         units = math.ceil(q_L / k)
         # each unit consumes at most one T per logical cycle
@@ -295,9 +295,8 @@ def max_m_pinnacle(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
     running out of table rows, not physics -- real GB families extend further.
     The plotted range (n <= 1e8) is well inside the valid region.
     """
-    n_tot = n_shots_total(cfg)
-
     def ok(m):
+        n_tot = n_shots_total(cfg, m)
         pt = pinnacle_point(m, cfg)
         if pt is None or pt["phys"] > n:
             return False

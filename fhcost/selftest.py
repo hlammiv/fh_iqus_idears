@@ -19,11 +19,14 @@ def main() -> int:
     ms = np.array([64.0, 256.0, 1024.0, 4096.0])
     gs = np.array([hubbard.counts(m)["g_total"] for m in ms])
     alpha = float(np.polyfit(np.log(ms), np.log(gs), 1)[0])
-    check("G_total ~ m^(9/4)", abs(alpha - 2.25) < 1e-6, f"alpha = {alpha:.6f}")
+    # no longer exact: the absolute tolerance now tracks a decaying signal, so r
+    # picks up a weak extra m-dependence that dies out once C^zz reaches its residual
+    check("G_total ~ m^(9/4)", abs(alpha - 2.25) < 0.01, f"alpha = {alpha:.6f}")
     check("t_max = sqrt(m)/v", abs(hubbard.t_max(64) - 8.0 / DEFAULT.v) < 1e-12)
-    check("compact encoding = 3m + ancilla", hubbard.counts(16)["q_per_copy"] == 49.0)
+    check("compact encoding = 3m, no ancilla for the equal-time observable",
+          hubbard.counts(16)["q_per_copy"] == 48.0)
     check("JW costs depth, not qubits",
-          hubbard.counts(16, DEFAULT.but(encoding="jw"))["q_per_copy"] == 33.0
+          hubbard.counts(16, DEFAULT.but(encoding="jw"))["q_per_copy"] == 32.0
           and hubbard.step_depth(16, DEFAULT.but(encoding="jw")) > hubbard.step_depth(16))
     check("light-cone refinement is void at t_max",
           abs(hubbard.cone_sites(100, hubbard.t_max(100)) - 100) < 1e-9,
@@ -52,8 +55,35 @@ def main() -> int:
           abs(math.log10(nisq.max_m_ideal(1e5) / nisq.max_m_ideal(1e4)) - 1.0) < 0.05)
     check("eps is treated as RELATIVE",
           abs(hubbard.eps_absolute() - DEFAULT.eps * DEFAULT.s_sig) < 1e-15)
-    check("Hadamard-test ancilla is counted",
-          hubbard.counts(16)["q_per_copy"] == 3 * 16 + 1)
+    check("the ancilla is charged only to the two-time correlator",
+          hubbard.counts(16, DEFAULT.but(observable="two_time"))["q_per_copy"] == 3 * 16 + 1
+          and hubbard.counts(16)["q_per_copy"] == 3 * 16)
+
+    # --- review finding #1: state / observable consistency ---
+    # <Z_i(t)Z_j(0)>_c vanishes identically from a Z-eigenstate. The experiment's
+    # dimerised S^z_tot=0 TRIPLET start is not one, which is what rescues it.
+    check("triplet start gives |C^zz| = 1 exactly at t = 0",
+          abs(hubbard.signal(0.0) - 1.0) < 1e-12)
+    check("order melts more slowly at larger U",
+          hubbard.t_melt(DEFAULT.but(U_over_J=8)) > hubbard.t_melt(DEFAULT.but(U_over_J=4))
+          > hubbard.t_melt(DEFAULT.but(U_over_J=0)))
+    check("late-time AF residual grows with U",
+          hubbard.s_residual(DEFAULT.but(U_over_J=8))
+          > hubbard.s_residual(DEFAULT.but(U_over_J=4)))
+    check("signal decays monotonically to the residual",
+          hubbard.signal(0.1) > hubbard.signal(1.0) > hubbard.signal(10.0)
+          >= hubbard.s_residual())
+    check("absolute tolerance has a floor at the residual",
+          hubbard.eps_absolute(DEFAULT, 1e6) >= DEFAULT.eps * DEFAULT.s_res_min)
+    # the point of the short/long knob: raising U hurts at short time (bigger
+    # commutator norm) but helps at long time (bigger residual -> looser tolerance)
+    short = {u: nisq.max_m(1e6, DEFAULT.but(signal_regime="short", U_over_J=u), "pec")
+             for u in (4, 8)}
+    long_ = {u: ftqc.max_m_surface(1e6, DEFAULT.but(signal_regime="long", U_over_J=u,
+                                                    pl_model="fowler")) for u in (4, 8)}
+    check("U hurts at short time but helps at long time",
+          short[8] < short[4] and long_[8] > long_[4],
+          f"short {short[4]:.1f}->{short[8]:.1f}, long {long_[4]:.0f}->{long_[8]:.0f}")
     check("mitigation ordering: none < ZNE < PEC",
           nisq.max_m(1e6, strategy="none") < nisq.max_m(1e6, strategy="zne2")
           < nisq.max_m(1e6, strategy="pec"))
@@ -184,8 +214,9 @@ def main() -> int:
     print("\npresets.py -- reconciliation knobs")
     for name, c in presets.PRESETS.items():
         check(f"preset {name!r} evaluates", nisq.max_m(1e6, c, "pec") > 0)
-    check("default config is unchanged by the knobs",
-          abs(nisq.max_m(1e6, DEFAULT, "pec") - 7.880) < 0.01)
+    check("default config anchor",
+          abs(nisq.max_m(1e6, DEFAULT, "pec") - 8.97) < 0.05,
+          f"m = {nisq.max_m(1e6, DEFAULT, 'pec'):.3f}")
     check("Trotter step count is the dominant disagreement",
           nisq.max_m(1e6, DEFAULT.but(trotter_mode="fixed_density"), "pec")
           > 8 * nisq.max_m(1e6, DEFAULT, "pec"))

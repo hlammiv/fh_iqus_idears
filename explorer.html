@@ -126,7 +126,7 @@ wall clock. Every curve is recomputed live from the same cost models as
       <div class="ctl"><label for="pre">preset</label><output id="pre_o"></output>
         <div class="seg" id="pre">
           <button data-v="this_repo" aria-pressed="true">this repo</button>
-          <button data-v="arch_comparison" aria-pressed="false">arch_comparison</button></div></div>
+          <button data-v="alt_model" aria-pressed="false">alt model</button></div></div>
       <div class="ctl"><label for="tmo">Trotter steps</label><output id="tmo_o"></output>
         <div class="seg" id="tmo">
           <button data-v="bound" aria-pressed="true">commutator</button>
@@ -169,12 +169,12 @@ const WEEK=604800, lg2=Math.log2, L10=Math.log10;
 const cfg={p:1e-3,eps:.1,s:.1,U:4,tmax:"sqrt_m",budget:WEEK,k:2,ent:.6,pl:"fowler",
   v:2,vcorr:4,cg:15,crot:5,nt:20,dtg:1e-8,dtm:1e-7,lc:1/3,depol:16/15,anc:1,
   pth:1e-2,tround:1e-6,routing:2,nfac:8,ram:1e16,flops:1.7e18,nkry:4,kappa:.533,srps:20,
-  // reconciliation knobs -- every assumption that differs from 0tt3r/arch_comparison
+  // reconciliation knobs -- every assumption that differs from an independent model
   tmode:"bound",spt:4,peccoef:32/15,nchan:1,starlaw:"count",salpha:1.5,sfloor:1e-5,
   magic:"litinski",lanes:1,rpow:0,xi:1};
 const PRESETS={
   this_repo:{},
-  arch_comparison:{eps:.01,s:.1,tmax:"const",tmode:"fixed_density",spt:4,peccoef:4,
+  alt_model:{eps:.01,s:.1,tmax:"const",tmode:"fixed_density",spt:4,peccoef:4,
     nchan:20.02/10.59,starlaw:"angle",salpha:1.5,sfloor:1e-5,magic:"cultivation",
     lanes:4,tround:2.4e-7,lc:1,rpow:1}};
 const MMIN=4, RS=3, FQ=4620, FC=42.6;
@@ -201,9 +201,9 @@ const epsAbs=c=>c.eps*c.s;
 function l1(k){if(k<=1)return 1;const x=[];for(let i=1;i<=k;i++)x.push(1/(i*i));
   let s=0;for(let i=0;i<k;i++){let p=1;for(let j=0;j<k;j++)if(i!==j)p*=x[j]/(x[j]-x[i]);s+=Math.abs(p)}return s}
 function steps(m,c){const t=tMax(m,c);if(t<=0)return 1;
-  // arch_comparison fixes a step DENSITY (r = ceil(4 tau)); their own notes record
-  // that r = 4 fails their small-patch Trotter checks. We derive r from Campbell's
-  // commutator bound, which is documented to be 10-100x loose. Truth is between.
+  // The alternative convention fixes a step DENSITY (r = ceil(4 tau)) rather than
+  // deriving r from Campbell's commutator bound, which is documented to be 10-100x
+  // loose. Neither is calibrated; the truth is between them.
   if(c.tmode==="fixed_density")return Math.max(1,Math.ceil(c.spt*t));
   const W=wComm(c)*m, eT=.3*epsAbs(c), k=Math.max(1,c.k|0);
   const r=k===1?Math.pow(t,1.5)*Math.sqrt(W/eT)
@@ -223,7 +223,7 @@ function gamma(lam,st){if(st==="none")return 1;
   for(let i=0;i<=k;i++){let p=1;for(let j=0;j<=k;j++)if(i!==j)p*=no[j]/(no[j]-no[i]);co.push(p)}
   return co.reduce((a,cc,i)=>a+Math.abs(cc)*Math.exp(Math.min(no[i]*lam,700)),0)}
 function nisqOK(m,n,c,st){const q=counts(m,c),
-  // Gamma^2 = exp(peccoef * nchan * p * G_cone). Ours 32/15; theirs 4.
+  // Gamma^2 = exp(peccoef * nchan * p * G_cone). This model 32/15; alt model 4.
   lam=.5*c.peccoef*c.nchan*c.p*q.gc;
   if(st==="none"&&1-Math.exp(-lam)>c.eps)return false;
   const cp=n/q.q; if(cp<1)return false;

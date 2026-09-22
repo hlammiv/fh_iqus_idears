@@ -32,7 +32,7 @@ WHY THIS SATURATES IN n
 from __future__ import annotations
 import math
 from .budget import Config, DEFAULT
-from .hubbard import counts, qubits_per_copy, multiproduct_l1
+from .hubbard import counts, qubits_per_copy, multiproduct_l1, signal_at
 
 M_MIN = 4.0      # smallest real lattice is 2x2; m=1 has no hopping term
 
@@ -86,7 +86,8 @@ def shots_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> fl
     # not exponential [Low, Kliuchnikov & Wiebe arXiv:1907.11679; Vazquez et al.,
     # Quantum 7, 1067 (2023)] -- so the depth saving wins easily.
     l1 = multiproduct_l1(cfg.trotter_order_k)
-    return cfg.n_times * l1 * l1 * g * g / (cfg.s_sig * cfg.eps) ** 2
+    sig = signal_at(m, cfg)
+    return cfg.n_times * l1 * l1 * g * g / (sig * cfg.eps) ** 2
 
 
 def shots_available(m: float, n: float, cfg: Config = DEFAULT) -> float:
@@ -125,7 +126,7 @@ def max_m_ideal(n: float, cfg: Config = DEFAULT) -> float:
     m = n / (3.0 if cfg.encoding == "compact" else 2.0)
     if m < M_MIN:
         return 0.0
-    need = cfg.n_times / (cfg.s_sig * cfg.eps) ** 2
+    need = cfg.n_times / (signal_at(min(m, 1e6), cfg) * cfg.eps) ** 2
     lo, hi = M_MIN, m
     if need * counts(hi, cfg)["t_circuit"] <= cfg.budget_s * max(1.0, math.floor(n / qubits_per_copy(hi, cfg))):
         return hi

@@ -108,7 +108,7 @@ class Config:
     ent_rate: float = 0.6         # bits of entanglement per site at t_max (see classical.py)
 
     # ---- reconciliation knobs: every assumption that differs from
-    # ---- 0tt3r/arch_comparison. See COMPARISON_arch_comparison.md.
+    # ---- an independent parallel resource model. See fhcost/presets.py.
     trotter_mode: str = "bound"   # "bound" = Campbell commutator bound (ours)
                                   # "fixed_density" = r = steps_per_tau * t (theirs)
     steps_per_tau: float = 4.0    # only used by "fixed_density"
@@ -139,8 +139,28 @@ class Config:
     xi: float = 1.0               # correlation length, lattice units. Sets how far past
                                   # the light cone L must reach for finite-size
                                   # convergence: error ~ exp(-(L - 2 v_corr t)/xi).
-    observable: str = "two_time"  # "two_time" = <Z_i(t)Z_j(0)>, needs a Hadamard ancilla
+    observable: str = "czz_nn"    # "czz_nn"   = equal-time CONNECTED nearest-neighbour spin
+                                  #              correlation C^zz_ij(t), the observable the
+                                  #              Phasecraft/Quantinuum experiment reports.
+                                  #              Measured in the occupation basis: NO ancilla.
+                                  # "two_time" = <Z_i(t)Z_j(0)>, needs a Hadamard ancilla.
+                                  #              NOTE: its CONNECTED part vanishes identically
+                                  #              from a Z-eigenstate, so it is only meaningful
+                                  #              with a non-eigenstate start.
                                   # "local"    = <n_up n_dn> doublon density, no ancilla
+    # --- signal model for C^zz_nn(t), from arXiv:2510.26300 ---
+    # The initial state is a dimer covering of S^z_tot = 0 TRIPLETS (not a Neel/Z
+    # eigenstate -- which is what makes the connected correlator nonzero at all).
+    # On a dimer link that triplet gives <S^z_i S^z_j> = -1/4 and <S^z_i> = 0, so
+    # |C^zz| = 1 exactly at t = 0. The order then melts and leaves a small residual
+    # antiferromagnetic correlation. The paper reports melting at t ~ 0.4-0.7, that
+    # melting is SLOWER for larger U, and that the residual is LARGER for larger U.
+    # The residual magnitude is not quoted numerically there, so it is parameterised.
+    signal_regime: str = "curve"  # "short" | "long" | "curve" | "fixed" (use s_sig)
+    s_short: float = 1.0          # EXACT from the triplet algebra
+    s_res_min: float = 0.02       # residual at U = 0 (the paper still sees a slight AF tendency)
+    s_res_slope: float = 0.10     # residual growth per unit (U/J)/4      ESTIMATE
+    t_melt0: float = 0.5          # melting time at U/J = 4, in 1/J       (paper: 0.4-0.7)
 
     def but(self, **kw) -> "Config":
         return replace(self, **kw)

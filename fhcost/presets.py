@@ -1,11 +1,10 @@
 """Named assumption sets, so both teams' models can be run from one codebase.
 
-Every field that differs between this repo and 0tt3r/arch_comparison is a knob on
-Config; these presets just bundle them. See COMPARISON_arch_comparison.md for why
-each one differs and which side is likely right.
+Every field that differs between this repo and an independent parallel resource model
+is a knob on Config; these presets just bundle them.
 
     from fhcost.presets import PRESETS
-    cfg = PRESETS["arch_comparison"]
+    cfg = PRESETS["alt_model"]
 """
 from __future__ import annotations
 from .budget import Config, DEFAULT
@@ -14,7 +13,8 @@ from .budget import Config, DEFAULT
 # the lattice, Trotter steps from Campbell's commutator bound, 2q noise only.
 THIS_REPO = DEFAULT
 
-# 0tt3r/arch_comparison, commit 7212660, "discussion" scenario (central band).
+# The alternative model's central scenario. Values are its declared assumptions,
+# not claims about which set is correct.
 ARCH_COMPARISON = DEFAULT.but(
     observable="local",          # local doublon density, single-time -> no ancilla
     eps=0.01,                    # 1% relative on D* = 0.1  (eps_abs = 1e-3)
@@ -22,7 +22,8 @@ ARCH_COMPARISON = DEFAULT.but(
     tmax_mode="const",
     tmax_const=1.0,              # fixed tau, not sqrt(m)/v_B
     trotter_mode="fixed_density",
-    steps_per_tau=4.0,           # r = ceil(4 tau); they flag it as failing their checks
+    steps_per_tau=4.0,           # r = ceil(4 tau), a fixed step density rather than a
+                                 # bound-derived count; not calibrated to the accuracy target
     pec_coeff=4.0,               # Gamma^2 = exp(4 p G)
     noise_channels=20.02 / 10.59,  # their chi decomposition: 2q + 1q + idle + SPAM
     star_law="angle",            # 4 alpha p Theta + 4 f R
@@ -35,7 +36,7 @@ ARCH_COMPARISON = DEFAULT.but(
     routing_power=1.0,           # their compiled anchor scales as L^3, not L^2
 )
 
-# Each side's assumption adopted one at a time, for bisecting the disagreement.
+# Each differing assumption adopted one at a time, for bisecting the gap.
 SWAPS = {
     "observable -> local (no ancilla)":  dict(observable="local"),
     "precision -> 1% relative":          dict(eps=0.01),
@@ -51,7 +52,7 @@ SWAPS = {
     "routing -> G ~ L^3 (compiled)":     dict(routing_power=1.0),
 }
 
-PRESETS = {"this_repo": THIS_REPO, "arch_comparison": ARCH_COMPARISON}
+PRESETS = {"this_repo": THIS_REPO, "alt_model": ARCH_COMPARISON}
 
 
 if __name__ == "__main__":
@@ -67,7 +68,6 @@ if __name__ == "__main__":
     for name, c in PRESETS.items():
         a, b, cc, d = row(c)
         print(f"{name:<34}{a:>9.1f}{b:>8.1f}{cc:>8.1f}{d:>11.0f}")
-    print(f"\n{'their reported value':<34}{'8x8=64':>9}{'8x8=64':>8}{'4x4=16':>8}{'none':>11}")
 
     print("\n\nbisecting the disagreement: one swap at a time from this repo\n")
     base = row(THIS_REPO)

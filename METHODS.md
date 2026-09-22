@@ -25,13 +25,51 @@ this. We therefore adopt **t_max = √m / v_B** — evolve until the light cone
 crosses the lattice — which is the regime where the question has content. Slide 1
 should be corrected to match.
 
-**(b) The state and the measurement.** We assume a product/Néel-type initial
-state, so state preparation is free. If the intended state is the Hubbard ground
-state, preparation dominates everything here and needs its own curve. We also
-assume the **connected** correlator: leaving the disconnected ⟨Z_i⟩⟨Z_j⟩ piece in
-makes "relative error 0.1" trivially satisfiable. ⟨Z_i(t)Z_j(0)⟩ is a two-time
-object, so it is read out by a Hadamard test; the ancilla is counted (`n_ancilla`)
-and idles through the whole circuit.
+**(b) The state and the measurement — resolved by matching the experiment.**
+An earlier version of this model assumed a Néel/product start together with the
+*connected* correlator. Those are incompatible: a product state in the occupation
+basis is a Z eigenstate, `Z_j|psi_0> = z_j|psi_0>`, so
+
+    <Z_i(t) Z_j(0)>_c = <Z_i(t) Z_j(0)> - <Z_i(t)><Z_j(0)> = 0
+
+identically, at every time and for every Hamiltonian. The signal scale was
+therefore undefined, and it enters the cost twice.
+
+We now match the state and observable of the Phasecraft/Quantinuum experiment,
+[arXiv:2510.26300](https://arxiv.org/abs/2510.26300):
+
+* **Initial state** — a dimerised half-filled configuration: a maximally entangled
+  `S^z_tot = 0` TRIPLET on each link of a dimer covering, plus one holon and one
+  doublon. The triplet is *not* a Z eigenstate, which is exactly what makes the
+  connected correlator nonzero.
+* **Observable** — the equal-time connected nearest-neighbour spin correlation
+  `C^zz_ij(t) = 4[<S^z_i(t) S^z_j(t)> - <S^z_i(t)><S^z_j(t)>]`, with
+  `S^z_i = (n_i,up - n_i,dn)/2`. Read out in the **real-space occupation basis**:
+  no Hadamard test, no ancilla. The ancilla is charged only if `observable` is
+  switched back to the two-time correlator.
+* **Signal** — `|C^zz| = 1` exactly at `t = 0` (triplet algebra), melting over
+  `t ~ 0.4-0.7` and leaving a residual antiferromagnetic correlation. The paper
+  reports that the melt is **slower** and the residual **larger** at larger `U`.
+  Modelled as `s(t) = s_res + (1 - s_res) exp(-t/t_melt)` with `t_melt` and
+  `s_res` both rising with `U/J`. The residual magnitude is not quoted
+  numerically in the paper, so `s_res_min` and `s_res_slope` are ESTIMATES.
+* **Grid** — 7x4 = 28 sites, double-periodic, flux `Phi = pi`, `t in [0.1, 2]` in
+  steps of 0.1 (20 points, units of 1/J), `U/J = 0` and 4, second-order Trotter,
+  160 shots per point, TFLO + GPR mitigation (not PEC).
+
+The `signal_regime` knob selects **short** (t before the melt, `s ~ 1`), **long**
+(the residual), or **curve** (the decay, default). This matters because the two
+regimes respond to `U` in *opposite* directions: raising `U` enlarges the
+commutator norm, which hurts at short time, but also raises the residual, which
+loosens the absolute tolerance and helps at long time. At `n = 10^6`, going from
+`U/J = 4` to 8 moves mitigated NISQ **down** 14.3 -> 11.6 in the short regime and
+surface FT **up** 48 -> 77 in the long regime.
+
+Two checks worth noting: their lattice, `m = 28`, sits right at the top of the
+exact-diagonalisation band estimated in §5 (24-26), an independent confirmation
+of that edge; and they report that Trotter error "may be substantially lower than
+worst-case commutator bounds would indicate", which supports treating the
+bound-derived step count as an upper bound (§8, item 3).
 
 ## 1. Circuit cost — the exponent everything rides on
 
