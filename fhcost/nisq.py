@@ -70,7 +70,8 @@ WHY THIS SATURATES IN n
 from __future__ import annotations
 import math
 from .budget import Config, DEFAULT
-from .hubbard import counts, qubits_per_copy, multiproduct_l1, signal_at
+from .hubbard import (counts, qubits_per_copy, multiproduct_l1,
+                      multiproduct_branches, signal_at)
 
 M_MIN = 4.0      # smallest real lattice is 2x2; m=1 has no hopping term
 
@@ -173,12 +174,22 @@ def time_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> flo
         return math.inf                 # no shot count repairs this
     c = counts(m, cfg)
     delta = signal_at(m, cfg) * (1.0 - cfg.bias_frac) * cfg.eps
-    l1 = multiproduct_l1(cfg.trotter_order_k)
-    f = (cfg.exp_cal_overhead if strategy == "expcal"
-         else cost_factor(strategy, lam, log_gamma_sq(m, cfg)))
-    if not math.isfinite(f):
-        return math.inf
-    return cfg.n_times * l1 * l1 * f * c["t_circuit"] / delta ** 2
+    # Per-BRANCH accounting. Branch i is its own circuit at k_i x the base step
+    # count, so it has k_i x the gates (hence k_i x the PEC exponent) and k_i x
+    # the runtime. Optimal allocation over independent unbiased branch estimators
+    # with variance v_i and per-shot time tau_i gives a minimum total time
+    # (sum_i |c_i| sqrt(v_i tau_i))^2 / delta^2.
+    lg2 = log_gamma_sq(m, cfg)
+    total = 0.0
+    for ki, ci in multiproduct_branches(cfg.trotter_order_k):
+        if strategy == "expcal":
+            v = cfg.exp_cal_overhead
+        else:
+            v = cost_factor(strategy, ki * lam, ki * lg2)
+        if not math.isfinite(v):
+            return math.inf
+        total += abs(ci) * math.sqrt(v * ki)
+    return cfg.n_times * total * total * c["t_circuit"] / delta ** 2
 
 
 def feasible(m: float, n: float, cfg: Config = DEFAULT, strategy: str = "pec") -> bool:

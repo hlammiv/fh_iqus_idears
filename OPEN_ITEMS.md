@@ -129,12 +129,19 @@ This is the third distinct place the time-window convention has driven a wrong
 conclusion, after finite-size extrapolation buying nothing and the classical band
 being a hard wall.
 
-### O8. The Trotter calibration is U/J = 4 only
-`W_MEASURED` was fitted at U/J = 4, so `trotter = "measured"` has **no
-U-dependence on the circuit side**. U still enters through the signal (the AF
-residual and melting time), which is why m still rises with U, but the
-short-vs-long asymmetry established earlier is currently carried by the signal
-alone. A U = 0 / 8 calibration sweep is running on the same patches.
+### O8. ~~The Trotter calibration is U/J = 4 only~~ **CLOSED**
+Calibrated at U/J = 0, 4 and 8. `W_eff` spans **68x** across that range at
+tau = 0.25, almost all of it in the step from U = 0 (free hopping, where the two
+colour groups nearly commute and the on-site term carries all the error) to
+U = 4; beyond that it flattens, consistent with the dynamics slowing as 4J^2/U.
+
+A consequence worth noting: because the circuit gets harder with U while the
+signal gets *bigger* with U, **m(U) is non-monotonic and the conventional
+U/J = 4 is the worst case** (m = 58 / 29 / 37 at U = 0 / 4 / 8, n = 10^6).
+
+One entry is unphysical: U = 8, tau = 2 sits below U = 4. That is the same
+accidental zero-crossing artefact seen in the raw error there. It is kept rather
+than smoothed, and should not be read as physics.
 
 ### O9. The calibration is extrapolated well past its range
 Measured on **4-12 sites, tau in [0.25, 2]**. The curves use it at m up to ~2000
@@ -201,6 +208,22 @@ conclusion may survive. But a 1500x increase in chi buying only 2.4x in error is
 itself evidence the error is not truncation-limited, which means the slope cannot
 be extrapolated in **either** direction. The tensor-network arm is therefore
 **unbounded by the available data**, not bounded and small.
+
+**Decided not to run it here.** chi = 1e5 needs 16.7 TB for the state alone
+(~50 TB with TDVP working space) against lenore's 122 GB -- short by 400x. It
+needs ~100-200 leadership nodes, which is an allocation request, not a background
+job. lenore's ceiling is chi ~ 4800, only 2x the published value, which would
+test the measured slope over one more factor of two and predict 0.077 -> 0.072:
+too weak to settle anything.
+
+**The decisive cheap test, if this is picked up again**, is not more chi at all.
+Hold chi fixed and vary the TDVP time step. If the error moves with dt at fixed
+chi, the 0.077 plateau is integration error, the chi-extrapolation is void in
+both directions, and no bond dimension settles the question. If it does not move,
+the plateau is real and the band is on firmer ground. Either outcome is decisive
+and it runs at chi ~ 2048. It needs a correct fermionic 2D TDVP on a doubly
+periodic torus -- use a library (TeNPy has Fermi-Hubbard and two-site TDVP built
+in); hand-rolling one risks a confidently wrong number.
 
 Until at least one purpose-built, leadership-scale classical attack is run, the
 honest headline is "clears the **exact-diagonalisation** frontier", not "clears

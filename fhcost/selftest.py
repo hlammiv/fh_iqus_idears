@@ -167,10 +167,18 @@ def main() -> int:
           f"short {short[4]:.1f}->{short[8]:.1f}, long {long_[4]:.0f}->{long_[8]:.0f}")
     # the calibration is U/J = 4 only, so U no longer enters the CIRCUIT side;
     # it still enters through the signal, which is why m rises with U here
-    check("measured W has no U-dependence; the signal still does",
-          hubbard.w_measured(1.0) == hubbard.w_measured(1.0)
-          and nisq.max_m(1e6, DEFAULT.but(U_over_J=8), "pec")
-          > nisq.max_m(1e6, DEFAULT.but(U_over_J=0), "pec"))
+    # calibrated at U = 0, 4, 8: W_eff spans ~68x, almost all of it in the step
+    # from U = 0 (free hopping, colours nearly commute) to U = 4
+    check("measured W is strongly U-dependent",
+          hubbard.w_measured(0.25, 8.0) / hubbard.w_measured(0.25, 0.0) > 20,
+          f"{hubbard.w_measured(0.25, 0.0):.4f} -> {hubbard.w_measured(0.25, 8.0):.4f} "
+          "at tau = 0.25")
+    # circuit gets harder with U, signal gets bigger with U -> m(U) is NOT monotonic,
+    # and the conventional U/J = 4 is the worst case
+    mU = {u: nisq.max_m(1e6, DEFAULT.but(U_over_J=u), "pec") for u in (0, 4, 8)}
+    check("m(U) is non-monotonic and U/J=4 is the worst case",
+          mU[4] < mU[0] and mU[4] < mU[8],
+          " ".join(f"U={u}:{v:.0f}" for u, v in mU.items()))
     check("PEC outperforms every ZNE order here",
           all(nisq.max_m(1e6, strategy="pec") > nisq.max_m(1e6, strategy=f"zne{k}")
               for k in (1, 2, 3)))
@@ -331,8 +339,23 @@ def main() -> int:
           f"clears at n = {s['n_star_clears_classical_hi']:.1e} when measured")
     # extrapolation (b): the biggest single lever, and it has an OPTIMUM
     mpf = {k: nisq.max_m(1e6, DEFAULT.but(trotter_order_k=k), "pec") for k in (1, 2, 3)}
-    check("multiproduct extrapolation helps NISQ a lot",
-          mpf[2] > 1.8 * mpf[1], f"m: {mpf[1]:.1f} -> {mpf[2]:.1f} at order 4")
+    # charged PER BRANCH, the gain is ~1.4x, not the ~3x an ||c||_1^2 charge gave
+    check("multiproduct still helps, but modestly once branches are charged",
+          1.2 < mpf[2] / mpf[1] < 1.8, f"m: {mpf[1]:.1f} -> {mpf[2]:.1f} at order 4")
+    mpf4 = {k: nisq.max_m(1e6, DEFAULT.but(trotter_order_k=k), "pec") for k in (2, 3, 4)}
+    check("and the optimum is order 4-6, not ever-higher",
+          mpf4[4] < mpf4[2],
+          " ".join(f"order{2*k}:{v:.0f}" for k, v in mpf4.items()))
+    # the deepest branch dominates: compare the per-branch cost against what an
+    # ||c||_1^2 charge on a single branch would have given, at the same lg2
+    c3 = DEFAULT.but(trotter_order_k=3)
+    lg2 = nisq.log_gamma_sq(6.0, c3)
+    per_branch = sum(abs(ci) * math.sqrt(math.exp(min(ki * lg2, 700)) * ki)
+                     for ki, ci in hubbard.multiproduct_branches(3)) ** 2
+    naive = hubbard.multiproduct_l1(3) ** 2 * math.exp(min(lg2, 700))
+    check("the deepest branch dominates the PEC cost",
+          per_branch > 5 * naive,
+          f"per-branch is {per_branch/naive:.0f}x the ||c||_1^2 charge")
     ftm = {k: ftqc.max_m_surface(1e6, DEFAULT.but(trotter_order_k=k, pl_model="fowler"))
            for k in (1, 2, 3, 4)}
     check("multiproduct order has an optimum for FT (shot-limited)",

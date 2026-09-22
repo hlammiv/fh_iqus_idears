@@ -438,23 +438,33 @@ with less curvature would raise every bias ceiling above, and with it every ZNE
 conclusion here. Measuring the actual noise response of a small compiled Hubbard
 circuit is the check that would settle it.
 
-**(b) Trotter-step extrapolation — the largest single lever.** Order-2k
-multiproduct formulas give r ∝ t^{1+1/2k}(W/ε)^{1/2k}. The shot-noise cost is the
-coefficient 1-norm, and for well-conditioned MPFs ‖c‖₁ = O(log k) — polylogarithmic,
-not exponential (our computed ‖c‖₁ = 5/3 at order 4 reproduces the published
-value). Charged net of that cost:
+**(b) Trotter-step extrapolation.** Order-2k multiproduct formulas, costed as
+**classical extrapolation of expectation values**: branch i is its own circuit at
+k_i times the base step count.
 
-| | order 2 | 4 | 6 | 8 |
+*The convergence is validated.* Against exact diagonalisation the order-4 formula
+measures order **3.5-4.1** and order-6 measures **5.7-6.5**, with error gains up
+to 5x10^6 over plain Trotter at the same base step count. The review's doubt
+about the higher-order remainder was unfounded -- the formulas work.
+
+*The costing was not.* Branch i has k_i times the gates, hence k_i times the PEC
+exponent, and k_i times the runtime. Charging only `||c||_1^2` ignores all of
+that, and the deepest branch dominates. Correct accounting uses the optimal
+allocation over branches, minimum total time
+`(sum_i |c_i| sqrt(v_i tau_i))^2 / delta^2` with `v_i = exp(k_i log Gamma^2)` and
+`tau_i ~ k_i`. Effect at n = 10^6:
+
+| order | NISQ + PEC | (as ||c||_1^2) | surface FT | (as ||c||_1^2) |
 |---|---|---|---|---|
-| NISQ + PEC | 8 | 31 | 55 | 73 |
-| surface FT | 38 | 140 | 163 | 107 |
+| 2 | 29.3 | 29.3 | 231 | 231 |
+| 4 | **41.3** | 62.5 | **266** | 266 |
+| 6 | 41.1 | 80.4 | 136 | 249 |
+| 8 | 38.0 | 89.1 | 63 | 143 |
 
-**There is an optimum, and it differs by architecture.** NISQ is Λ-limited, so
-depth reduction keeps paying. FT is shot-limited, so beyond order ~6 the ‖c‖₁²
-shot cost overtakes the depth saving. This is the single biggest algorithmic win
-available and it moves NISQ+PEC from "hopeless" to the edge of the classical band.
-Caveat: MPFs at this ε and t have not been demonstrated for 2D FH — treat as an
-upper bound on the gain.
+So multiproduct is worth about **1.4x for NISQ and 1.15x for FT**, not the ~3x
+the old charge implied, and there is a genuine **optimum at order 4-6** rather
+than a monotone gain. FT falls off faster than NISQ because it has no PEC
+overhead to amortise, so the deepest branch's runtime is the whole cost.
 
 **(c) Finite-size extrapolation.** For a local observable, once the lattice is
 bigger than the boundary disturbance has travelled the finite answer *is* the

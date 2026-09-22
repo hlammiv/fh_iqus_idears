@@ -40,7 +40,8 @@ OTHER CORRECTIONS FOLDED IN
 from __future__ import annotations
 import math
 from .budget import Config, DEFAULT
-from .hubbard import counts, step_depth, eps_absolute, multiproduct_l1, t_max, signal_at
+from .hubbard import (counts, step_depth, eps_absolute, multiproduct_l1,
+                      multiproduct_branches, t_max, signal_at)
 from .nisq import M_MIN
 
 ROSS_SELINGER = 3.0        # T gates per Rz = 3 log2(1/eps) (Ross & Selinger 2016)
@@ -94,9 +95,12 @@ def n_shots_total(cfg: Config = DEFAULT, m: float | None = None) -> float:
     Multiproduct extrapolation amplifies shot noise by ||c||_1^2; that cost is
     charged here so the depth saving is reported NET, not gross.
     """
-    l1 = multiproduct_l1(cfg.trotter_order_k)
+    # per-branch: no PEC here, so v_i = 1, but branch i still costs k_i x the
+    # runtime, so the weight is (sum_i |c_i| sqrt(k_i))^2 rather than ||c||_1^2
+    w = sum(abs(ci) * math.sqrt(ki) for ki, ci in
+            multiproduct_branches(cfg.trotter_order_k))
     sig = cfg.s_sig if m is None else signal_at(m, cfg)
-    return cfg.n_times * l1 * l1 / (sig * cfg.eps) ** 2
+    return cfg.n_times * w * w / (sig * cfg.eps) ** 2
 
 
 def t_counts(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:

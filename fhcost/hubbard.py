@@ -36,22 +36,51 @@ from .budget import Config, DEFAULT
 #     bound: 150x at m = 9, ~450x at the operating point, and larger still beyond.
 #   * W_eff FALLS with tau, because the absolute error on an observable that melts
 #     to a small residual cannot keep growing as tau^3.
-W_MEASURED = {0.25: 1.450, 0.5: 1.289, 1.0: 0.190, 2.0: 0.119}
+W_MEASURED = {          # W_eff[U/J][tau], medians over n >= 9, r >= 8
+    0.0: {0.25: 0.0682, 0.5: 0.0466, 1.0: 0.0083, 2.0: 0.0067},
+    4.0: {0.25: 1.4500, 0.5: 1.2896, 1.0: 0.1899, 2.0: 0.1190},
+    8.0: {0.25: 4.6275, 0.5: 1.6841, 1.0: 0.2368, 2.0: 0.0701},
+}
 W_TAU_MIN, W_TAU_MAX = 0.25, 2.0
+W_U_MIN, W_U_MAX = 0.0, 8.0
 
 
-def w_measured(t: float) -> float:
-    """Log-log interpolation of the calibration; clamped outside its range."""
-    ts = sorted(W_MEASURED)
-    if t <= ts[0]:
-        return W_MEASURED[ts[0]]
-    if t >= ts[-1]:
-        return W_MEASURED[ts[-1]]          # EXTRAPOLATION beyond the measured range
-    for a, b in zip(ts, ts[1:]):
-        if a <= t <= b:
-            f = (math.log(t) - math.log(a)) / (math.log(b) - math.log(a))
-            return math.exp((1 - f) * math.log(W_MEASURED[a])
-                            + f * math.log(W_MEASURED[b]))
+def _loginterp(x, xs, ys):
+    if x <= xs[0]:
+        return ys[0]
+    if x >= xs[-1]:
+        return ys[-1]
+    for a, b, ya, yb in zip(xs, xs[1:], ys, ys[1:]):
+        if a <= x <= b:
+            f = (math.log(x) - math.log(a)) / (math.log(b) - math.log(a))
+            return math.exp((1 - f) * math.log(ya) + f * math.log(yb))
+    raise AssertionError
+
+
+def w_measured(t: float, u: float = 4.0) -> float:
+    """Measured W_eff at evolution time t and coupling U/J. Clamped outside range.
+
+    U-dependence is strong and was invisible while the calibration ran at U = 4
+    only: W_eff spans 68x from U = 0 to U = 8 at tau = 0.25. Most of that is the
+    step from U = 0 (where the model is free and the two hopping colours nearly
+    commute, so the on-site term carries all the Trotter error) to U = 4; beyond
+    that it flattens, consistent with the dynamics slowing as 4J^2/U.
+
+    The U = 8, tau = 2 entry sits BELOW U = 4 -- non-monotonic, and the same
+    accidental-zero-crossing artefact that shows up in the raw error there. It is
+    kept rather than smoothed, but it should not be read as physics.
+    """
+    taus = sorted(W_MEASURED[0.0])
+    us = sorted(W_MEASURED)
+    per_u = [_loginterp(t, taus, [W_MEASURED[uu][x] for x in taus]) for uu in us]
+    if u <= us[0]:
+        return per_u[0]
+    if u >= us[-1]:
+        return per_u[-1]
+    for a, b, ya, yb in zip(us, us[1:], per_u, per_u[1:]):
+        if a <= u <= b:
+            f = (u - a) / (b - a)            # linear in U, log in W
+            return math.exp((1 - f) * math.log(ya) + f * math.log(yb))
     raise AssertionError
 
 
@@ -166,7 +195,7 @@ def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None
         return max(1.0, math.ceil(cfg.steps_per_tau * t))
     if cfg.trotter == "measured":
         # W_eff is a property of the OBSERVABLE, not the lattice, so no factor of m
-        W2 = w_measured(t)
+        W2 = w_measured(t, cfg.U_over_J)
         k = max(1, int(cfg.trotter_order_k))
         r = (t ** 1.5 * math.sqrt(W2 / eps_trot) if k == 1
              else t ** (1.0 + 1.0 / (2 * k)) * (W2 / eps_trot) ** (1.0 / (2 * k)))
@@ -227,6 +256,31 @@ def counts(m: float, cfg: Config = DEFAULT) -> dict:
         "depth": depth,
         "t_circuit": depth * cfg.dt_gate + cfg.dt_meas,
     }
+
+
+def multiproduct_branches(k: int) -> list[tuple[int, float]]:
+    """[(step-count multiplier, Lagrange weight)] for an order-2k multiproduct.
+
+    CLASSICAL EXTRAPOLATION OF EXPECTATION VALUES: branch i is its own circuit,
+    run at k_i times the base step count, so it has k_i times the gates, k_i
+    times the depth, and -- under PEC -- an overhead exponential in k_i. Charging
+    only ||c||_1^2 ignores all of that; the deepest branch dominates.
+
+    The convergence order is VALIDATED against exact diagonalisation: measured
+    3.5-4.1 for the order-4 formula and 5.7-6.5 for order-6, with error gains up
+    to 5e6 over plain Trotter at the same base step count.
+    """
+    if k <= 1:
+        return [(1, 1.0)]
+    x = [(1.0 / i) ** 2 for i in range(1, k + 1)]
+    out = []
+    for i, xi in enumerate(x):
+        c = 1.0
+        for j, xj in enumerate(x):
+            if i != j:
+                c *= xj / (xj - xi)
+        out.append((i + 1, c))
+    return out
 
 
 def multiproduct_l1(k: int) -> float:
