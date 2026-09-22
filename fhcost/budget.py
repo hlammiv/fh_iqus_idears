@@ -122,6 +122,15 @@ class Config:
     d_max: int = 101
 
     # --- STAR (least-pinned; see METHODS.md) ---
+    pin_engines: int = 1          # magic engines. The paper's Hubbard calculation uses
+                                  # exactly ONE for the whole machine, so T states arrive
+                                  # at one per logical cycle regardless of lattice size.
+                                  # Exposed because adding engines is the obvious scaling
+                                  # lever, but >1 is OUR extrapolation, not theirs.
+    pin_nonlocal: bool = True     # Pinnacle needs qLDPC connectivity, which the slide's
+                                  # nearest-neighbour 2D grid does NOT provide. Keeping
+                                  # this True means the arm is costed under a DIFFERENT
+                                  # hardware assumption from every other curve.
     star_rounds_per_step: float = 20.0   # sequential logical layers per Trotter step, in
                                   # units of d. STAR's largest tax: a us*d code cycle
                                   # instead of a 10 ns gate clock. Least-pinned STAR input.

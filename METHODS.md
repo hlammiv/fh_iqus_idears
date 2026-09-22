@@ -283,6 +283,224 @@ the angle. That is where STAR's case should be argued, not on p.
 
 ## 4b. Pinnacle (QLDPC)
 
+Webster *et al.* (Iceberg Quantum), arXiv:2602.11457v2 (2026);
+`refs/2602.11457_pinnacle.pdf`. Generalised bicycle codes with generalised
+lattice surgery and a **magic engine** that distils and injects inside a single
+code block.
+
+**Footprint, reproduced with no fitted parameter.** Their published Hubbard
+formula is `n = 1620 ceil((L^2+1)/8) + 4410`, which decodes as: 1620 = n_pb for
+the d = 24 code [[510,16,24]]; `ceil((L^2+1)/8) = ceil((2m+2)/16)` processing
+**blocks** at k = 16 logical qubits each; and 4410 for **one** magic engine.
+One processing unit, one engine, no memory. Our implementation reproduces all
+seven rows of their Table IV to within 1.9%, worst case, with nothing fitted.
+
+An earlier version of this model fitted a multiplicative engine factor to their
+L = 8 point and got the structure wrong in two ways, both now corrected:
+
+* the engine was **scaled with the block count**; there is exactly one, and
+* so T states were assumed to arrive at one per logical cycle **per block**. They
+  arrive at one per logical cycle for the **whole machine**. On a T-heavy
+  dynamics workload the old model was therefore roughly m times too fast.
+
+The earlier explanation that the residual L-dependence came from cheaper
+idle-memory blocks was simply wrong; there is no memory in their calculation.
+
+**Effect of the correction** (n = 10^6): Pinnacle falls from 195 to **61**.
+
+| n | Pinnacle | surface FT |
+|---|---|---|
+| 10^5 | 24 | 12 |
+| 10^6 | **61** | 49 |
+| 10^7 | 168 | 166 |
+| 10^8 | 434 | **531** |
+
+So with the engine count as published, **Pinnacle is comparable to the surface
+code on this workload, not far above it, and the surface code overtakes it by
+n = 10^8.** The qLDPC advantage here is in *storage*, and serialised T supply
+gives most of it back. Adding engines is the obvious lever and is exposed as
+`pin_engines`, but it is **our** extrapolation, not theirs, and it has an optimum
+near 16: each engine costs 4410 qubits, so 64 engines is worse than 16.
+
+**Connectivity caveat, and it is not small.** Generalised bicycle codes require
+non-local qLDPC connectivity. The slide specifies a **nearest-neighbour 2D
+grid**, which does not provide it. This arm is therefore costed under a different
+hardware assumption from every other curve on the figure, and the comparison is
+not like-for-like. Either the grid assumption or this arm has to give. See
+`OPEN_ITEMS.md` O11.
+
+**Their own Fermi-Hubbard section is a different workload** -- ground-state energy
+at 0.5% relative energy error, not dynamics -- so their Table IV is a footprint
+check only. The logical-error model is a refit of their Table III (A = 5.84,
+threshold B = 1.58%, exponent (d+1)/2, reproducing every entry to within 26%
+across twelve orders of magnitude); it is labelled a refit, not an independently
+demonstrated hardware threshold.
+
+### What the lower-bound literature actually gives (review #4)
+
+Takagi, Endo, **Minagawa & Gu**, npj QI **8**, 114 (2022) — an earlier version of
+this document credited the wrong two authors — prove a worst-case
+estimator-spread lower bound, exponential in circuit **depth**, for a defined
+class of mitigation protocols under a layered local-depolarizing noise model.
+
+That is not what the plotted curve is. The curve is the cost of **one specified
+implementation** (gatewise PEC) as a function of **gate count**, for this state
+and observable. Depth and gate count scale differently in m, so the theorem does
+not license the curve's m-dependence; a worst-case bound does not say this
+instance is hard; and the PEC-optimality result is for a particular dephasing
+setting, so PEC is not "optimal mitigation" here in any proven sense. The curve
+is now labelled "PEC (as implemented)".
+
+### Measured: which gates actually damp the observable
+
+The cone model charges every gate in the causal cone. Measured against the
+Phasecraft/Quantinuum circuit — 2415 two-qubit gates, their own quoted
+`p = 1e-3`, raw against exact (FLO is exact at U=0) — the observed attenuation is
+`Lambda = 0.20`, against **2.58** from the cone model. A **12.9x overcharge**.
+
+The mechanism was checked on their data rather than assumed:
+`Lambda(ZZ)/Lambda(Z) = 1.91`, where damping proportional to operator weight
+predicts 2 and uniform-per-gate predicts 1. A depolarizing error damps the
+observable only where the Heisenberg-evolved operator has support.
+`damping_model = "support"` implements `w_obs/q` and reproduces the measurement
+to 8%. It is **not** the default: one measurement fixes the value at one
+operating point, not the scaling, and `support_growth = 0` cannot hold at long
+times. See `OPEN_ITEMS.md` O5, and note this partially supersedes review #9.
+
+### The 160-shot tension, resolved
+
+Their 56-qubit run reaches ~0.005 absolute on C^zz with 160 shots per point,
+where this model prices mitigation at `exp(4 p G)`. Decomposing against their
+actual circuit (m = 28, t = 2):
+
+| factor | ratio |
+|---|---|
+| Trotter step count — 417 here vs **4** there | **104x** |
+| per-gate attenuation — 1.067 vs measured 0.083 per pG | **12.9x** |
+| per-step gate count — 420 here vs 604 there | 0.70x (ours optimistic) |
+| cone fraction | 0.33x |
+| **net overestimate of Lambda** | **311x** |
+
+Two by-products. `c_g = 15` gets its first external check: their compiled circuit
+is 21.6 two-qubit gates per site per step, so ours is 30% optimistic but the right
+order. And a `strategy = "expcal"` arm, costed at TFLO+GPR's measured effective
+overhead of 0.08 — *below* one, since GPR borrows statistics across correlated
+time points — and drawn only out to the largest `Lambda` demonstrated (0.20),
+reaches **nothing** under this model's workload, yet reaches `m = 20` at
+`n = 10^6` the moment the experiment's step density is adopted.
+
+**So the whole distance between this model and a real experiment is the Trotter
+step count.** Not the mitigation scheme, not the channel conventions, not the
+damping geometry.
+
+### A correction: attenuation is not the cancellation one-norm
+
+These are two different quantities and an earlier version of this model used one
+number, 32/15, for both. Derived from the Pauli transfer matrix of the two-qubit
+depolarizing channel `D(rho) = (1-p) rho + (p/15) sum_{P != I} P rho P` (the PTM
+is diagonal; `D^-1 D = 1` was checked numerically):
+
+* 7 of the 15 non-identity Paulis commute with a given non-identity observable and
+  8 anticommute, so it is damped by `1 - 16p/15` per gate. The **attenuation**
+  coefficient is `-ln(1 - 16p/15)/p = 1.067236`.
+* The signed Pauli inverse is `D^-1 = a . + b sum_{P != I} P . P` with
+  `a = (15-p)/(15-16p)`, `b = -p/(15-16p)`, giving a **cancellation one-norm**
+  `gamma = |a| + 15|b| = (15+14p)/(15-16p)`. The PEC coefficient is
+  `2 ln(gamma)/p = 4.000268` — a factor **3.748** larger than the attenuation.
+
+Conflating them made PEC **1.875x too cheap in the exponent**. Correcting it moves
+mitigated NISQ at `n = 10^6` from 8.76 to **6.89**. The attenuation — and with it
+the unmitigated bias and every ZNE bias ceiling — is unchanged, as it must be: a
+costing convention cannot move a physical damping rate. `selftest` now asserts
+that invariance directly.
+
+*Is STAR costed the same way?* Checked, and yes. Its injected-rotation error is a
+Z-type Pauli channel with RUS-total probability `q = 4p/15`; the signed inverse
+gives `gamma = 1/(1-2q)` and `2 ln(gamma)/p = 1.0670`, reproducing the STAR
+paper's `gamma^2 = exp(8 P_Z,1 N)` exactly. **Both arms are cancellation
+one-norms.** With NISQ corrected upward STAR now beats it at every `n` it can run
+(1.04x at 10^4 rising to 1.94x at 10^8), where before it lost below `n ~ 5x10^4`.
+The margin is set by NISQ paying over all two-qubit gates while STAR pays only
+over rotations — a real architectural difference, but one whose size rests on the
+assumed ratio `c_rot/c_g = 5/15`, which has not been checked against a compiled
+circuit. See `OPEN_ITEMS.md` O1.
+
+## 3. Surface-code FT
+
+The correction that matters most: **an FT estimate is not a qubit count.** Each of
+N = T/(sε)² ≈ 2×10⁵ shots is a full circuit of r ~ 10³–10⁴ Trotter steps at d
+rounds per logical layer. Checking only qubits, or only a single shot against the
+week, overstates m by more than 10× and wrongly makes the curve slope 1 forever.
+With the shot budget imposed the curve is
+
+```
+m = min[ qubit-limited (slope 1),  shot/time-limited (slope 4/9) ]
+```
+
+and the bend is inside the plotted range (`selftest` asserts slope → 4/9).
+
+Other choices: d is selected against the **per-shot** logical volume (a logical
+fault biases the shot it lands in; it does not compound across independent shots —
+summing over 10⁵ shots over-provisions d badly). Hamming-weight phasing collapses
+the T-count ~30×, so the magic-state factory is not the bottleneck.
+
+**p_L is the largest uncertainty, so it is drawn as a band:**
+
+| model | expression | m at n = 10⁶ |
+|---|---|---|
+| Fowler (idealised) | 0.1 (p/10⁻²)^{(d+1)/2} | 38 |
+| Willow (measured) | 1.43×10⁻³ · 2.14^{−(d−7)/2} | 12 |
+
+## 4. STAR
+
+Error-corrected Cliffords plus directly injected analog rotations. The injected
+rotation error is **P_Z,1 = 2p/15, independent of d** — raising the code distance
+cannot fix it — giving Λ_STAR = 0.533·p·N_rot(cone). So STAR saturates
+logarithmically for the same reason NISQ does.
+
+Λ_STAR/Λ_NISQ = 1/6: STAR's noise is six times gentler per unit of circuit. Against
+that it pays a full surface-code footprint per logical qubit (~600× fewer parallel
+copies) and a μs·d code cycle instead of a 10 ns gate clock (~2500× slower per
+shot). Both penalties enter only through a logarithm — together they cost ~7 in
+Λ_max — so the 6× gain is not wiped out:
+
+| n | 10⁴ | 10⁵ | 10⁶ | 10⁷ | 10⁸ |
+|---|---|---|---|---|---|
+| NISQ + PEC | 7.1 | 7.5 | 7.9 | 8.2 | 8.6 |
+| STAR | 5.1 | 9.2 | 10.6 | 11.7 | 12.8 |
+
+**STAR overtakes mitigated NISQ at n ≈ 5×10⁴** and settles ~1.4× above it. Below
+that its surface-code footprint starves it of parallel copies. It is still beaten
+by full FT above n ≈ 2×10⁵, and it never clears the classical band.
+
+### Which knob makes STAR effective
+
+Only one, and it is not the obvious one. At n = 10⁶, changing a single input:
+
+| knob | STAR | NISQ | ratio |
+|---|---|---|---|
+| baseline | 10.6 | 7.9 | 1.35 |
+| p = 10⁻⁴ | 28.3 | 20.9 | **1.35** |
+| p = 10⁻⁵ | 71.3 | 55.3 | 1.29 |
+| injection error ÷2.5 (angle-dependent RUS) | 14.8 | 7.9 | **1.88** |
+| injection error ÷10 | 24.9 | 7.9 | **3.17** |
+| clock: 5 logical layers/step, not 20 | 11.4 | 7.9 | 1.44 |
+| 240 ns code round, not 1 μs | 11.4 | 7.9 | 1.45 |
+| footprint 2d² (1 tile, not 2) | 11.0 | 7.9 | 1.40 |
+
+**Lowering p does not help STAR relative to NISQ at all.** Both Λ's are linear in
+p, so better gates lift the two curves together; the d that STAR can drop to is
+worth only ½ln of a footprint ratio. Likewise the clock and the footprint are
+logarithmic levers, worth ~10% each.
+
+**The injection error is the only knob with real leverage**, because it is the only
+one that enters Λ_STAR itself rather than the shot budget. The angle-dependent RUS
+variant (ε_RUS,θ ≈ α_RUS·θ·p with α_RUS/k ≈ 0.40) is the concrete route: rotations
+in a Trotter step are mostly small-angle, so the average injected error falls with
+the angle. That is where STAR's case should be argued, not on p.
+
+## 4b. Pinnacle (QLDPC)
+
 Webster, Berent, Chandra, Hockings, Baspin, Thomsen, Smith & Cohen (Iceberg
 Quantum), arXiv:2602.11457v2 (2026); local copy `refs/2602.11457_pinnacle.pdf`.
 Generalised bicycle codes with generalised lattice surgery, one **magic engine**

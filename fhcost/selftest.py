@@ -297,13 +297,27 @@ def main() -> int:
         got = ftqc.p_logical_gb(k, d)
         check(f"p_L fit reproduces their Table III, d={d}",
               0.7 < got / want < 1.4, f"{got:.1e} vs {want:.0e}")
-    check("Pinnacle footprint reproduces their Table IV at L=8",
-          abs(math.ceil(130 / 14) * 860 * (1 + ftqc.PIN_ENGINE) / 19e3 - 1) < 0.05)
-    check("QLDPC beats the surface code on our workload",
-          ftqc.max_m_pinnacle(1e6) > 2 * ftqc.max_m_surface(1e6, fow))
-    check("and clears the classical band far earlier",
-          curves.summary()["n_pinnacle_clears_classical_hi"]
-          < 0.3 * curves.summary()["n_ft_clears_classical_hi"])
+    # footprint reproduced with NO free parameter (review #6): their published
+    # n = 1620 ceil((L^2+1)/8) + 4410, i.e. d=24 blocks plus ONE magic engine
+    paper_IV = {8: 19e3, 12: 35e3, 16: 58e3, 20: 87e3}
+    dev = max(abs(ftqc.pinnacle_footprint(L * L, DEFAULT, 24) / w - 1)
+              for L, w in paper_IV.items())
+    check("Pinnacle footprint reproduces Table IV with no fitted parameter",
+          dev < 0.03, f"worst deviation {100*dev:.1f}% across four rows")
+    check("there is exactly ONE magic engine, not one per block",
+          ftqc.pinnacle_footprint(400, DEFAULT, 24)
+          - ftqc.pinnacle_footprint(400, DEFAULT.but(pin_engines=0), 24)
+          == ftqc.ENGINE_QUBITS)
+    # with T supply serialised through that single engine, the storage advantage
+    # of the qLDPC codes no longer translates into a large end-to-end win
+    check("Pinnacle is comparable to, not far above, the surface code",
+          0.8 < ftqc.max_m_pinnacle(1e6) / ftqc.max_m_surface(1e6, fow) < 2.0,
+          f"ratio {ftqc.max_m_pinnacle(1e6)/ftqc.max_m_surface(1e6, fow):.2f} at n=1e6")
+    check("and the surface code overtakes it at large n",
+          ftqc.max_m_pinnacle(1e8) < ftqc.max_m_surface(1e8, fow))
+    check("engine count has an optimum -- engines cost 4410 qubits each",
+          ftqc.max_m_pinnacle(1e6, DEFAULT.but(pin_engines=16))
+          > ftqc.max_m_pinnacle(1e6, DEFAULT.but(pin_engines=64)))
     check("the plotted range stays inside the published GB code family",
           ftqc.pinnacle_point(ftqc.max_m_pinnacle(1e8))["d"] <= 24
           and ftqc.max_m_pinnacle(1e8) < ftqc.max_m_pinnacle(1e9),

@@ -257,40 +257,59 @@ PIN_A, PIN_B = 5.84, 0.0158
 # One magic engine per processing unit, itself a GB code block, delivering one
 # |T> per logical cycle. Calibrated so the footprint reproduces their Table IV
 # L = 8 point (19 kq): see pinnacle_validate().
-PIN_ENGINE = 1.2
 
 
 def p_logical_gb(k: int, d: int, cfg: Config = DEFAULT) -> float:
     return (PIN_A / k) * (cfg.p / PIN_B) ** ((d + 1) / 2.0)
 
 
-def pinnacle_point(m: float, cfg: Config = DEFAULT) -> dict | None:
-    """Our dynamics workload run on the Pinnacle architecture.
+ENGINE_QUBITS = 4410.0     # one magic engine, from their Hubbard footprint formula
 
-    Their own Fermi-Hubbard application (their Table IV) is GROUND-STATE ENERGY
-    at 0.5% relative energy error -- a different workload from this dynamics
-    problem. What is borrowed here is the architecture: the code family, the
-    logical error model, the (d+2) code-cycle logical clock, and one magic engine
-    per processing unit. Their logical-qubit count N = 2L^2 + 2 is the same
-    Jordan-Wigner count we already use.
+
+def pinnacle_footprint(m: float, cfg: Config = DEFAULT, d: int = 24) -> float:
+    """Their published formula, exactly: n = 1620 ceil((L^2+1)/8) + 4410.
+
+    Decoded: 1620 is n_pb for the d = 24 code [[510,16,24]]; ceil((L^2+1)/8) is
+    ceil((2m+2)/16), the number of processing BLOCKS at k = 16 logical qubits
+    each; and 4410 is ONE magic engine for the whole machine. One processing
+    unit, one engine, no memory. Reproduces all seven rows of their Table IV to
+    within 2% with no free parameter.
+    """
+    k, n_pb = {4: (8, 140), 6: (10, 244), 10: (12, 452), 16: (14, 860),
+               24: (16, 1620)}[d]
+    blocks = math.ceil((2.0 * m + 2.0) / k)
+    return blocks * n_pb + cfg.pin_engines * ENGINE_QUBITS
+
+
+def pinnacle_point(m: float, cfg: Config = DEFAULT) -> dict | None:
+    """Our dynamics workload on the Pinnacle architecture.
+
+    CORRECTED against the paper (review #6). Two structural errors before:
+      * the magic engine was scaled with the block count; there is exactly ONE,
+      * so T states arrive at one per logical cycle for the WHOLE machine, not
+        one per block. The previous model divided the T-count by the block count
+        and was therefore ~m times too fast on a T-heavy workload.
+
+    CONNECTIVITY CAVEAT: generalised bicycle codes need non-local qLDPC
+    connectivity. The slide specifies a nearest-neighbour 2D grid, which does not
+    provide it. This arm is therefore costed under a different hardware
+    assumption from every other curve on the figure, and the comparison is not
+    like-for-like. See OPEN_ITEMS.md O11.
     """
     q_L = 2.0 * m + cfg.n_ancilla
     n_t, d_t = t_counts(m, cfg)
     eps_L = cfg.frac_logical * eps_absolute(cfg, m)
     for (n_code, k, d, dt, n_pb) in GB_CODES:
-        units = math.ceil(q_L / k)
-        # each unit consumes at most one T per logical cycle
-        cycles = max(d_t, n_t / units) / max(cfg.lanes, 1.0)
+        blocks = math.ceil(q_L / k)
+        # ONE engine (by default): T consumption is serialised across the machine
+        cycles = max(d_t, n_t / max(cfg.pin_engines, 1)) / max(cfg.lanes, 1.0)
         if q_L * cycles * p_logical_gb(k, d, cfg) > eps_L:
             continue
-        phys = units * n_pb * (1.0 + PIN_ENGINE)
-        return {"m": m, "d": d, "k": k, "units": units, "n_t": n_t,
+        phys = blocks * n_pb + cfg.pin_engines * ENGINE_QUBITS
+        return {"m": m, "d": d, "k": k, "blocks": blocks, "n_t": n_t,
                 "cycles": cycles, "phys": phys,
                 "t_shot": cycles * dt * cfg.t_round}
     return None
-
-
-PIN_N_VALID = 1e10   # above this the 5-code family is exhausted; see pinnacle_point
 
 
 def max_m_pinnacle(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
@@ -321,15 +340,15 @@ def max_m_pinnacle(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
     return lo
 
 
-def pinnacle_validate() -> None:
-    """Footprint cross-check against their Table IV (ground-state workload)."""
-    print("Pinnacle footprint vs their Table IV (p = 1e-3, N = 2L^2 + 2 logical)")
-    print(f"{'L':>4}{'N_log':>7}{'code':>16}{'units':>7}{'ours':>9}{'paper':>8}{'ratio':>7}")
+def pinnacle_validate(cfg: Config = DEFAULT) -> None:
+    """Footprint check against their Table IV -- NO free parameters."""
+    print("Pinnacle footprint vs Table IV, d = 24, one engine (p = 1e-3)")
+    print(f"{'L':>4}{'m':>6}{'blocks':>8}{'ours':>9}{'paper':>8}{'ratio':>7}")
     paper = {8: 19e3, 10: 25e3, 12: 35e3, 14: 45e3, 16: 58e3, 18: 71e3, 20: 87e3}
+    worst = 0.0
     for L, want in paper.items():
-        N = 2 * L * L + 2
-        n_code, k, d, dt, n_pb = GB_CODES[3]        # d = 16, their p=1e-3 choice
-        units = math.ceil(N / k)
-        got = units * n_pb * (1.0 + PIN_ENGINE)
-        print(f"{L:>4}{N:>7}{f'[[{n_code},{k},{d}]]':>16}{units:>7}"
-              f"{got/1e3:>8.0f}k{want/1e3:>7.0f}k{got/want:>7.2f}")
+        got = pinnacle_footprint(L * L, cfg, d=24)
+        worst = max(worst, abs(got / want - 1))
+        print(f"{L:>4}{L*L:>6}{math.ceil((2*L*L+2)/16):>8}"
+              f"{got/1e3:>8.0f}k{want/1e3:>7.0f}k{got/want:>7.3f}")
+    print(f"worst deviation {100*worst:.1f}%  (rounding in their published table)")
