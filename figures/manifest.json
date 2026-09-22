@@ -1,0 +1,7 @@
+{
+ "fh_resource_estimate_slide": {
+  "kind": "mpl",
+  "path": "figures/fh_resource_estimate_slide.png",
+  "script": "make_slide.py"
+ }
+}

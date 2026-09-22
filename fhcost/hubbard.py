@@ -1,0 +1,169 @@
+"""m -> circuit: qubits, Trotter steps, gate counts, depth, wall-clock per shot.
+
+Shared by every quantum curve. See budget.py for the value-provenance ledger.
+
+THE ONE EXPONENT THAT MATTERS
+  t_max = sqrt(m)/v, and 2nd-order Trotter needs r ~ t^{3/2} sqrt(W2/eps_T) with
+  W2 = c_w * m, so
+
+      r(m)       ~ (m^{1/2}/v)^{3/2} * sqrt(c_w m / eps_T)  ~  m^{5/4}
+      G_total(m) = c_g * m * r(m)                           ~  m^{9/4}
+
+  i.e. alpha = 9/4. Everything downstream -- the NISQ saturation exponent
+  1/alpha = 4/9, the FT qubit budget, the crossings -- rides on this.
+
+NOTE ON THE LOCAL-OBSERVABLE REFINEMENT
+  <Z_i(t) Z_j(0)> is local, so only the causal cone contributes to the Trotter
+  error: W2_eff = c_w * min(m, N_cone) with N_cone = (2 v t)^2. At the
+  light-cone-crossing time t = sqrt(m)/v we have N_cone = 4m > m, so the
+  refinement buys NOTHING -- the cone IS the lattice. It only bites at fixed
+  short t, which is why the t_max panel of the figure exists.
+"""
+from __future__ import annotations
+import math
+from .budget import Config, DEFAULT
+
+
+def w_commutator(cfg: Config = DEFAULT) -> float:
+    """Second-order Trotter commutator norm per site, W2 = w * m.
+
+    Campbell's PLAQ bound for 2D Fermi-Hubbard is the tightest published closed
+    form: w ~ 9.5/site at U/J = 4 and ~24.3/site at U/J = 8 [Campbell, QST 7,
+    015007 (2021)]. The nested commutators are dominated by terms linear and
+    quadratic in U, so interpolate in U/J through those two anchors.
+    """
+    u = cfg.U_over_J
+    w = 9.5 + (24.3 - 9.5) * (u - 4.0) / 4.0
+    return cfg.c_w * max(w, 1.0)
+
+
+def t_max(m: float, cfg: Config = DEFAULT) -> float:
+    """Longest evolution time required, in units hbar/J."""
+    if cfg.tmax_mode == "sqrt_m":
+        return math.sqrt(m) / cfg.v
+    if cfg.tmax_mode == "const":
+        return cfg.tmax_const
+    if cfg.tmax_mode == "inv_m":
+        return 1.0 / m
+    raise ValueError(f"unknown tmax_mode {cfg.tmax_mode!r}")
+
+
+def cone_sites(m: float, t: float, cfg: Config = DEFAULT) -> float:
+    """Sites inside the causal cone of the observable, capped at the lattice."""
+    return min(float(m), (2.0 * cfg.v * t + 1.0) ** 2)
+
+
+def qubits_per_copy(m: float, cfg: Config = DEFAULT) -> float:
+    """Physical/logical qubits to hold one copy of the lattice."""
+    # + n_ancilla for the Hadamard test: <Z_i(t) Z_j(0)> is a TWO-TIME correlator
+    # and cannot be read off a prepare-evolve-measure circuit.
+    anc = cfg.n_ancilla if cfg.observable == "two_time" else 0
+    if cfg.encoding == "compact":       # Derby-Klassen, ~1.5 qubits per mode
+        return 3.0 * m + anc
+    if cfg.encoding == "jw":            # 2 modes per site, no ancillas
+        return 2.0 * m + anc
+    raise ValueError(f"unknown encoding {cfg.encoding!r}")
+
+
+def eps_absolute(cfg: Config = DEFAULT) -> float:
+    """eps on the slide is RELATIVE; the Trotter/synthesis budgets are absolute."""
+    return cfg.eps * cfg.s_sig
+
+
+def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None) -> float:
+    """Second-order (or 2k-order multiproduct) Trotter step count."""
+    if eps_trot is None:
+        eps_trot = 0.3 * eps_absolute(cfg)   # Trotter's share of the ABSOLUTE budget
+    t = t_max(m, cfg)
+    if t <= 0:
+        return 1.0
+    if cfg.trotter_mode == "fixed_density":
+        # arch_comparison's convention: a fixed step density, r = ceil(4*tau).
+        # Their own WORKING_DECISIONS.md records that r = 4 fails the small-patch
+        # Trotter checks, so this is a floor, not a calibrated value.
+        return max(1.0, math.ceil(cfg.steps_per_tau * t))
+    W2 = w_commutator(cfg) * (cone_sites(m, t, cfg) if cfg.trotter == "lightcone" else m)
+    k = max(1, int(cfg.trotter_order_k))
+    if k == 1:
+        r = t ** 1.5 * math.sqrt(W2 / eps_trot)
+    else:
+        # order-2k multiproduct / Richardson-in-dt: r ~ t^{1+1/2k} (W/eps)^{1/2k}
+        r = t ** (1.0 + 1.0 / (2 * k)) * (W2 / eps_trot) ** (1.0 / (2 * k))
+    if cfg.trotter == "empirical":
+        r /= cfg.f_emp
+    return max(1.0, r)
+
+
+def step_depth(m: float, cfg: Config = DEFAULT) -> float:
+    """Two-qubit-gate layers per Trotter step."""
+    base = 12.0                                  # 4 hopping colour classes x 2 spins + onsite
+    if cfg.encoding == "jw":
+        base += 2.0 * math.sqrt(m)               # Kivlichan fermionic swap network
+    return base
+
+
+def counts(m: float, cfg: Config = DEFAULT) -> dict:
+    """Everything the downstream models need, in one dict."""
+    r = trotter_steps(m, cfg)
+    t = t_max(m, cfg)
+    # routing_power adds powers of L = sqrt(m): a compiled NN-grid circuit needs
+    # SWAP networks that a per-site gate estimate does not see.
+    route = m ** (0.5 * cfg.routing_power)
+    g_total = cfg.c_g * m * r * route
+    # gates inside the causal cone -- what the noise actually corrupts. The cone
+    # is 1/3 of the space-time box in d=2, so this is a prefactor, not a scaling:
+    # at t_max the cone already spans the lattice (see module docstring).
+    g_cone = cfg.lightcone_frac * cfg.c_g * cone_sites(m, t, cfg) * r * route
+    depth = r * step_depth(m, cfg)
+    return {
+        "m": m,
+        "t_max": t,
+        "steps": r,
+        "q_per_copy": qubits_per_copy(m, cfg),
+        "g_total": g_total,
+        "g_cone": g_cone,
+        "n_rot": cfg.c_rot * m * r * route,
+        # rotations inside the causal cone. STAR's noise, like NISQ's, only
+        # matters where it can reach the observable, so this must carry the SAME
+        # light-cone factor as g_cone -- applying it to one and not the other
+        # penalises STAR by exactly 3x.
+        "n_rot_cone": cfg.lightcone_frac * cfg.c_rot * cone_sites(m, t, cfg) * r * route,
+        "depth": depth,
+        "t_circuit": depth * cfg.dt_gate + cfg.dt_meas,
+    }
+
+
+def multiproduct_l1(k: int) -> float:
+    """1-norm of the multiproduct coefficients for an order-2k formula.
+
+    Richardson extrapolation of 2nd-order Trotter on step counts (k_1..k_j) =
+    (1,2,...,j) with j = k: the coefficients that cancel orders 2..2k-2 are the
+    Lagrange weights at nodes h_i = 1/k_i, evaluated at h = 0. Their 1-norm is
+    the shot-noise amplification, and it grows fast with k -- which is exactly
+    the cost that must be charged against the depth saving.
+    """
+    if k <= 1:
+        return 1.0
+    nodes = [(1.0 / i) ** 2 for i in range(1, k + 1)]     # 2nd order -> error in h^2
+    tot = 0.0
+    for i, xi in enumerate(nodes):
+        c = 1.0
+        for j, xj in enumerate(nodes):
+            if i != j:
+                c *= xj / (xj - xi)
+        tot += abs(c)
+    return tot
+
+
+if __name__ == "__main__":
+    print(f"{'m':>6} {'t_max':>7} {'steps':>10} {'G_total':>11} {'depth':>10} "
+          f"{'t_circ(s)':>11} {'q/copy':>8}")
+    for m in (4, 16, 36, 64, 100, 256, 1024):
+        c = counts(m)
+        print(f"{m:>6} {c['t_max']:>7.2f} {c['steps']:>10.1f} {c['g_total']:>11.3g} "
+              f"{c['depth']:>10.3g} {c['t_circuit']:>11.3g} {c['q_per_copy']:>8.0f}")
+    import numpy as np
+    ms = np.array([64.0, 256.0, 1024.0, 4096.0])
+    gs = np.array([counts(x)["g_total"] for x in ms])
+    print(f"\nalpha in G ~ m^alpha: {np.polyfit(np.log(ms), np.log(gs), 1)[0]:.4f}  (expect 2.25)")
+    print("multiproduct 1-norm:", {k: round(multiproduct_l1(k), 2) for k in (1, 2, 3, 4)})

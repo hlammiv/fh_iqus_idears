@@ -1,0 +1,10 @@
+# Third-party papers: do not redistribute from a public repo. Fetch from arXiv.
+refs/*.pdf
+# Source deck (not ours to publish)
+Q1_Fermi_Hubbard-1.pdf
+__pycache__/
+*.pyc
+
+# Internal notes: not for the public repo
+COMPARISON_arch_comparison.md
+SCIENTIFIC_REVIEW.md

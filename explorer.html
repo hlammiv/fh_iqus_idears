@@ -1,0 +1,472 @@
+<title>Fermi–Hubbard Resource Frontier</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#f4f6f7; --surface:#ffffff; --sunk:#eceff1;
+  --ink:#14191e; --ink-2:#4a555f; --ink-3:#7c8892;
+  --rule:#dbe1e6; --rule-2:#c4ccd3;
+  --nisq:#0072B2; --star:#D55E00; --ft:#009E73; --ideal:#333333; --pinn:#E69F00;
+  --band:#c9d1d8; --band-fill:rgba(160,175,188,.30);
+  --accent:#0072B2;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#10151a; --surface:#181f26; --sunk:#0c1116;
+  --ink:#e7edf2; --ink-2:#a3b1bd; --ink-3:#6f7d89;
+  --rule:#2a343d; --rule-2:#3a4650;
+  --nisq:#4aa3dd; --star:#f0803f; --ft:#2fc39b; --ideal:#9aa7b2; --pinn:#f0b429;
+  --band:#4b5763; --band-fill:rgba(120,138,155,.26);
+  --accent:#4aa3dd;
+}}
+:root[data-theme="dark"]{
+  --ground:#10151a; --surface:#181f26; --sunk:#0c1116;
+  --ink:#e7edf2; --ink-2:#a3b1bd; --ink-3:#6f7d89;
+  --rule:#2a343d; --rule-2:#3a4650;
+  --nisq:#4aa3dd; --star:#f0803f; --ft:#2fc39b; --ideal:#9aa7b2; --pinn:#f0b429;
+  --band:#4b5763; --band-fill:rgba(120,138,155,.26);
+  --accent:#4aa3dd;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+     font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:22px 40px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 14px;margin-bottom:6px}
+h1{font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sub{color:var(--ink-2);font-size:13px;max-width:66ch;margin:0 0 18px}
+.sub code{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.layout{display:grid;grid-template-columns:1fr 288px;gap:18px;align-items:start}
+@media(max-width:820px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:6px}
+.chartbox{padding:12px 12px 4px}
+svg{display:block;width:100%;height:auto}
+.axlab{fill:var(--ink-2);font-size:11px;font-family:var(--sans)}
+.tick{fill:var(--ink-3);font-size:10px;font-family:var(--mono)}
+.curvelab{font-size:10.5px;font-family:var(--sans);font-weight:500}
+.grid{stroke:var(--rule);stroke-width:.6}
+.frame{stroke:var(--rule-2);stroke-width:1;fill:none}
+
+.rail{display:flex;flex-direction:column;gap:12px}
+fieldset{margin:0;border:1px solid var(--rule);border-radius:6px;background:var(--surface);
+         padding:10px 12px 12px}
+legend{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-3);
+       padding:0 5px;font-weight:600}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:baseline;margin-top:9px}
+.ctl:first-of-type{margin-top:2px}
+.ctl label{font-size:12px;color:var(--ink-2)}
+.ctl output{font-family:var(--mono);font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+.ctl input[type=range]{grid-column:1/-1;width:100%;margin:2px 0 0;accent-color:var(--accent)}
+.seg{grid-column:1/-1;display:flex;gap:4px;margin-top:3px}
+.seg button{flex:1;font:inherit;font-size:11px;padding:3px 4px;border:1px solid var(--rule-2);
+  background:var(--sunk);color:var(--ink-2);border-radius:4px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+.readout{border-top:1px solid var(--rule);margin-top:0}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:5px 12px;border-bottom:1px solid var(--rule)}
+th{font-weight:500;color:var(--ink-2)}
+td.v{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr:last-child th,tr:last-child td{border-bottom:none}
+.swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;
+        vertical-align:baseline}
+.note{font-size:11.5px;color:var(--ink-3);padding:9px 12px 11px;border-top:1px solid var(--rule)}
+.verdict{padding:10px 12px;font-size:12.5px;border-top:1px solid var(--rule);color:var(--ink-2)}
+.verdict b{color:var(--ink);font-weight:600}
+footer{margin-top:20px;font-size:11.5px;color:var(--ink-3);max-width:76ch}
+footer code{font-family:var(--mono)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+<header><h1>Fermi–Hubbard Resource Frontier</h1></header>
+<p class="sub">Resolvable lattice size <code>m</code> against physical qubits <code>n</code>, for
+⟨Z<sub>i</sub>(t)Z<sub>j</sub>(0)⟩ on a √m×√m Hubbard lattice to relative error ε in one week of
+wall clock. Every curve is recomputed live from the same cost models as
+<code>fhcost/</code>. Times in ħ/J; <code>t_max = √m / v_B</code>.</p>
+
+<div class="layout">
+  <div>
+    <div class="panel chartbox"><svg id="plot" viewBox="0 0 640 400" role="img"
+      aria-label="Resolvable lattice size versus physical qubit count"></svg></div>
+    <div class="panel" style="margin-top:14px">
+      <table><tbody id="rows"></tbody></table>
+      <div class="verdict" id="verdict"></div>
+      <div class="note" id="note"></div>
+    </div>
+  </div>
+
+  <div class="rail">
+    <fieldset><legend>Hardware</legend>
+      <div class="ctl"><label for="p">two-qubit error p</label><output id="p_o"></output>
+        <input type="range" id="p" min="-5" max="-2" step="0.1" value="-3"></div>
+      <div class="ctl"><label for="bud">wall clock</label><output id="bud_o"></output>
+        <input type="range" id="bud" min="0" max="2" step="1" value="1"></div>
+      <div class="ctl"><label for="pl">surface-code p<sub>L</sub></label><output id="pl_o"></output>
+        <div class="seg" id="pl">
+          <button data-v="fowler" aria-pressed="true">idealised</button>
+          <button data-v="willow" aria-pressed="false">measured</button></div></div>
+    </fieldset>
+
+    <fieldset><legend>Problem</legend>
+      <div class="ctl"><label for="eps">relative error ε</label><output id="eps_o"></output>
+        <input type="range" id="eps" min="-2" max="-0.7" step="0.05" value="-1"></div>
+      <div class="ctl"><label for="s">signal |⟨ZZ⟩<sub>c</sub>|</label><output id="s_o"></output>
+        <input type="range" id="s" min="-2" max="-0.3" step="0.05" value="-1"></div>
+      <div class="ctl"><label for="u">U / J</label><output id="u_o"></output>
+        <input type="range" id="u" min="2" max="10" step="0.5" value="4"></div>
+      <div class="ctl"><label for="tm">time window</label><output id="tm_o"></output>
+        <div class="seg" id="tm">
+          <button data-v="sqrt_m" aria-pressed="true">√m / v<sub>B</sub></button>
+          <button data-v="const" aria-pressed="false">t = 1</button>
+          <button data-v="inv_m" aria-pressed="false">1 / m</button></div></div>
+    </fieldset>
+
+    <fieldset><legend>Assumption set</legend>
+      <div class="ctl"><label for="pre">preset</label><output id="pre_o"></output>
+        <div class="seg" id="pre">
+          <button data-v="this_repo" aria-pressed="true">this repo</button>
+          <button data-v="arch_comparison" aria-pressed="false">arch_comparison</button></div></div>
+      <div class="ctl"><label for="tmo">Trotter steps</label><output id="tmo_o"></output>
+        <div class="seg" id="tmo">
+          <button data-v="bound" aria-pressed="true">commutator</button>
+          <button data-v="fixed_density" aria-pressed="false">r = 4τ</button></div></div>
+      <div class="ctl"><label for="slaw">STAR law</label><output id="slaw_o"></output>
+        <div class="seg" id="slaw">
+          <button data-v="count" aria-pressed="true">per rotation</button>
+          <button data-v="angle" aria-pressed="false">per angle</button></div></div>
+      <div class="ctl"><label for="rp">routing: G ~ m·L<sup>x</sup></label><output id="rp_o"></output>
+        <input type="range" id="rp" min="0" max="1" step="0.1" value="0"></div>
+      <div class="ctl"><label for="pc">PEC exponent /(pG)</label><output id="pc_o"></output>
+        <input type="range" id="pc" min="1" max="6" step="0.1" value="2.13"></div>
+      <div class="ctl"><label for="nc">noise channels ×2q</label><output id="nc_o"></output>
+        <input type="range" id="nc" min="1" max="3" step="0.05" value="1"></div>
+    </fieldset>
+
+    <fieldset><legend>Algorithm</legend>
+      <div class="ctl"><label for="mpf">multiproduct order</label><output id="mpf_o"></output>
+        <input type="range" id="mpf" min="1" max="4" step="1" value="2"></div>
+      <div class="ctl"><label for="ent">entanglement, bits/site</label><output id="ent_o"></output>
+        <input type="range" id="ent" min="0.2" max="1.6" step="0.05" value="0.6"></div>
+      <div class="ctl"><label for="kap">STAR injection error</label><output id="kap_o"></output>
+        <input type="range" id="kap" min="-2" max="0" step="0.05" value="-0.273"></div>
+      <div class="ctl"><label for="nsel">readout at n</label><output id="nsel_o"></output>
+        <input type="range" id="nsel" min="0" max="8" step="0.05" value="6"></div>
+    </fieldset>
+  </div>
+</div>
+
+<footer>Models, derivations and citations: <code>METHODS.md</code>. Surface-code p<sub>L</sub>
+after Fowler <em>et al.</em> PRA 86 032324 (2012) or Google Quantum AI, Nature 638 920 (2025);
+mitigation ceiling after Takagi <em>et al.</em> npj QI 8 114 (2022); STAR after Akahoshi
+<em>et al.</em> PRX Quantum 5 010337 (2024); Trotter norms after Campbell QST 7 015007 (2021).
+The classical band is exact diagonalisation and snake-MPS on a 10 PB, exascale data centre.</footer>
+</div>
+
+<script>
+"use strict";
+const WEEK=604800, lg2=Math.log2, L10=Math.log10;
+const cfg={p:1e-3,eps:.1,s:.1,U:4,tmax:"sqrt_m",budget:WEEK,k:2,ent:.6,pl:"fowler",
+  v:2,vcorr:4,cg:15,crot:5,nt:20,dtg:1e-8,dtm:1e-7,lc:1/3,depol:16/15,anc:1,
+  pth:1e-2,tround:1e-6,routing:2,nfac:8,ram:1e16,flops:1.7e18,nkry:4,kappa:.533,srps:20,
+  // reconciliation knobs -- every assumption that differs from 0tt3r/arch_comparison
+  tmode:"bound",spt:4,peccoef:32/15,nchan:1,starlaw:"count",salpha:1.5,sfloor:1e-5,
+  magic:"litinski",lanes:1,rpow:0,xi:1};
+const PRESETS={
+  this_repo:{},
+  arch_comparison:{eps:.01,s:.1,tmax:"const",tmode:"fixed_density",spt:4,peccoef:4,
+    nchan:20.02/10.59,starlaw:"angle",salpha:1.5,sfloor:1e-5,magic:"cultivation",
+    lanes:4,tround:2.4e-7,lc:1,rpow:1}};
+const MMIN=4, RS=3, FQ=4620, FC=42.6;
+// Pinnacle QLDPC architecture -- Webster et al. (Iceberg Quantum) arXiv:2602.11457.
+// Generalised bicycle codes [n,k,d], dt = d+2 code cycles per logical cycle,
+// n_pb physical per processing block; one magic engine per unit, 1 |T> per cycle.
+const GB=[[30,8,4,6,140],[62,10,6,8,244],[126,12,10,12,452],[254,14,16,18,860],
+          [510,16,24,26,1620]];
+const PIN_A=5.84,PIN_B=.0158,PIN_ENG=1.2;
+const pLgb=(k,d,c)=>(PIN_A/k)*Math.pow(c.p/PIN_B,(d+1)/2);
+function pinn(m,c){const qL=2*m+(c.obs==="local"?0:c.anc),T=tcounts(m,c),eL=.3*epsAbs(c);
+  for(const [nc,k,d,dt,npb] of GB){const u=Math.ceil(qL/k);
+    const cy=Math.max(T.dt,T.nt/u)/Math.max(c.lanes,1);
+    if(qL*cy*pLgb(k,d,c)>eL)continue;
+    return{d,k,units:u,phys:u*npb*(1+PIN_ENG),tshot:cy*dt*c.tround}}
+  return null}
+const maxPinn=(n,c)=>bis(m=>{const p=pinn(m,c);if(!p||p.phys>n)return false;
+  const cp=n/p.phys;return cp>=1&&nShots(c)*p.tshot/cp<=c.budget},1e6);
+
+const wComm=c=>9.5+(24.3-9.5)*(c.U-4)/4;
+const tMax=(m,c)=>c.tmax==="sqrt_m"?Math.sqrt(m)/c.v:c.tmax==="const"?1:1/m;
+const cone=(m,t,c)=>Math.min(m,Math.pow(2*c.v*t+1,2));
+const epsAbs=c=>c.eps*c.s;
+function l1(k){if(k<=1)return 1;const x=[];for(let i=1;i<=k;i++)x.push(1/(i*i));
+  let s=0;for(let i=0;i<k;i++){let p=1;for(let j=0;j<k;j++)if(i!==j)p*=x[j]/(x[j]-x[i]);s+=Math.abs(p)}return s}
+function steps(m,c){const t=tMax(m,c);if(t<=0)return 1;
+  // arch_comparison fixes a step DENSITY (r = ceil(4 tau)); their own notes record
+  // that r = 4 fails their small-patch Trotter checks. We derive r from Campbell's
+  // commutator bound, which is documented to be 10-100x loose. Truth is between.
+  if(c.tmode==="fixed_density")return Math.max(1,Math.ceil(c.spt*t));
+  const W=wComm(c)*m, eT=.3*epsAbs(c), k=Math.max(1,c.k|0);
+  const r=k===1?Math.pow(t,1.5)*Math.sqrt(W/eT)
+                :Math.pow(t,1+1/(2*k))*Math.pow(W/eT,1/(2*k));
+  return Math.max(1,r)}
+const sdepth=m=>12;
+function counts(m,c){const r=steps(m,c),t=tMax(m,c),d=r*sdepth(m);
+  const rt=Math.pow(m,.5*c.rpow);   // extra powers of L from compiled SWAP routing
+  const anc=c.obs==="local"?0:c.anc;
+  return{r,t,q:3*m+anc,g:c.cg*m*r*rt,gc:c.lc*c.cg*cone(m,t,c)*r*rt,
+         nrot:c.crot*m*r*rt,nrotc:c.lc*c.crot*cone(m,t,c)*r*rt,depth:d,tc:d*c.dtg+c.dtm}}
+
+// --- NISQ -----------------------------------------------------------------
+function gamma(lam,st){if(st==="none")return 1;
+  if(st==="pec")return Math.exp(Math.min(lam,700));
+  const k=+st.slice(3),no=[],co=[];for(let i=0;i<=k;i++)no.push(1+2*i);
+  for(let i=0;i<=k;i++){let p=1;for(let j=0;j<=k;j++)if(i!==j)p*=no[j]/(no[j]-no[i]);co.push(p)}
+  return co.reduce((a,cc,i)=>a+Math.abs(cc)*Math.exp(Math.min(no[i]*lam,700)),0)}
+function nisqOK(m,n,c,st){const q=counts(m,c),
+  // Gamma^2 = exp(peccoef * nchan * p * G_cone). Ours 32/15; theirs 4.
+  lam=.5*c.peccoef*c.nchan*c.p*q.gc;
+  if(st==="none"&&1-Math.exp(-lam)>c.eps)return false;
+  const cp=n/q.q; if(cp<1)return false;
+  const g=gamma(lam,st); if(!isFinite(g))return false;
+  const L=l1(c.k);
+  const need=Math.log(c.nt*L*L)+2*Math.log(g)-2*Math.log(c.s*c.eps);
+  return need<=Math.log(c.budget*cp/q.tc)}
+function bis(ok,hi){if(!ok(MMIN))return 0;if(ok(hi))return hi;
+  let lo=MMIN,h=hi;for(let i=0;i<34;i++){const md=.5*(lo+h);ok(md)?lo=md:h=md}return lo}
+const maxNisq=(n,c,st)=>bis(m=>nisqOK(m,n,c,st),1e6);
+function maxIdeal(n,c){const mq=n/3;if(mq<MMIN)return 0;
+  const need=c.nt/Math.pow(c.s*c.eps,2);
+  const ok=m=>need*counts(m,c).tc<=c.budget*Math.max(1,n/counts(m,c).q);
+  if(ok(mq))return mq;let lo=MMIN,h=mq;
+  for(let i=0;i<34;i++){const md=.5*(lo+h);ok(md)?lo=md:h=md}return lo}
+
+// --- fault tolerance ------------------------------------------------------
+const pL=(d,c)=>c.pl==="fowler"?.1*Math.pow(c.p/c.pth,(d+1)/2):1.43e-3*Math.pow(2.14,-(d-7)/2);
+const nShots=c=>c.nt*Math.pow(l1(c.k),2)/Math.pow(c.s*c.eps,2);
+function tcounts(m,c){const q=counts(m,c),nd=Math.max(q.nrot/Math.max(m,1),1);
+  const er=.3*epsAbs(c)/nd, ns=RS*lg2(1/er), L=lg2(Math.max(m,2));
+  return{nt:Math.max(q.r*c.crot*(4*(m-1)+L*ns),1),dt:Math.max(q.r*c.crot*(2*L+ns),1)}}
+function surf(m,c){const qL=2*m+c.anc,T=tcounts(m,c),eL=.3*epsAbs(c);
+  const fq=c.magic==="cultivation"?1024:FQ, fc=c.magic==="cultivation"?100:FC;
+  for(let d=3;d<101;d+=2){const rd=T.dt*d/Math.max(c.lanes,1);
+    if(qL*rd*pL(d,c)>eL)continue;
+    const nf=Math.max(c.nfac,Math.ceil(T.nt*fc/rd));
+    return{d,qL,rounds:rd,phys:qL*c.routing*2*d*d+nf*fq,tshot:rd*c.tround}}
+  return null}
+const maxSurf=(n,c)=>bis(m=>{const p=surf(m,c);if(!p||p.phys>n)return false;
+  const cp=n/p.phys;return cp>=1&&nShots(c)*p.tshot/cp<=c.budget},1e6);
+function starLam(m,c){
+  if(c.starlaw==="angle"){const L=Math.sqrt(m),t=tMax(m,c),q=counts(m,c);
+    const th=(5*m-4*L)*t, R=Math.max((16*L*(L-1)+2*m-2)*q.r+1,1);
+    return .5*(4*c.salpha*c.p*th+4*c.sfloor*R)}
+  return c.kappa*c.p*Math.max(counts(m,c).nrotc,1)}
+function star(m,c){const q=counts(m,c),qL=2*m+c.anc,eL=.3*epsAbs(c);
+  for(let d=3;d<101;d+=2){const rd=q.r*c.srps*d/Math.max(c.lanes,1);
+    if(qL*rd*pL(d,c)>eL)continue;
+    // cone-restricted, exactly as NISQ's gc is: applying the light cone to one
+    // and not the other penalises STAR by 3x and makes it look strictly worse
+    return{d,lam:starLam(m,c),phys:qL*c.routing*2*d*d,tshot:rd*c.tround}}
+  return null}
+const maxStar=(n,c)=>bis(m=>{const p=star(m,c);if(!p||p.phys>n)return false;
+  const cp=n/p.phys;if(cp<1)return false;
+  return Math.log(nShots(c))+2*p.lam<=Math.log(c.budget*cp/p.tshot)},1e6);
+
+// --- classical ------------------------------------------------------------
+function lgam(z){const g=[676.5203681218851,-1259.1392167224028,771.32342877765313,
+  -176.61502916214059,12.507343278686905,-.13857109526572012,9.9843695780195716e-6,
+  1.5056327351493116e-7];if(z<.5)return Math.log(Math.PI/Math.sin(Math.PI*z))-lgam(1-z);
+  z-=1;let x=.99999999999980993;for(let i=0;i<8;i++)x+=g[i]/(z+i+1);
+  const t=z+7.5;return .5*Math.log(2*Math.PI)+(z+.5)*Math.log(t)-t+Math.log(x)}
+const log2dim=m=>2*(lgam(m+1)-2*lgam(m/2+1))/Math.LN2;
+function edFrontier(c){let best=0;
+  for(let m=2;m<80;m+=2){if(4+log2dim(m)+lg2(c.nkry)>lg2(c.ram))break;best=m}
+  return best}
+function mpsMax(c,ent){let best=0;
+  for(let m=2;m<4000;m+=2){const cb=ent*c.v*tMax(m,c)*Math.sqrt(m);
+    const mem=2*cb+lg2(Math.sqrt(m)*m*4*16), ops=3*cb+lg2(steps(m,c)*m*c.nt)+6;
+    if(mem>lg2(c.ram)||ops>lg2(c.flops*c.budget))break;best=m}
+  return best}
+function clusterUnbounded(c){
+  // t shrinks with m, so the cone never grows: a cluster expansion is exact at a
+  // cost independent of m and classical reach is unbounded at every m
+  if(c.tmax==="inv_m")return true;
+  if(c.tmax!=="const")return false;
+  return 2*Math.pow(2*c.v*1+1,2)<=lg2(c.ram/16)}
+function band(c){if(clusterUnbounded(c))return[Infinity,Infinity];
+  // the entanglement slider IS the assumption here, so the band spans only the
+  // data-centre size; the paper figure instead shades ent in [0.3, 1.5]
+  const mp=mpsMax(c,c.ent);
+  return[Math.max(edFrontier({...c,ram:1e15}),mp),
+         Math.max(edFrontier({...c,ram:1e17}),mp)]}
+
+// --- plot -----------------------------------------------------------------
+const SVG="http://www.w3.org/2000/svg", W=640,H=400,
+      M={l:52,r:14,t:14,b:40}, X0=0,X1=8,Y0=Math.log10(2),Y1=3.2;
+const px=v=>M.l+(v-X0)/(X1-X0)*(W-M.l-M.r);
+const py=v=>H-M.b-(v-Y0)/(Y1-Y0)*(H-M.t-M.b);
+const el=(t,a)=>{const e=document.createElementNS(SVG,t);
+  for(const k in a)e.setAttribute(k,a[k]);return e};
+
+const SERIES=[
+ {k:"ideal",  c:"--ideal",label:"p = 0",         dash:"6 3", w:1.2},
+ {k:"pec",    c:"--nisq", label:"NISQ + PEC",    dash:"",    w:2},
+ {k:"pecmpf", c:"--nisq", label:"+ MPF",         dash:"4 2", w:1.6},
+ {k:"star",   c:"--star", label:"STAR",          dash:"",    w:2},
+ {k:"surf",   c:"--ft",   label:"surface-code FT",dash:"",   w:2.2},
+ {k:"pinn",   c:"--pinn", label:"Pinnacle (QLDPC)",dash:"",  w:2.2}];
+
+function compute(){
+  const g=[],N=60;
+  for(let i=0;i<N;i++){
+    const lx=X0+(X1-X0)*i/(N-1), n=Math.pow(10,lx);
+    const base={...cfg,k:1};
+    g.push({lx,n,
+      ideal:maxIdeal(n,base), pec:maxNisq(n,base,"pec"),
+      pecmpf:maxNisq(n,cfg,"pec"), star:maxStar(n,base), surf:maxSurf(n,base), pinn:maxPinn(n,base)});
+  }
+  return g}
+
+function draw(g,bd){
+  const p=document.getElementById("plot"); p.textContent="";
+  const cs=getComputedStyle(document.documentElement);
+  const col=v=>cs.getPropertyValue(v).trim();
+
+  if(isFinite(bd[0])){
+    const yl=py(Math.min(Math.max(L10(bd[0]),Y0),Y1)),
+          yh=py(Math.min(Math.max(L10(bd[1]),Y0),Y1));
+    p.appendChild(el("rect",{x:M.l,y:yh,width:W-M.l-M.r,height:Math.max(yl-yh,0),
+      fill:"var(--band-fill)"}));
+    p.appendChild(el("line",{x1:M.l,x2:W-M.r,y1:yh,y2:yh,stroke:"var(--band)",
+      "stroke-width":1,"stroke-dasharray":"5 3"}));
+    const lb=el("text",{x:M.l+6,y:yh-5,class:"curvelab",fill:"var(--ink-2)"});
+    lb.textContent=`classically easy  (m ≤ ${bd[1].toFixed(0)})`; p.appendChild(lb);
+  }else{
+    const lb=el("text",{x:M.l+6,y:M.t+16,class:"curvelab",fill:"var(--ink-2)"});
+    lb.textContent="classically easy at every m — cone smaller than the lattice";
+    p.appendChild(lb);
+  }
+
+  for(let e=X0;e<=X1;e+=2){
+    p.appendChild(el("line",{x1:px(e),x2:px(e),y1:M.t,y2:H-M.b,class:"grid"}));
+    const t=el("text",{x:px(e),y:H-M.b+15,class:"tick","text-anchor":"middle"});
+    t.textContent="10"+String(e).replace(/\d/g,d=>"⁰¹²³⁴⁵⁶⁷⁸⁹"[d]); p.appendChild(t)}
+  for(let e=0;e<=3;e++){ if(e<Y0)continue;
+    p.appendChild(el("line",{x1:M.l,x2:W-M.r,y1:py(e),y2:py(e),class:"grid"}));
+    const t=el("text",{x:M.l-7,y:py(e)+3.5,class:"tick","text-anchor":"end"});
+    t.textContent="10"+String(e).replace(/\d/g,d=>"⁰¹²³⁴⁵⁶⁷⁸⁹"[d]); p.appendChild(t)}
+  p.appendChild(el("rect",{x:M.l,y:M.t,width:W-M.l-M.r,height:H-M.t-M.b,class:"frame"}));
+
+  const xl=el("text",{x:(M.l+W-M.r)/2,y:H-6,class:"axlab","text-anchor":"middle"});
+  xl.textContent="n  (physical qubits)"; p.appendChild(xl);
+  const yl=el("text",{x:14,y:(M.t+H-M.b)/2,class:"axlab","text-anchor":"middle",
+    transform:`rotate(-90 14 ${(M.t+H-M.b)/2})`});
+  yl.textContent="m  (resolvable lattice sites)"; p.appendChild(yl);
+
+  for(const s of SERIES){
+    let d="",open=false,last=null;
+    for(const pt of g){const v=pt[s.k];
+      if(!(v>0)||L10(v)>Y1+.6){open=false;continue}
+      const X=px(pt.lx),Y=py(Math.max(L10(v),Y0));
+      d+=(open?"L":"M")+X.toFixed(1)+" "+Y.toFixed(1)+" ";open=true;last={X,Y,v}}
+    if(!d)continue;
+    p.appendChild(el("path",{d,fill:"none",stroke:`var(${s.c})`,"stroke-width":s.w,
+      "stroke-dasharray":s.dash,"stroke-linejoin":"round"}));
+    if(last&&last.Y>M.t+10&&last.Y<H-M.b-6){
+      const t=el("text",{x:Math.min(last.X,W-M.r)-4,y:last.Y-6,class:"curvelab",
+        fill:`var(${s.c})`,"text-anchor":"end"});
+      t.textContent=s.label; p.appendChild(t)}}
+
+  const lx=+document.getElementById("nsel").value;
+  p.appendChild(el("line",{x1:px(lx),x2:px(lx),y1:M.t,y2:H-M.b,
+    stroke:"var(--ink-3)","stroke-width":1,"stroke-dasharray":"2 3"}));
+}
+
+// --- wiring ---------------------------------------------------------------
+const $=id=>document.getElementById(id);
+const BUDS=[["1 day",86400],["1 week",WEEK],["1 month",30*86400]];
+function readInputs(){
+  cfg.p=Math.pow(10,+$("p").value); cfg.eps=Math.pow(10,+$("eps").value);
+  cfg.s=Math.pow(10,+$("s").value); cfg.U=+$("u").value;
+  cfg.k=+$("mpf").value; cfg.ent=+$("ent").value; cfg.kappa=Math.pow(10,+$("kap").value);
+  cfg.rpow=+$("rp").value; cfg.peccoef=+$("pc").value; cfg.nchan=+$("nc").value;
+  cfg.budget=BUDS[+$("bud").value][1];
+  $("p_o").textContent=cfg.p.toExponential(1);
+  $("eps_o").textContent=cfg.eps.toFixed(3);
+  $("s_o").textContent=cfg.s.toFixed(3);
+  $("u_o").textContent=cfg.U.toFixed(1);
+  $("mpf_o").textContent="order "+2*cfg.k;
+  $("ent_o").textContent=cfg.ent.toFixed(2);
+  $("kap_o").textContent=(cfg.kappa/0.533).toFixed(2)+"× nominal";
+  $("rp_o").textContent="x = "+(2+cfg.rpow).toFixed(1);
+  $("pc_o").textContent=cfg.peccoef.toFixed(2);
+  $("nc_o").textContent=cfg.nchan.toFixed(2)+"×";
+  $("tmo_o").textContent=cfg.tmode==="bound"?"Campbell":"fixed";
+  $("slaw_o").textContent=cfg.starlaw==="angle"?"angle":"count";
+  $("pre_o").textContent=cfg.preset||"custom";
+  $("bud_o").textContent=BUDS[+$("bud").value][0];
+  $("pl_o").textContent=cfg.pl==="fowler"?"Fowler":"Willow";
+  $("tm_o").textContent=cfg.tmax==="sqrt_m"?"light cone":cfg.tmax==="const"?"fixed":"slide 1";
+  $("nsel_o").textContent=Math.pow(10,+$("nsel").value).toPrecision(2).replace("e+"," × 10^");
+}
+function render(){
+  readInputs();
+  const g=compute(), bd=band(cfg);
+  draw(g,bd);
+  const n=Math.pow(10,+$("nsel").value), base={...cfg,k:1};
+  const mSurf0=maxSurf(n,base);
+  const vals=[
+    ["ideal","p = 0 (qubit-limited)",maxIdeal(n,base),null],
+    ["nisq","NISQ + PEC",maxNisq(n,base,"pec"),null],
+    ["nisq","NISQ + PEC + MPF-"+2*cfg.k,maxNisq(n,cfg,"pec"),"dash"],
+    ["star","STAR",maxStar(n,base),null],
+    ["ft","surface-code FT",mSurf0,null],
+    ["pinn","Pinnacle (QLDPC)",maxPinn(n,base),null]];
+  const sp=mSurf0>0?surf(mSurf0,base):null;
+  $("rows").innerHTML=vals.map(([c,l,v])=>
+    `<tr><th><span class="swatch" style="background:var(--${c})"></span>${l}</th>
+     <td class="v">${v>0?(v<10?v.toFixed(1):v.toFixed(0)):"—"}</td></tr>`).join("")
+    +`<tr><th>classical band</th><td class="v">${isFinite(bd[1])?bd[0].toFixed(0)+"–"+bd[1].toFixed(0):"unbounded"}</td></tr>`;
+  const mPin=maxPinn(n,base);
+  const best=Math.max(mSurf0,mPin,maxNisq(n,cfg,"pec"),maxStar(n,base));
+  const who=mPin>=best?"Pinnacle (QLDPC)":mSurf0>=best?"surface-code FT":
+            maxNisq(n,cfg,"pec")>=best?"mitigated NISQ":"STAR";
+  $("verdict").innerHTML=!isFinite(bd[1])
+    ? `<b>No quantum advantage at any n.</b> This time window leaves the causal cone smaller than the lattice, so a classical cluster expansion is exact at a cost independent of m.`
+    : best>bd[1]
+      ? `<b>${who} clears the classical band</b> at n = 10<sup>${(+$("nsel").value).toFixed(1)}</sup>, reaching m = ${best.toFixed(0)} against a classical ceiling of ${bd[1].toFixed(0)}.`
+      : `<b>Nothing clears the classical band here.</b> Best quantum reach is m = ${best>0?best.toFixed(0):"—"} (${who}); classical gets to ${bd[1].toFixed(0)}.`;
+  $("note").textContent=sp
+    ? `Surface code picks distance d = ${sp.d}, ${(sp.phys/1e3).toFixed(0)}k physical qubits per copy, ${nShots(cfg).toExponential(1)} shots. Multiproduct ‖c‖₁ = ${l1(cfg.k).toFixed(2)}. G_total ∝ m^(9/4), so the mitigated ceiling grows only as (ln n)^(4/9).`
+    : `No surface-code point exists at this n: the magic-state factory bank alone exceeds the qubit budget.`;
+}
+let queued=false;
+const schedule=()=>{if(queued)return;queued=true;
+  requestAnimationFrame(()=>{queued=false;render()})};
+for(const id of ["p","eps","s","u","mpf","ent","bud","nsel","kap","rp","pc","nc"])
+  $(id).addEventListener("input",schedule);
+const SEGKEY={pl:"pl",tm:"tmax",tmo:"tmode",slaw:"starlaw"};
+for(const grp of Object.keys(SEGKEY))
+  $(grp).addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+    [...$(grp).children].forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+    cfg[SEGKEY[grp]]=b.dataset.v; cfg.preset="custom"; render()});
+
+function setSeg(grp,v){[...$(grp).children].forEach(x=>
+  x.setAttribute("aria-pressed",String(x.dataset.v===v)))}
+function applyPreset(name){
+  Object.assign(cfg,{eps:.1,s:.1,tmax:"sqrt_m",tmode:"bound",spt:4,peccoef:32/15,nchan:1,
+    starlaw:"count",salpha:1.5,sfloor:1e-5,magic:"litinski",lanes:1,tround:1e-6,
+    lc:1/3,rpow:0},PRESETS[name]);
+  cfg.preset=name;
+  $("eps").value=Math.log10(cfg.eps).toFixed(2); $("s").value=Math.log10(cfg.s).toFixed(2);
+  $("pc").value=cfg.peccoef.toFixed(2); $("nc").value=cfg.nchan.toFixed(2);
+  $("rp").value=cfg.rpow.toFixed(1);
+  setSeg("tm",cfg.tmax); setSeg("tmo",cfg.tmode); setSeg("slaw",cfg.starlaw);
+  setSeg("pre",name);
+  render();
+}
+$("pre").addEventListener("click",e=>{const b=e.target.closest("button");
+  if(b)applyPreset(b.dataset.v)});
+matchMedia("(prefers-color-scheme:dark)").addEventListener("change",render);
+cfg.preset="this_repo";
+render();
+</script>
