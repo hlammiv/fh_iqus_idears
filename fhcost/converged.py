@@ -21,7 +21,10 @@ WHERE THE EXPONENTIAL TAKEOFF ACTUALLY IS
   In the converged regime the contest is no longer "how big a lattice" but "how
   far in time", and there the scaling separates violently:
 
-      classical (light-cone / cluster):  cost ~ 4^{(2 v_B t + 1)^2}   -- exp(t^2)
+      classical (light-cone / cluster):  cost ~ 4^{cluster_sites(t)}   -- exp(t^2),
+                                         where the cluster carries the SAME
+                                         xi ln(1/eps) accuracy buffer as the
+                                         quantum finite-size criterion
       quantum:                           cost ~ poly(t) on m_required(t) sites
 
   The classical cost is exponential in the cone AREA. Every unit of t you add
@@ -99,17 +102,36 @@ def m_required_extrapolated(t: float, cfg: Config = DEFAULT, n_sizes: int = 4,
     return {"m_required": max(L, 1.0) ** 2, "shot_multiplier": float(n_sizes)}
 
 
-def classical_t_reach(cfg: Config = DEFAULT) -> float:
-    """Largest t a light-cone/cluster expansion handles, at ANY lattice size.
+def cluster_t_reach(cfg: Config = DEFAULT) -> float:
+    """Largest t an ERROR-CONTROLLED cluster expansion handles, at any lattice size.
 
-    The cone holds N_c = (2 v_B t + 1)^2 sites at 4 states each, and its cost is
-    independent of m. This is the number the quantum machine has to beat.
+    This is 0 at the accuracy this study demands, and that is the point.
+
+    An earlier version of this model charged the cluster only (2 v t + 1)^2 sites
+    -- the bare cone, with no accuracy buffer -- and concluded that short-time
+    dynamics is "classically free at any m". That was an artifact of not charging
+    the classical side for accuracy. Truncating at v t is not exact: the tail
+    outside the cluster decays as exp(-(R - v t)/xi), so reaching eps needs
+    R >~ v t + xi ln(1/eps), exactly the buffer the quantum finite-size criterion
+    carries. With eps ~ 4e-4 that buffer alone is ~6 sites, so the cluster is
+    ~170 sites even at t = 0, and 4^170 amplitudes is not a calculation.
+
+    For the cluster to beat exact diagonalisation on a 28-site lattice it would
+    have to be SMALLER than 28 sites, i.e. R <~ 2.4, which at t = 0.5 permits a
+    residual of only exp(-1.4) ~ 25%. So at 10% relative accuracy the cluster
+    expansion is simply not a competitive method here, at any xi in the plausible
+    range (checked from 0.2 to 1.0).
+
+    Caveat in the other direction: this costs FULL diagonalisation inside the
+    cluster (4^N). A cluster with an approximate inner solver is not costed, and
+    would be the obvious way to rescue the method.
     """
+    from .classical import cluster_sites
     cap = math.log2(cfg.ram_bytes / BYTES_PER_AMP)
     lo, hi = 0.0, 50.0
     for _ in range(60):
         mid = 0.5 * (lo + hi)
-        lo, hi = (mid, hi) if 2.0 * (2.0 * cfg.v * mid + 1.0) ** 2 <= cap else (lo, mid)
+        lo, hi = (mid, hi) if 2.0 * cluster_sites(mid, cfg) <= cap else (lo, mid)
     return lo
 
 
@@ -135,6 +157,24 @@ def quantum_t_reach(n: float, cfg: Config = DEFAULT, arm: str = "pec") -> float:
     for _ in range(44):
         mid = 0.5 * (lo + hi)
         lo, hi = (mid, hi) if ok(mid) else (lo, mid)
+    return lo
+
+
+def classical_t_reach(cfg: Config = DEFAULT) -> float:
+    """Best CONVERGED classical reach in t, over the methods we cost.
+
+    The cluster expansion contributes nothing at this accuracy (see above), so
+    this is set by exact diagonalisation: the largest t at which ED on its
+    memory-limited lattice is still bigger than the lattice the physics needs.
+    """
+    from .classical import ed_frontier
+    m_ed = float(ed_frontier(cfg))
+    lo, hi = 0.0, 50.0
+    if m_required(lo, cfg) > m_ed:
+        return 0.0
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if m_required(mid, cfg) <= m_ed else (lo, mid)
     return lo
 
 

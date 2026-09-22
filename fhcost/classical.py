@@ -35,7 +35,7 @@ from __future__ import annotations
 import math
 from math import comb
 from .budget import Config, DEFAULT
-from .hubbard import t_max, cone_sites
+from .hubbard import t_max, cone_sites, eps_absolute
 
 BYTES_PER_AMP = 16.0      # complex128
 
@@ -117,12 +117,26 @@ def mps_max_m(cfg: Config = DEFAULT) -> float:
     return best
 
 
+def cluster_radius(t: float, cfg: Config = DEFAULT) -> float:
+    """Cluster radius for an ERROR-CONTROLLED truncation, matching the quantum
+    finite-size criterion. Truncating at v t alone is not exact -- the tail
+    outside the cone is exponential, so reaching accuracy eps needs the same
+    xi ln(1/eps) buffer that converged.m_required charges. Omitting it here gave
+    the classical side a free pass the quantum side did not get."""
+    eps = cfg.frac_trotter * eps_absolute(cfg)
+    return cfg.v * t + cfg.xi * math.log(1.0 / max(eps, 1e-12))
+
+
+def cluster_sites(t: float, cfg: Config = DEFAULT) -> float:
+    return (2.0 * cluster_radius(t, cfg) + 1.0) ** 2
+
+
 def cluster_max_m(cfg: Config = DEFAULT) -> float:
-    """Light-cone / cluster truncation: exact on (2vt+1)^2 sites, 4 states each."""
+    """Error-controlled cluster truncation: exact on cluster_sites, 4 states each."""
     best = 0.0
     m = 2.0
     while m < 1e5:
-        nc = cone_sites(m, t_max(m, cfg), cfg)
+        nc = min(m, cluster_sites(t_max(m, cfg), cfg))
         if nc * 2.0 > math.log2(cfg.ram_bytes / BYTES_PER_AMP):   # 4^nc amplitudes
             break
         best = m
@@ -257,7 +271,7 @@ def max_m_fixed_t(t: float, cfg: Config = DEFAULT) -> float:
     intended question.
     """
     from .hubbard import trotter_steps
-    ncone = (2.0 * cfg.v * t + 1.0) ** 2
+    ncone = cluster_sites(t, cfg)          # error-controlled, same buffer as quantum
     # cluster expansion: 4^ncone amplitudes, independent of m
     if 2.0 * ncone <= math.log2(cfg.ram_bytes / BYTES_PER_AMP):
         return UNBOUNDED

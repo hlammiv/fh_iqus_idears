@@ -116,11 +116,18 @@ def main() -> int:
     # budget its residual bias is allocated, NOT by the physics -- give it the old
     # 0.5 share and it runs, give it 0.05 and it does not. Assert that, not a verdict.
     lam4 = nisq.lambda_of(4.0)
-    check("ZNE is allocation-limited here, not physics-limited",
-          abs(lam4 / caps["zne3"] - 1.0) < 0.15
-          and nisq.max_m(1e6, DEFAULT.but(frac_mitig=0.5), "zne3") > 0
-          and nisq.max_m(1e6, DEFAULT, "zne3") == 0,
-          f"Lambda(m=4) = {lam4:.3f} vs order-3 ceiling {caps['zne3']:.3f}")
+    # With the cone integral corrected (2/3 not 1/3) Lambda(m=4) rises to 0.596
+    # and ZNE is no longer on a knife edge: at order 8 its residual bias is still
+    # 63% of the ENTIRE relative tolerance, so no reallocation rescues it.
+    b8 = nisq.residual_bias(lam4, "zne4")
+    check("ZNE is bias-blocked outright, not merely under-allocated",
+          nisq.max_m(1e6, DEFAULT, "zne3") == 0
+          and nisq.max_m(1e6, DEFAULT.but(frac_mitig=0.5), "zne3") == 0
+          and b8 > 0.5 * DEFAULT.eps,
+          f"Lambda(m=4) = {lam4:.3f}; order-8 bias is {b8/DEFAULT.eps:.0%} of the "
+          "whole tolerance")
+    check("...but it recovers at lower physical error",
+          nisq.max_m(1e6, DEFAULT.but(p=1e-5), "zne2") > 0)
     check("PEC still beats every ZNE order",
           all(nisq.max_m(1e6, DEFAULT, "pec") > nisq.max_m(1e6, DEFAULT, f"zne{k}")
               for k in (1, 2, 3)))
@@ -394,12 +401,22 @@ def main() -> int:
     # the band. It is a statement about the ED frontier, NOT about classical
     # methods in general -- no validated tensor-network estimate exists for this
     # observable. See OPEN_ITEMS.md O10.
-    check("PEC-NISQ clears the ED frontier under the measured calibration",
-          s["n_pec_clears_classical_hi"] is not None,
-          f"at n = {s['n_pec_clears_classical_hi']:.1e}")
-    check("...but not under the loose Trotter bound",
-          curves.summary(DEFAULT.but(trotter="extensive"))["n_pec_clears_classical_hi"]
-          is None, "so the flip rests on the calibration too, not the band alone")
+    # Correcting the cone integral (2/3 not 1/3) doubled Lambda and took
+    # mitigated NISQ back below the ED frontier: 26.8 -> 16.8 at n = 1e6. It had
+    # cleared only while the cone fraction was wrong.
+    check("PEC-NISQ does NOT clear the ED frontier",
+          s["n_pec_clears_classical_hi"] is None,
+          f"m = {s['pec_at_1e6']:.1f} at n=1e6 against a frontier of {hi:.0f}")
+    check("adding multiproduct does get it there, eventually",
+          s["n_pec_mpf_clears_classical_hi"] is not None,
+          f"at n = {curves.fmt_crossing(s['n_pec_mpf_clears_classical_hi'])}")
+    check("STAR, surface FT and Pinnacle all clear it",
+          all(s[k] is not None for k in ("n_star_clears_classical_hi",
+                                         "n_ft_clears_classical_hi",
+                                         "n_pinnacle_clears_classical_hi")),
+          f"STAR {curves.fmt_crossing(s['n_star_clears_classical_hi'])}, "
+          f"FT {curves.fmt_crossing(s['n_ft_clears_classical_hi'])}, "
+          f"QLDPC {curves.fmt_crossing(s['n_pinnacle_clears_classical_hi'])}")
     check("STAR clears the classical band only under the measured calibration",
           curves.summary(DEFAULT.but(trotter="extensive"))["n_star_clears_classical_hi"] is None
           and s["n_star_clears_classical_hi"] is not None,
@@ -438,26 +455,31 @@ def main() -> int:
           f"n = {s['n_ft_clears_classical_hi']:.2g}")
 
     print("\nconverged.py -- finite-size extrapolation")
+    check("an error-controlled cluster expansion is not viable at this accuracy",
+          converged.cluster_t_reach() == 0.0,
+          "the xi ln(1/eps) buffer alone is ~6 sites, so 4^170 amplitudes at t=0")
     tc = converged.classical_t_reach()
-    check("classical light cone dies near t ~ 1", 0.7 < tc < 1.4, f"t = {tc:.2f}")
-    check("m_required is modest, not huge", 100 < converged.m_required(1.0) < 400,
-          f"{converged.m_required(1.0):.0f} sites at t = 1")
-    check("classical cone cost is exp(t^2)",
-          converged.classical_cone_cost_log2(2.0) / converged.classical_cone_cost_log2(1.0) > 3.0)
-    # Under the loose bound neither arm reached the classical light-cone time.
-    # The measured step count reverses that -- the single biggest consequence.
-    EXTC = DEFAULT.but(trotter="extensive")
-    check("the loose bound kept MASQ and STAR below the classical time",
-          converged.quantum_t_reach(1e10, EXTC, "pec") < tc
-          and converged.quantum_t_reach(1e10, EXTC, "star") < tc)
-    check("the measured calibration lifts both above it",
-          converged.quantum_t_reach(1e6, DEFAULT, "pec") > tc
-          and converged.quantum_t_reach(1e6, DEFAULT, "star") > tc,
-          f"MASQ t={converged.quantum_t_reach(1e6, DEFAULT, 'pec'):.2f}, "
-          f"STAR t={converged.quantum_t_reach(1e6, DEFAULT, 'star'):.2f} vs classical {tc:.2f}")
-    check("surface FT clears the classical time between n = 1e6 and 1e7",
-          converged.quantum_t_reach(1e6, DEFAULT.but(pl_model="fowler"), "surface") < tc
-          < converged.quantum_t_reach(1e7, DEFAULT.but(pl_model="fowler"), "surface"))
+    # Nothing classical converges at all: the finite-size buffer alone demands
+    # 144 sites at t = 0, and ED holds 26. The converged question is therefore
+    # about which QUANTUM arms get there, not about beating a classical time.
+    check("no classical method we cost reaches a converged answer",
+          converged.classical_t_reach() == 0.0
+          and converged.m_required(0.0) > classical.ed_frontier(),
+          f"needs {converged.m_required(0.0):.0f} sites, ED holds "
+          f"{classical.ed_frontier()}")
+    fowc = DEFAULT.but(pl_model="fowler")
+    need = converged.m_required(0.0)
+    check("neither MASQ nor STAR converges at any plotted n",
+          nisq.max_m(1e9, DEFAULT, "pec") < need
+          and ftqc.max_m_star(1e9, DEFAULT) < need,
+          f"MASQ {nisq.max_m(1e9, DEFAULT, 'pec'):.0f}, "
+          f"STAR {ftqc.max_m_star(1e9, DEFAULT):.0f} vs {need:.0f} needed")
+    check("surface FT and Pinnacle do, between n = 1e7 and 1e8",
+          ftqc.max_m_surface(1e7, fowc) < need < ftqc.max_m_surface(1e8, fowc)
+          and ftqc.max_m_pinnacle(1e8, DEFAULT) > need,
+          f"FT {ftqc.max_m_surface(1e7, fowc):.0f} -> "
+          f"{ftqc.max_m_surface(1e8, fowc):.0f}")
+
     check("the current t_max convention cannot converge",
           converged.m_required(hubbard.t_max(100.0)) > 100.0,
           "2 v_corr t_max = 4L > L by construction")
@@ -466,7 +488,7 @@ def main() -> int:
     for name, c in presets.PRESETS.items():
         check(f"preset {name!r} evaluates", nisq.max_m(1e6, c, "pec") > 0)
     check("default config anchor",
-          abs(nisq.max_m(1e6, DEFAULT, "pec") - 26.79) < 0.05,
+          abs(nisq.max_m(1e6, DEFAULT, "pec") - 16.80) < 0.05,
           f"m = {nisq.max_m(1e6, DEFAULT, 'pec'):.3f}")
     # Under the loose bound the fixed-density convention differed by 13x. The
     # exact calibration closes almost all of it: r(m=6) is 12.5 measured against
@@ -474,9 +496,11 @@ def main() -> int:
     ext = nisq.max_m(1e6, DEFAULT.but(trotter="extensive"), "pec")
     fix = nisq.max_m(1e6, DEFAULT.but(trotter_mode="fixed_density"), "pec")
     mea = nisq.max_m(1e6, DEFAULT, "pec")
+    # With the cone integral corrected, the bound no longer reaches a 2x2 lattice
+    # at all, so the ratio to it is infinite rather than merely large.
     check("the calibration closes most of the step-count disagreement",
-          fix / ext > 8 and fix / mea < 3,
-          f"vs bound {fix/ext:.1f}x, vs measured {fix/mea:.1f}x")
+          ext == 0 and 0.5 < fix / mea < 5,
+          f"bound reaches {ext:.0f}, measured {mea:.1f}, fixed-density {fix:.1f}")
 
     print("\nhygiene (review #11)")
     a = converged.m_required(1.0)

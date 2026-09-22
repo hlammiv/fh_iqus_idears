@@ -109,8 +109,49 @@ def t_max(m: float, cfg: Config = DEFAULT) -> float:
 
 
 def cone_sites(m: float, t: float, cfg: Config = DEFAULT) -> float:
-    """Sites inside the causal cone of the observable, capped at the lattice."""
+    """HAMILTONIAN light cone: sites within v t of the observable, capped.
+
+    This is an approximate physical cone, NOT the circuit's exact backward
+    dependency cone (see circuit_cone_sites). Hamiltonian evolution also has
+    tails outside it, so truncation at v t is not exact -- it is accurate only to
+    the exponential tail, which is why the finite-size criterion in converged.py
+    carries an explicit xi ln(1/eps) buffer and this does not.
+    """
     return min(float(m), (2.0 * cfg.v * t + 1.0) ** 2)
+
+
+def circuit_cone_sites(m: float, cfg: Config = DEFAULT) -> float:
+    """Backward dependency cone of the COMPILED circuit, in sites.
+
+    Different object from the Hamiltonian cone: it is set by gate connectivity
+    and depth, not by a velocity. A second-order Trotter step applies four
+    nearest-neighbour hopping colour classes, so the observable's support grows
+    by roughly two sites per step. With r in the tens to hundreds this saturates
+    at the whole lattice almost immediately -- which is precisely why a cone
+    argument cannot explain the measured damping, and why the support model
+    (O5) does. Kept as a diagnostic.
+    """
+    r = trotter_steps(m, cfg)
+    return min(float(m), (2.0 * 2.0 * r + 1.0) ** 2)
+
+
+def mean_cone_fraction(m: float, cfg: Config = DEFAULT) -> float:
+    """Time-averaged cone fraction over the evolution, with the lattice cap.
+
+    The cone grows as (2 v u + 1)^2 until it hits m, then stays there. Averaging
+    that over u in [0, t_max] gives 2/3 + 1/(2 sqrt m) - 1/(6 m^(3/2)), which
+    tends to 2/3 -- NOT the 1/3 of an uncapped cone, which this model used. The
+    closed form is checked against numerical integration in selftest.
+    """
+    if cfg.tmax_mode != "sqrt_m":
+        t = t_max(m, cfg)
+        if t <= 0:
+            return 1.0
+        n = 256
+        acc = sum(cone_sites(m, t * (i + 0.5) / n, cfg) for i in range(n)) / n
+        return acc / max(m, 1e-12)
+    rm = math.sqrt(max(m, 1.0))
+    return 2.0 / 3.0 + 1.0 / (2.0 * rm) - 1.0 / (6.0 * rm ** 3)
 
 
 def qubits_per_site_total(m: float, cfg: Config = DEFAULT) -> float:
@@ -254,7 +295,9 @@ def counts(m: float, cfg: Config = DEFAULT) -> dict:
         frac = min(1.0, (cfg.w_obs0 + cfg.support_growth * depth)
                    / qubits_per_site_total(m, cfg))
     elif cfg.damping_model == "cone":
-        frac = cfg.lightcone_frac * cone_sites(m, t, cfg) / max(m, 1e-12)
+        # the TIME-AVERAGED cone fraction, not a constant: with the lattice cap
+        # the average is ~2/3, not the 1/3 of an uncapped cone
+        frac = mean_cone_fraction(m, cfg)
     else:
         raise ValueError(f"unknown damping_model {cfg.damping_model!r}")
     g_cone = cfg.c_g * m * r * route * frac

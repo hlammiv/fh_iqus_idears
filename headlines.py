@@ -38,9 +38,16 @@ L.append(f"- Continuous m is a capacity proxy. At n = 10^6 the feasible integer 
          f"{curves.max_integer_L(nisq.max_m(1e6, D, 'pec'))}, "
          f"FT {curves.max_integer_L(ftqc.max_m_surface(1e6, fow))}x"
          f"{curves.max_integer_L(ftqc.max_m_surface(1e6, fow))}.")
-L.append(f"- Trotter: the commutator bound is {ext and ''}"
-         f"{nisq.max_m(1e6, D, 'pec') / nisq.max_m(1e6, ext, 'pec'):.1f}x conservative in m "
-         f"against the exact-diagonalisation calibration; curves are drawn as a band between them.")
+_pe = nisq.max_m(1e6, ext, "pec")
+L.append("- Trotter: under the commutator bound mitigated NISQ does not reach even a"
+         " 2x2 lattice; under the exact-diagonalisation calibration it reaches"
+         f" {nisq.max_m(1e6, D, "pec"):.0f}."
+         " Curves are drawn as a band between the two."
+         if _pe <= 0 else
+         f"- Trotter: the bound is {nisq.max_m(1e6, D, "pec") / _pe:.1f}x conservative in m.")
+L.append(f"- Converged answers: the finite-size buffer needs {converged.m_required(0.0, D):.0f}"
+         f" sites at t=0, so NOTHING classical converges (ED holds {classical.ed_frontier(D)}),"
+         " and neither do NISQ or STAR. Only surface FT and Pinnacle do, by n = 1e8.")
 L.append(f"- Error ledger sums to {error_ledger(D)['TOTAL']:.2f} of the tolerance, at "
          f"per-time two-sided 95%.")
 
