@@ -188,6 +188,40 @@ TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
 # limited, which means the slope cannot be extrapolated in EITHER direction.
 # The tensor-network arm is therefore UNBOUNDED by the available data, not
 # bounded and small. Its absence from the band is a gap, not a finding.
+# DECISIVE DIAGNOSTIC, from the same deposit and costing nothing to run.
+# Absolute error against exact FLO at U = 0, by time and bond dimension:
+#
+#    t     exact    chi=256   chi=512  chi=1024  chi=2048   ratio 256/2048
+#   0.1    0.9418   7.93e-3   7.38e-3   7.36e-3   7.35e-3      1.1x
+#   0.5    0.2429   6.36e-2   4.78e-2   3.31e-2   2.56e-2      2.5x
+#   2.0    0.0211   1.72e-1   1.47e-1   1.44e-1   1.57e-1      1.1x
+#
+# At t = 0.1 the state is barely entangled and chi = 256 is wild overkill -- a
+# truncation-limited calculation would be at machine precision there. Instead the
+# error is 7.9e-3, and an EIGHTFOLD increase in bond dimension removes 8% of it.
+# The `max_bond_dimension` column confirms every run saturated its cap, so
+# truncation was binding; it simply was not what limited the accuracy.
+#
+# CONCLUSION: the published TDVP carries a chi-INDEPENDENT error floor of
+# ~7e-3 present from the earliest times -- plausibly two-site TDVP projection
+# error on a snake MPS with long-range Jordan-Wigner strings, or the time step,
+# or the GPR smoothing. It is therefore NOT a converged tensor-network
+# calculation, the chi-extrapolation to 2e12 is meaningless, and this dataset
+# CANNOT bound what tensor networks can do on this problem.
+#
+# Note what this does to the argument in METHODS 5: the conclusion there (drop
+# the entropy-derived arm) stands, because the entropy model is contradicted by
+# a floor it cannot represent. But the REASONING offered there -- "the error is
+# flat in chi, so TN fails" -- was wrong: flatness in chi is evidence the run was
+# not chi-limited, not evidence that chi cannot help.
+#
+# The floor sits at ~7e-3, essentially AT our absolute tolerance (~6e-3). A clean
+# implementation that removed it could plausibly reach this accuracy at modest
+# chi, which would move the classical upper edge well above 26.
+TDVP_FLOOR = {"t": 0.1, "exact": 0.9418,
+              "err": {256: 7.93e-3, 512: 7.38e-3, 1024: 7.36e-3, 2048: 7.35e-3},
+              "verdict": "chi-independent floor; not truncation-limited"}
+
 TDVP_LEADERSHIP = {"published_chi": 2048, "published_flops": 4.8e14,
                    "week_exascale_flops": 1.0e24, "chi_affordable_week": 3e6,
                    "err_at_affordable_chi_on_measured_slope": 0.032}

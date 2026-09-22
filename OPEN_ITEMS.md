@@ -168,13 +168,37 @@ n ~ 1.7e4". **The band narrowed because an unvalidated arm was removed, not
 because tensor networks were shown to fail** -- and removing an arm is a change in
 the direction that flatters the quantum curves, which deserves suspicion.
 
-What is actually established: the only published tensor-network attempt on this
-problem (TDVP, chi = 256-2048, Zenodo 17799843) does not converge on this
-observable. Its error is flat in chi (err ~ chi^-0.12, so doubling chi buys 9%),
-plateaus at 0.077, and at late times exceeds the signal itself. The entropy model
-that set the old upper edge predicts chi ~ 6.6e3 would suffice at that same point
--- it is the wrong shape, not merely mis-calibrated, because an entropy argument
-cannot see an error that saturates.
+**Sharpened by a diagnostic that cost nothing to run.** Splitting the published
+TDVP error by TIME rather than averaging it:
+
+| t | exact | chi=256 | chi=2048 | ratio |
+|---|---|---|---|---|
+| 0.1 | 0.9418 | 7.93e-3 | 7.35e-3 | **1.1x** |
+| 0.5 | 0.2429 | 6.36e-2 | 2.56e-2 | 2.5x |
+| 2.0 | 0.0211 | 1.72e-1 | 1.57e-1 | 1.1x |
+
+At t = 0.1 the state is barely entangled and chi = 256 is wild overkill; a
+truncation-limited calculation would be at machine precision. Instead the error
+is 7.9e-3, and an **eightfold** increase in bond dimension removes **8%** of it.
+The deposit's `max_bond_dimension` column confirms every run saturated its cap,
+so truncation was binding -- it simply was not what limited the accuracy.
+
+So the published TDVP carries a **chi-independent error floor of ~7e-3 from the
+earliest times** (plausibly two-site TDVP projection error on a snake MPS with
+long-range Jordan-Wigner strings, or the time step, or the GPR smoothing). It is
+**not a converged tensor-network calculation**, the chi-extrapolation to 2e12 is
+meaningless, and this dataset **cannot bound what tensor networks can do here**.
+
+This also corrects the reasoning given in METHODS 5. The conclusion there --
+drop the entropy-derived arm -- stands, because the entropy model cannot
+represent a floor of this kind. But the argument offered for it, "the error is
+flat in chi, so tensor networks fail", was wrong: flatness in chi is evidence the
+run was not chi-limited, not evidence that chi cannot help.
+
+The floor sits at ~7e-3, essentially AT our absolute tolerance of ~6e-3. **A
+clean implementation that removed it could plausibly reach this accuracy at
+modest chi**, which would move the classical upper edge well above 26 and could
+reverse the FT/STAR/Pinnacle crossings.
 
 What is NOT established, and would move the band back up:
 1. **That was not a best-effort classical attack.** They ran TDVP as a

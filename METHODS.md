@@ -649,9 +649,23 @@ links at U = 0 against the exact free-fermion result:
 | mean abs. error | 0.100 | 0.085 | 0.078 | **0.077** |
 
 The error is **flat in chi** -- `err ~ chi^-0.12`, so doubling the bond dimension
-buys 9% -- and it has plateaued at 0.077, which at late times is several times
-larger than the signal itself (exact |C^zz| = 0.021-0.031 for t >= 1.5).
-Extrapolating that slope to our tolerance would need `chi ~ 2e12`.
+buys 9%.
+
+**But flatness in chi does not mean tensor networks fail.** Splitting the error
+by time rather than averaging it shows why. At t = 0.1 the state is barely
+entangled and chi = 256 is wild overkill, yet the error is 7.9e-3 and an
+*eightfold* increase in bond dimension removes only 8% of it (7.35e-3 at
+chi = 2048). A truncation-limited calculation would be at machine precision
+there. The deposit's `max_bond_dimension` column confirms every run saturated
+its cap, so truncation was binding -- it just was not what limited the accuracy.
+
+The published TDVP therefore carries a **chi-independent error floor of ~7e-3**
+from the earliest times: plausibly two-site TDVP projection error on a snake MPS
+with long-range Jordan-Wigner strings, or the time step, or the GPR smoothing.
+It is **not a converged tensor-network calculation**, any chi-extrapolation from
+it is meaningless, and it cannot bound what tensor networks can do on this
+problem. The floor sits at roughly our entire absolute tolerance, so a clean
+implementation that removed it could plausibly reach this accuracy at modest chi.
 
 At the same operating point the entropy model predicts `chi ~ 6.6e3` suffices.
 It is not mis-calibrated, it is **the wrong shape**: an entropy argument cannot

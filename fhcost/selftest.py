@@ -380,6 +380,15 @@ def main() -> int:
           "over an 8x range in chi")
     check("its plateau exceeds the late-time signal",
           classical.TDVP_MEASURED[2048] > hubbard.s_residual())
+    # the published TDVP is not bond-dimension-limited at all
+    fl = classical.TDVP_FLOOR["err"]
+    check("TDVP carries a chi-independent error floor at early times",
+          fl[256] / fl[2048] < 1.3 and fl[2048] > 5e-3,
+          f"t=0.1: {fl[256]:.2e} at chi=256 vs {fl[2048]:.2e} at chi=2048, "
+          "an 8x increase in chi removing 8%")
+    check("so that dataset cannot bound what tensor networks can do",
+          fl[2048] > 0.5 * hubbard.eps_absolute(DEFAULT, 30.0),
+          "the floor sits at roughly our whole absolute tolerance")
     check("the entropy model contradicts that datum",
           classical.mps_bond_bits(28.0, DEFAULT.but(tmax_mode="const", tmax_const=2.0,
                                                     ent_rate=0.6)) < 20,
