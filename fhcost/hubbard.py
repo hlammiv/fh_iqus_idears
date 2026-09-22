@@ -24,6 +24,37 @@ import math
 from .budget import Config, DEFAULT
 
 
+# Measured second-order Trotter error constant, W_eff = err * r^2 / tau^3, from
+# exact evolution of the dimerised-triplet state and the C^zz_nn observable on
+# patches of 4-12 sites (the collaborator's cross5/square2/square3/rectangle2x3
+# geometry plus 3x4). Medians over n >= 9 and r >= 8; n = 6 is excluded because
+# the lattice clips the causal cone there.
+#
+#   * W_eff is constant in r to four digits, so the tau^3 / r^2 form is exact.
+#   * W_eff is INDEPENDENT of m. Campbell's extensive bound W = 9.5 m is therefore
+#     wrong in kind for a two-site observable, and its overestimate grows without
+#     bound: 150x at m = 9, ~450x at the operating point, and larger still beyond.
+#   * W_eff FALLS with tau, because the absolute error on an observable that melts
+#     to a small residual cannot keep growing as tau^3.
+W_MEASURED = {0.25: 1.450, 0.5: 1.289, 1.0: 0.190, 2.0: 0.119}
+W_TAU_MIN, W_TAU_MAX = 0.25, 2.0
+
+
+def w_measured(t: float) -> float:
+    """Log-log interpolation of the calibration; clamped outside its range."""
+    ts = sorted(W_MEASURED)
+    if t <= ts[0]:
+        return W_MEASURED[ts[0]]
+    if t >= ts[-1]:
+        return W_MEASURED[ts[-1]]          # EXTRAPOLATION beyond the measured range
+    for a, b in zip(ts, ts[1:]):
+        if a <= t <= b:
+            f = (math.log(t) - math.log(a)) / (math.log(b) - math.log(a))
+            return math.exp((1 - f) * math.log(W_MEASURED[a])
+                            + f * math.log(W_MEASURED[b]))
+    raise AssertionError
+
+
 def w_commutator(cfg: Config = DEFAULT) -> float:
     """Second-order Trotter commutator norm per site, W2 = w * m.
 
@@ -129,10 +160,17 @@ def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None
     if t <= 0:
         return 1.0
     if cfg.trotter_mode == "fixed_density":
-        # Alternative convention: a fixed step density, r = ceil(4*tau), rather
-        # than a bound-derived count. It is not calibrated to the accuracy target,
-        # so treat it as a floor.
+        # A step-count CONVENTION, not an error model, so it outranks cfg.trotter:
+        # r = ceil(4*tau) regardless of how the error would otherwise be estimated.
+        # Not calibrated to the accuracy target; treat it as a floor.
         return max(1.0, math.ceil(cfg.steps_per_tau * t))
+    if cfg.trotter == "measured":
+        # W_eff is a property of the OBSERVABLE, not the lattice, so no factor of m
+        W2 = w_measured(t)
+        k = max(1, int(cfg.trotter_order_k))
+        r = (t ** 1.5 * math.sqrt(W2 / eps_trot) if k == 1
+             else t ** (1.0 + 1.0 / (2 * k)) * (W2 / eps_trot) ** (1.0 / (2 * k)))
+        return max(1.0, r)
     W2 = w_commutator(cfg) * (cone_sites(m, t, cfg) if cfg.trotter == "lightcone" else m)
     k = max(1, int(cfg.trotter_order_k))
     if k == 1:

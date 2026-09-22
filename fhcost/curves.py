@@ -30,6 +30,23 @@ LABELS = {
 
 MPF_ORDER = 2      # k=2 -> order-4 multiproduct
 
+# The Trotter step count is the dominant uncertainty, so every arm is reported as
+# a BAND between the two defensible conventions rather than as a point value:
+#   lower edge  Campbell's worst-case commutator bound  (150-450x loose, measured)
+#   upper edge  the exact-diagonalisation calibration   (m <= 12, tau <= 2)
+# Neither edge is "the answer". See OPEN_ITEMS.md O9.
+TROTTER_EDGES = ("extensive", "measured")
+
+
+def evaluate_band(n_grid, cfg: Config = DEFAULT) -> dict:
+    """{arm: (lo, hi)} over the Trotter-model uncertainty."""
+    out = {}
+    lo = evaluate(n_grid, cfg.but(trotter=TROTTER_EDGES[0]))
+    hi = evaluate(n_grid, cfg.but(trotter=TROTTER_EDGES[1]))
+    for k in lo:
+        out[k] = (np.minimum(lo[k], hi[k]), np.maximum(lo[k], hi[k]))
+    return out
+
 
 def evaluate(n_grid, cfg: Config = DEFAULT) -> dict:
     mpf = cfg.but(trotter_order_k=MPF_ORDER)

@@ -74,7 +74,11 @@ class Config:
     c_g: float = 15.0             # 2q gates / site / step
     c_rot: float = 5.0            # rotations / site / step
     c_w: float = 1.0              # Trotter commutator prefactor
-    trotter: str = "extensive"    # "extensive" | "lightcone" | "empirical"
+    trotter: str = "measured"     # "measured" | "extensive" | "lightcone" | "empirical"
+                                  # "measured" uses W_MEASURED below: exact-diagonalisation
+                                  # calibration of THIS observable and initial state on
+                                  # patches of 4-12 sites, matching the collaborator's
+                                  # geometry. See hubbard.w_commutator.
     f_emp: float = 5.0
     trotter_order_k: int = 1      # 1 = plain 2nd order; k>1 = 2k-order multiproduct
 

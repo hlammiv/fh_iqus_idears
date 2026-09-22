@@ -105,6 +105,53 @@ channel conventions, and not the damping geometry. That makes review #5 — whic
 asks for an actual error bound behind the step count — the highest-value item
 remaining.
 
+### O7. The ideal p=0 curve should be capped by m_required(t)
+*Queued behind #5.*
+
+Once the lattice exceeds `m_required(t)` the finite answer already IS the
+infinite answer, so extra sites buy nothing. At fixed `t = 1` that ceiling is
+244 sites — about **730 physical qubits** — while the plotted p = 0 line reaches
+333,333 at `n = 10^6`, a **1370x overshoot**. Past the ceiling the qubits should
+buy time, not lattice.
+
+It does not show up under the default convention because `t_max = sqrt(m)/v_B`
+ties the ceiling to the lattice: `m_req(t_max) ~ 4m` at every size, so the target
+recedes twice as fast as the lattice grows and nothing is ever converged. Within
+that convention the slope-1 line is technically correct — which exposes the worse
+problem: **if nothing is ever converged, the y axis is not measuring a physics
+answer at all**, only the largest finite-lattice calculation that fits.
+
+Fix: draw `m_required(t)` as an explicit ceiling (a BAND — it inherits the 11x
+spread from O5, 244 to 2664 at t = 1) and cap the ideal curve by it in fixed-t
+mode; relabel the axis in sqrt(m) mode to say what it measures.
+
+This is the third distinct place the time-window convention has driven a wrong
+conclusion, after finite-size extrapolation buying nothing and the classical band
+being a hard wall.
+
+### O8. The Trotter calibration is U/J = 4 only
+`W_MEASURED` was fitted at U/J = 4, so `trotter = "measured"` has **no
+U-dependence on the circuit side**. U still enters through the signal (the AF
+residual and melting time), which is why m still rises with U, but the
+short-vs-long asymmetry established earlier is currently carried by the signal
+alone. A U = 0 / 8 calibration sweep is running on the same patches.
+
+### O9. The calibration is extrapolated well past its range
+Measured on **4-12 sites, tau in [0.25, 2]**. The curves use it at m up to ~2000
+and tau up to ~13.
+
+* The **m-extrapolation** is supported by locality: `W_eff` is flat across
+  n = 6, 9, 12 at fixed tau (1.461 / 1.448 / 1.453 at tau = 0.25, i.e. constant to
+  1%), which is what a two-site observable must do once the lattice exceeds its
+  cone. m = 16 is running to widen the range from 3x to 4x.
+* The **tau-extrapolation is only a clamp.** `W_eff` falls ~15x over the measured
+  range and is held fixed beyond tau = 2. That is conservative against the
+  measured trend, but a tau^3 law stretched 6.6x past its data is not defensible
+  on its own.
+
+Because of this every arm is now reported as a **band** between Campbell's bound
+and the calibration, rather than as a point value. Neither edge is the answer.
+
 ## Review status
 
 | # | finding | status |
@@ -113,7 +160,7 @@ remaining.
 | 2 | ZNE feasibility omits residual bias | **fixed** — bias-limited, not variance-limited |
 | 3 | gatewise PEC overhead uses the wrong coefficient | **fixed** — attenuation separated from one-norm |
 | 4 | mitigation theorem is overstated | **fixed** — citation corrected, claims downgraded, demonstrated arm added |
-| 5 | multiproduct gains lack an error bound | open |
+| 5 | multiproduct gains lack an error bound | **partial** — Trotter error calibrated by exact diagonalisation (alpha 9/4 -> 7/4); branch-cost accounting still open |
 | 6 | Pinnacle calibration needs reconstruction | open |
 | 7 | FT resource and error accounting incomplete | open |
 | 8 | classical band is heuristic, not a ceiling | open |
