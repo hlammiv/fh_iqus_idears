@@ -83,7 +83,11 @@ class Config:
                                   # THE largest un-pinned number in the model: it enters
                                   # twice (shots ~ 1/s^2, Trotter r ~ s^{-1/2}), net m ~ s^{2/9}.
     lightcone_frac: float = 1.0 / 3.0   # causal cone is 1/3 of the space-time box in d=2
-    depol_factor: float = 16.0 / 15.0   # exact Pauli damping per 2-qubit depolarizing gate
+    depol_factor: float = 16.0 / 15.0   # ATTENUATION only: a non-identity Pauli is damped
+                                  # by (1 - 16p/15) per 2-qubit depolarizing gate (7 of the
+                                  # 15 non-identity Paulis commute, 8 anticommute). This is
+                                  # a physical fact and must NOT move when the PEC costing
+                                  # convention changes.
     n_ancilla: int = 1            # Hadamard-test ancilla for the two-time correlator
 
     # --- fault tolerance ---
@@ -112,9 +116,16 @@ class Config:
     trotter_mode: str = "bound"   # "bound" = Campbell commutator bound (ours)
                                   # "fixed_density" = r = steps_per_tau * t (theirs)
     steps_per_tau: float = 4.0    # only used by "fixed_density"
-    pec_coeff: float = 32.0 / 15.0  # exponent of Gamma^2 per (p*G_cone).
-                                  # ours 2.133 = 2*(16/15); theirs 4.0.
-                                  # A checkable property of the depolarizing inverse.
+    pec_model: str = "exact"      # "exact"  = gamma = (15+14p)/(15-16p) per gate, from the
+                                  #            signed Pauli inverse of the depolarizing
+                                  #            channel (verified against its Pauli transfer
+                                  #            matrix); log(Gamma^2) = 2 G ln(gamma).
+                                  # "linear" = pec_coeff * p * G, for comparison only.
+    pec_coeff: float = 4.0        # only used by pec_model="linear". 2 ln(gamma)/p = 4.000268
+                                  # at p=1e-3, so this is the correct linearisation.
+                                  # ATTENUATION and CANCELLATION ONE-NORM ARE DIFFERENT
+                                  # QUANTITIES: an earlier version used one number (32/15)
+                                  # for both, which made the PEC cost 1.9x too cheap.
     noise_channels: float = 1.0   # multiplier on Lambda for 1q + idle + SPAM.
                                   # ours 1.0 (2q only); theirs 20.02/10.59 = 1.89.
     star_law: str = "count"       # "count" = 0.533*p*N_rot (ours)

@@ -118,6 +118,35 @@ is allowed, but the run must fit in a week — is exactly what makes it bind.
 Measured result: **m = 6.7 at n = 10³ → 8.5 at n = 10⁸.** Ten decades of qubits
 buy ~1.3× in lattice size. The *unmitigated* device does not reach m = 4 at any n.
 
+### A correction: attenuation is not the cancellation one-norm
+
+These are two different quantities and an earlier version of this model used one
+number, 32/15, for both. Derived from the Pauli transfer matrix of the two-qubit
+depolarizing channel `D(rho) = (1-p) rho + (p/15) sum_{P != I} P rho P` (the PTM
+is diagonal; `D^-1 D = 1` was checked numerically):
+
+* 7 of the 15 non-identity Paulis commute with a given non-identity observable and
+  8 anticommute, so it is damped by `1 - 16p/15` per gate. The **attenuation**
+  coefficient is `-ln(1 - 16p/15)/p = 1.067236`.
+* The signed Pauli inverse is `D^-1 = a . + b sum_{P != I} P . P` with
+  `a = (15-p)/(15-16p)`, `b = -p/(15-16p)`, giving a **cancellation one-norm**
+  `gamma = |a| + 15|b| = (15+14p)/(15-16p)`. The PEC coefficient is
+  `2 ln(gamma)/p = 4.000268` — a factor **3.748** larger than the attenuation.
+
+Conflating them made PEC **1.875x too cheap in the exponent**. Correcting it moves
+mitigated NISQ at `n = 10^6` from 8.76 to **6.89**. The attenuation — and with it
+the unmitigated bias and every ZNE bias ceiling — is unchanged, as it must be: a
+costing convention cannot move a physical damping rate. `selftest` now asserts
+that invariance directly.
+
+*Convention asymmetry, flagged not hidden.* The bare-NISQ arm now uses the
+one-norm derived above, while STAR's overhead is taken from its own paper's
+`gamma^2 = exp(8 P_Z,1 N)`. Those come from different sources and the STAR
+expression has not been re-derived the same way. With NISQ corrected upward,
+STAR now beats it at every `n` it can run (1.04x at 10^4 rising to 1.94x at
+10^8), where before it lost below `n ~ 5x10^4`. Part of that gap may be
+convention rather than architecture.
+
 ## 3. Surface-code FT
 
 The correction that matters most: **an FT estimate is not a qubit count.** Each of

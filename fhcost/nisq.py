@@ -98,7 +98,7 @@ def residual_bias(lam: float, strategy: str) -> float:
     raise ValueError(f"unknown strategy {strategy!r}")
 
 
-def cost_factor(lam: float, strategy: str) -> float:
+def cost_factor(strategy: str, lam: float = 0.0, lg2: float = 0.0) -> float:
     """Multiplier on (circuit time / delta^2) for the optimal shot allocation.
 
     For independent unbiased node estimators with per-shot variance v_i and
@@ -111,9 +111,9 @@ def cost_factor(lam: float, strategy: str) -> float:
     if strategy == "none":
         return 1.0
     if strategy == "pec":
-        if 2.0 * lam > 700.0:
+        if lg2 > 700.0:
             return math.inf                          # beyond any conceivable budget
-        return math.exp(2.0 * lam)                   # v = gamma^2, tau = 1
+        return math.exp(lg2)                         # v = Gamma^2, tau = 1
     if strategy.startswith("zne"):
         nodes = richardson_nodes(_k_of(strategy))
         cs = richardson_coeffs(nodes)
@@ -122,8 +122,28 @@ def cost_factor(lam: float, strategy: str) -> float:
 
 
 def lambda_of(m: float, cfg: Config = DEFAULT) -> float:
-    c = counts(m, cfg)
-    return 0.5 * cfg.pec_coeff * cfg.noise_channels * cfg.p * c["g_cone"]
+    """ATTENUATION exponent: a non-identity Pauli observable is damped by
+    exp(-Lambda) after G_cone two-qubit gates. Physical; independent of how any
+    mitigation scheme is costed."""
+    g = cfg.noise_channels * counts(m, cfg)["g_cone"]
+    return -g * math.log(1.0 - cfg.depol_factor * cfg.p)
+
+
+def log_gamma_sq(m: float, cfg: Config = DEFAULT) -> float:
+    """log(Gamma^2), the PEC sampling overhead: the CANCELLATION one-norm.
+
+    The signed Pauli inverse of the two-qubit depolarizing channel has
+    gamma = |a| + 15|b| = (15 + 14p)/(15 - 16p) per gate, so
+    log(Gamma^2) = 2 G ln(gamma) -> 4.000268 p G at p = 1e-3. This is a different
+    quantity from the attenuation above, which is 1.067 p G.
+    """
+    g = cfg.noise_channels * counts(m, cfg)["g_cone"]
+    if cfg.pec_model == "linear":
+        return cfg.pec_coeff * cfg.p * g
+    if cfg.pec_model == "exact":
+        gam = (15.0 + 14.0 * cfg.p) / (15.0 - 16.0 * cfg.p)
+        return 2.0 * g * math.log(gam)
+    raise ValueError(f"unknown pec_model {cfg.pec_model!r}")
 
 
 def time_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> float:
@@ -134,7 +154,7 @@ def time_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> flo
     c = counts(m, cfg)
     delta = signal_at(m, cfg) * (1.0 - cfg.bias_frac) * cfg.eps
     l1 = multiproduct_l1(cfg.trotter_order_k)
-    f = cost_factor(lam, strategy)
+    f = cost_factor(strategy, lam, log_gamma_sq(m, cfg))
     if not math.isfinite(f):
         return math.inf
     return cfg.n_times * l1 * l1 * f * c["t_circuit"] / delta ** 2

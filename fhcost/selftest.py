@@ -46,8 +46,29 @@ def main() -> int:
           abs(nisq.residual_bias(0.0, "zne2")) < 1e-12
           and nisq.residual_bias(0.5, "zne2") < nisq.residual_bias(1.5, "zne2"))
     check("ZNE variance cost is polynomial, PEC's is exponential",
-          nisq.cost_factor(6.0, "zne2") == nisq.cost_factor(1.0, "zne2")
-          and nisq.cost_factor(6.0, "pec") > 1e4)
+          nisq.cost_factor("zne2", 6.0) == nisq.cost_factor("zne2", 1.0)
+          and nisq.cost_factor("pec", lg2=12.0) > 1e4)
+
+    # --- review finding #3: attenuation and cancellation one-norm are different ---
+    # Verified against the Pauli transfer matrix of the two-qubit depolarizing
+    # channel: its signed inverse has gamma = (15+14p)/(15-16p) per gate.
+    pp = DEFAULT.p
+    g = hubbard.counts(8.0)["g_cone"]
+    att = nisq.lambda_of(8.0) / (pp * g)
+    pec = nisq.log_gamma_sq(8.0) / (pp * g)
+    check("attenuation coefficient = -ln(1-16p/15)/p", abs(att - 1.067236) < 1e-5,
+          f"{att:.6f}")
+    check("PEC coefficient = 2 ln(gamma)/p", abs(pec - 4.000268) < 1e-5, f"{pec:.6f}")
+    check("they are NOT the same number", abs(pec / att - 3.748) < 0.01,
+          f"PEC/attenuation = {pec/att:.3f}; one value was used for both")
+    check("the correction makes PEC 1.875x more expensive than the old model",
+          abs(pec / (32 / 15) - 1.875) < 0.01)
+    check("attenuation does not move when the PEC convention changes",
+          nisq.lambda_of(8.0, DEFAULT.but(pec_model="linear"))
+          == nisq.lambda_of(8.0, DEFAULT.but(pec_model="exact")))
+    check("the linearisation agrees with the exact form at p=1e-3",
+          abs(nisq.log_gamma_sq(8.0, DEFAULT.but(pec_model="linear"))
+              / nisq.log_gamma_sq(8.0) - 1) < 1e-4)
 
     def lam_cap(st):
         lo, hi = 0.0, 50.0
@@ -143,9 +164,14 @@ def main() -> int:
         DEFAULT.depol_factor * DEFAULT.p * ftqc.counts(8.0)["g_cone"])
     check("Lambda_STAR / Lambda_NISQ ~ 1/6", abs(ratio - 1 / 6) < 0.02,
           f"ratio = {ratio:.3f}")
-    check("STAR overtakes NISQ once it can fit parallel copies",
-          ftqc.max_m_star(1e4) < nisq.max_m(1e4, strategy="pec")
-          and ftqc.max_m_star(1e6) > nisq.max_m(1e6, strategy="pec"))
+    # NOTE a convention asymmetry worth keeping visible: the bare-NISQ arm now uses
+    # the depolarizing-channel cancellation one-norm derived here, while STAR's
+    # overhead comes from its own paper's gamma^2 = exp(8 P_Z,1 N). Those are
+    # different sources, and the STAR formula has not been re-derived the same way.
+    check("STAR beats bare NISQ at every n it can run",
+          all(ftqc.max_m_star(n) >= nisq.max_m(n, strategy="pec")
+              for n in (1e4, 1e6, 1e8)),
+          f"ratio {ftqc.max_m_star(1e6)/nisq.max_m(1e6, strategy='pec'):.2f} at n=1e6")
     check("STAR starts earlier than surface FT",
           ftqc.max_m_star(1e4) > 0 and ftqc.max_m_surface(1e4, fow) == 0)
     s_lo, s_hi = ftqc.max_m_star(1e5), ftqc.max_m_star(1e9)
@@ -241,7 +267,7 @@ def main() -> int:
     for name, c in presets.PRESETS.items():
         check(f"preset {name!r} evaluates", nisq.max_m(1e6, c, "pec") > 0)
     check("default config anchor",
-          abs(nisq.max_m(1e6, DEFAULT, "pec") - 8.758) < 0.05,
+          abs(nisq.max_m(1e6, DEFAULT, "pec") - 6.89) < 0.05,
           f"m = {nisq.max_m(1e6, DEFAULT, 'pec'):.3f}")
     check("Trotter step count is the dominant disagreement",
           nisq.max_m(1e6, DEFAULT.but(trotter_mode="fixed_density"), "pec")
