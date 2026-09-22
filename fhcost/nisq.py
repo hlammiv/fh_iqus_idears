@@ -71,7 +71,7 @@ from __future__ import annotations
 import math
 from .budget import Config, DEFAULT
 from .hubbard import (counts, qubits_per_copy, multiproduct_l1,
-                      multiproduct_branches, signal_at)
+                      multiproduct_branches, signal_at, eps_absolute, conf_z)
 
 M_MIN = 4.0      # smallest real lattice is 2x2; m=1 has no hopping term
 
@@ -170,10 +170,12 @@ def time_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> flo
     lam = lambda_of(m, cfg)
     if strategy == "expcal" and lam > cfg.exp_cal_lambda_max:
         return math.inf                 # outside the demonstrated range
-    if residual_bias(lam, strategy) > cfg.bias_frac * cfg.eps:
+    if residual_bias(lam, strategy) > cfg.frac_mitig * cfg.eps:
         return math.inf                 # no shot count repairs this
     c = counts(m, cfg)
-    delta = signal_at(m, cfg) * (1.0 - cfg.bias_frac) * cfg.eps
+    # statistical ALLOWANCE is frac_stat of the tolerance, and it is a
+    # confidence half-width: z * sigma <= allowance, so sigma <= allowance / z
+    delta = cfg.frac_stat * eps_absolute(cfg, m) / conf_z(cfg)
     # Per-BRANCH accounting. Branch i is its own circuit at k_i x the base step
     # count, so it has k_i x the gates (hence k_i x the PEC exponent) and k_i x
     # the runtime. Optimal allocation over independent unbiased branch estimators
@@ -223,7 +225,8 @@ def max_m_ideal(n: float, cfg: Config = DEFAULT) -> float:
     m = n / (3.0 if cfg.encoding == "compact" else 2.0)
     if m < M_MIN:
         return 0.0
-    need = cfg.n_times / (signal_at(min(m, 1e6), cfg) * cfg.eps) ** 2
+    dd = cfg.frac_stat * eps_absolute(cfg, min(m, 1e6)) / conf_z(cfg)
+    need = cfg.n_times / dd ** 2
     lo, hi = M_MIN, m
     if need * counts(hi, cfg)["t_circuit"] <= cfg.budget_s * max(1.0, math.floor(n / qubits_per_copy(hi, cfg))):
         return hi

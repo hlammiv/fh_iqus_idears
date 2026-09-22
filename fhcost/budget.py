@@ -204,10 +204,20 @@ class Config:
     exp_cal_overhead: float = 0.08   # measured effective sampling overhead
     exp_cal_lambda_max: float = 0.20  # largest Lambda demonstrated. Beyond this the
                                   # method is UNCHARACTERISED, not known to fail.
-    bias_frac: float = 0.5        # share of the relative tolerance reserved for RESIDUAL
-                                  # BIAS; the rest is the statistical half-width. Sampling
-                                  # cannot repair bias, so a strategy whose bias exceeds
-                                  # this allowance is infeasible at ANY shot count.
+    # ---- ERROR LEDGER -------------------------------------------------------
+    # Every contribution is a share of the SAME absolute tolerance and the shares
+    # must sum to at most 1. They previously did not: Trotter, synthesis and
+    # logical each took 0.30 while sampling took 0.50 (NISQ) or the whole budget
+    # (FT), i.e. 1.4x and 1.9x over. Synthesis and logical get the small shares
+    # because both are only logarithmic in the resource, so buying them down is
+    # cheap; Trotter and statistics get the rest.
+    frac_trotter: float = 0.25
+    frac_syn: float = 0.10
+    frac_logical: float = 0.10
+    frac_mitig: float = 0.05      # residual mitigation bias (ZNE); unused by PEC
+    frac_stat: float = 0.50       # statistical HALF-WIDTH at confidence conf_z
+    conf_z: float = 1.9600        # per-time two-sided 95%
+    simultaneous: bool = False    # True -> Bonferroni over n_times (z = 3.02 at T=20)
     # FITTED to the published data (Zenodo 17799843), dimer-link C^zz, TFLO+GPR
     # mitigated, t in [0.1,2], 20 points, both U. The decay is GAUSSIAN, not
     # exponential: a free stretch exponent fits beta = 2.15 +- 0.09 (U=0) and

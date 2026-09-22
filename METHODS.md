@@ -518,6 +518,55 @@ construction, so no point on the m-vs-n plot is ever converged and finite-size
 extrapolation buys exactly nothing. That is a property of the time window, not
 of the method, and it is the strongest argument for changing it.
 
+## 6b. The error ledger
+
+Every contribution is a share of the **same** absolute tolerance, and the shares
+must sum to at most 1. They did not: Trotter, synthesis and logical each took
+0.30 while sampling took 0.50 (NISQ) or the **whole** budget (FT) -- 1.4x and
+1.9x over respectively, and inconsistent between the two arms, which quietly
+tilted every NISQ-vs-FT comparison toward FT.
+
+| contribution | share |
+|---|---|
+| Trotter | 0.25 |
+| gate synthesis | 0.10 |
+| logical (per shot) | 0.10 |
+| residual mitigation bias | 0.05 |
+| statistical half-width | 0.50 |
+| **total** | **1.00** |
+
+Synthesis and logical get the small shares because both enter the resource only
+logarithmically, so buying them down is cheap.
+
+**Statistics are now a confidence half-width, not a 1-sigma spread.** The old
+`1/(s eps)^2` was a ~68% statement. The guarantee is **per-time two-sided 95%**,
+`z = 1.96`; `simultaneous = True` applies a Bonferroni correction across the time
+grid (`z = 3.02` at 20 points, 2.38x the shots) if the claim is about the whole
+curve rather than each point.
+
+**The connected subtraction is free here.** `C^zz = 4(<S_i S_j> - <S_i><S_j>)`
+estimates three correlated quantities from the same shots, but in the dimerised
+triplet state `<S^z_i> = 0` by symmetry, so the disconnected term vanishes and
+the estimator's variance collapses to the plain bounded-observable value. That is
+a property of this state, not a general result.
+
+Cost of getting this right, at n = 10^6:
+
+| | before | after |
+|---|---|---|
+| NISQ + PEC | 29.3 | **26.8** |
+| STAR | 58.5 | **42.6** |
+| surface FT | 230.8 | **49.2** |
+| Pinnacle | 707 | **195** |
+
+FT and Pinnacle fall hardest because they were the ones spending the entire
+tolerance on statistics. Two consequences worth naming: multiproduct **stops
+helping FT altogether** (order 2/4/6/8 gives 49/45/23/8 -- the extra branches
+never pay for themselves once FT is properly shot-limited), and ZNE lands on a
+knife edge, `Lambda(m=4) = 0.222` against an order-3 ceiling of 0.217. **ZNE's
+viability here is set by how much of the budget its residual bias is allocated,
+not by the physics** -- at the old 0.5 share it runs, at 0.05 it does not.
+
 ## 7. What the figure changes about the slide
 
 1. The sketch's "logical advantage = where FT overtakes NISQ" marks the wrong

@@ -171,6 +171,25 @@ def signal_at(m: float, cfg: Config = DEFAULT) -> float:
     return max(signal(t_max(m, cfg), cfg), 1e-6)
 
 
+def conf_z(cfg: Config = DEFAULT) -> float:
+    """Confidence factor. Bonferroni across the time grid if `simultaneous`."""
+    if not cfg.simultaneous:
+        return cfg.conf_z
+    from scipy.stats import norm            # only needed for the stronger claim
+    return float(norm.ppf(1.0 - 0.05 / (2.0 * max(cfg.n_times, 1))))
+
+
+def error_ledger(cfg: Config = DEFAULT) -> dict:
+    """The shares, and a hard check that they fit inside the tolerance."""
+    d = {"trotter": cfg.frac_trotter, "synthesis": cfg.frac_syn,
+         "logical": cfg.frac_logical, "mitigation bias": cfg.frac_mitig,
+         "statistical": cfg.frac_stat}
+    d["TOTAL"] = sum(d.values())
+    if d["TOTAL"] > 1.0 + 1e-9:
+        raise ValueError(f"error budget over-allocated: {d['TOTAL']:.3f} > 1")
+    return d
+
+
 def eps_absolute(cfg: Config = DEFAULT, m: float | None = None) -> float:
     """eps is RELATIVE; the Trotter/synthesis budgets are absolute.
 
@@ -184,7 +203,7 @@ def eps_absolute(cfg: Config = DEFAULT, m: float | None = None) -> float:
 def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None) -> float:
     """Second-order (or 2k-order multiproduct) Trotter step count."""
     if eps_trot is None:
-        eps_trot = 0.3 * eps_absolute(cfg, m)   # Trotter's share of the ABSOLUTE budget
+        eps_trot = cfg.frac_trotter * eps_absolute(cfg, m)
     t = t_max(m, cfg)
     if t <= 0:
         return 1.0

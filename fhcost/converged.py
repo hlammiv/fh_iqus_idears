@@ -79,7 +79,7 @@ def m_required(t: float, cfg: Config = DEFAULT) -> float:
     The boundary sits L/2 from the observable, so the condition is
     (L/2) > v t + xi ln(1/eps_fs), i.e. L > 2 v t + 2 xi ln(1/eps_fs).
     """
-    eps_fs = 0.3 * eps_absolute(cfg)
+    eps_fs = cfg.frac_trotter * eps_absolute(cfg)
     L = 2.0 * (fs_speed(cfg) * t + cfg.xi * math.log(1.0 / max(eps_fs, 1e-12)))
     return L * L
 
@@ -92,7 +92,7 @@ def m_required_extrapolated(t: float, cfg: Config = DEFAULT, n_sizes: int = 4,
     `gain` of the residual, so the required L drops by xi*ln(gain) -- a constant
     shift, not a change of scaling. It is paid for with n_sizes x the shots.
     """
-    eps_fs = 0.3 * eps_absolute(cfg)
+    eps_fs = cfg.frac_trotter * eps_absolute(cfg)
     L = 2.0 * cfg.v_corr * t + cfg.xi * math.log(1.0 / max(eps_fs * gain, 1e-12))
     return max(L, 1.0) ** 2
 
