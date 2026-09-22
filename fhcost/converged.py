@@ -87,19 +87,50 @@ def m_required(t: float, cfg: Config = DEFAULT) -> float:
     return m_required_extrapolated(t, cfg, gain=1.0)["m_required"]
 
 
+def lr_error(R: float, t: float, cfg: Config = DEFAULT) -> float:
+    """Lieb-Robinson bound on the error from truncating outside radius R.
+
+    Uses the factorial-suppressed form, err <~ (e v t / R)^R, which is vacuous for
+    R <= e v t and superexponentially small beyond it. Crucially it VANISHES as
+    t -> 0, which the simple exponential form exp(-(R - v t)/xi) does not: that
+    form returns error 1 at t = 0, R = 0 and so demanded 144 sites for an answer
+    that is exact on two.
+    """
+    if t <= 0.0:
+        return 0.0
+    x = math.e * fs_speed(cfg) * t
+    return 1.0 if R <= x else (x / R) ** R
+
+
+def m_certified(t: float, cfg: Config = DEFAULT, gain: float = 1.0) -> float:
+    """Sites at which this BOUND certifies a thermodynamic-limit answer.
+
+    NOT a necessary size. A bound failing does not prove non-convergence -- it
+    proves only that this bound does not certify it. The distinction matters:
+    the previous function was read as "cannot converge", which is false, and the
+    t = 0 limit shows why (2 sites, exactly, not 144).
+    """
+    eps = cfg.frac_finite * eps_absolute(cfg) * gain
+    if t <= 0.0:
+        return cfg.obs_support_sites
+    lo, hi = math.e * fs_speed(cfg) * t, 1e4
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (lo, mid) if lr_error(mid, t, cfg) <= eps else (mid, hi)
+    return max(cfg.obs_support_sites, (2.0 * hi + 1.0) ** 2)
+
+
+def m_required(t: float, cfg: Config = DEFAULT) -> float:
+    """Deprecated alias. Prefer m_certified, whose name states what it is."""
+    return m_certified(t, cfg)
+
+
 def m_required_extrapolated(t: float, cfg: Config = DEFAULT, n_sizes: int = 4,
                             gain: float = 10.0) -> dict:
-    """Same finite-size law as m_required, with the residual reduced by `gain`.
-
-    Fitting the trend over `n_sizes` lattices removes a factor `gain` of the
-    residual, so the required L drops by xi*ln(gain) -- a constant shift, not a
-    change of scaling. It is paid for with n_sizes times the shots, which is
-    returned rather than silently dropped (it previously was).
-    """
-    eps_fs = cfg.frac_trotter * eps_absolute(cfg)
-    L = 2.0 * (fs_speed(cfg) * t
-               + cfg.xi * math.log(1.0 / max(eps_fs * gain, 1e-12)))
-    return {"m_required": max(L, 1.0) ** 2, "shot_multiplier": float(n_sizes)}
+    """Same bound with the residual reduced by `gain` from fitting a size ladder,
+    paid for with n_sizes times the shots."""
+    return {"m_required": m_certified(t, cfg, gain=gain),
+            "shot_multiplier": float(n_sizes)}
 
 
 def cluster_t_reach(cfg: Config = DEFAULT) -> float:
@@ -170,11 +201,11 @@ def classical_t_reach(cfg: Config = DEFAULT) -> float:
     from .classical import ed_frontier
     m_ed = float(ed_frontier(cfg))
     lo, hi = 0.0, 50.0
-    if m_required(lo, cfg) > m_ed:
+    if m_certified(lo, cfg) > m_ed:
         return 0.0
     for _ in range(60):
         mid = 0.5 * (lo + hi)
-        lo, hi = (mid, hi) if m_required(mid, cfg) <= m_ed else (lo, mid)
+        lo, hi = (mid, hi) if m_certified(mid, cfg) <= m_ed else (lo, mid)
     return lo
 
 

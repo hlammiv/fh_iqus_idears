@@ -222,9 +222,10 @@ def conf_z(cfg: Config = DEFAULT) -> float:
 
 def error_ledger(cfg: Config = DEFAULT) -> dict:
     """The shares, and a hard check that they fit inside the tolerance."""
-    d = {"trotter": cfg.frac_trotter, "synthesis": cfg.frac_syn,
-         "logical": cfg.frac_logical, "magic states": cfg.frac_magic,
-         "mitigation bias": cfg.frac_mitig, "statistical": cfg.frac_stat}
+    d = {"trotter": cfg.frac_trotter, "finite size": cfg.frac_finite,
+         "synthesis": cfg.frac_syn, "logical": cfg.frac_logical,
+         "magic states": cfg.frac_magic, "mitigation bias": cfg.frac_mitig,
+         "statistical": cfg.frac_stat}
     d["TOTAL"] = sum(d.values())
     if d["TOTAL"] > 1.0 + 1e-9:
         raise ValueError(f"error budget over-allocated: {d['TOTAL']:.3f} > 1")
@@ -237,6 +238,7 @@ def eps_absolute(cfg: Config = DEFAULT, m: float | None = None) -> float:
     An absolute floor is applied so the target stays finite where the signal
     passes through zero (review finding #10).
     """
+    error_ledger(cfg)          # validate at the entry point, not only on request
     s = cfg.s_sig if m is None else signal_at(m, cfg)
     return cfg.eps * max(s, cfg.s_res_min)
 

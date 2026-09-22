@@ -122,7 +122,7 @@ def main() -> int:
     b8 = nisq.residual_bias(lam4, "zne4")
     check("ZNE is bias-blocked outright, not merely under-allocated",
           nisq.max_m(1e6, DEFAULT, "zne3") == 0
-          and nisq.max_m(1e6, DEFAULT.but(frac_mitig=0.5), "zne3") == 0
+          and nisq.max_m(1e6, DEFAULT.but(frac_mitig=0.30, frac_stat=0.20), "zne3") == 0
           and b8 > 0.5 * DEFAULT.eps,
           f"Lambda(m=4) = {lam4:.3f}; order-8 bias is {b8/DEFAULT.eps:.0%} of the "
           "whole tolerance")
@@ -468,26 +468,31 @@ def main() -> int:
           converged.cluster_t_reach() == 0.0,
           "the xi ln(1/eps) buffer alone is ~6 sites, so 4^170 amplitudes at t=0")
     tc = converged.classical_t_reach()
-    # Nothing classical converges at all: the finite-size buffer alone demands
-    # 144 sites at t = 0, and ED holds 26. The converged question is therefore
-    # about which QUANTUM arms get there, not about beating a classical time.
-    check("no classical method we cost reaches a converged answer",
-          converged.classical_t_reach() == 0.0
-          and converged.m_required(0.0) > classical.ed_frontier(),
-          f"needs {converged.m_required(0.0):.0f} sites, ED holds "
-          f"{classical.ed_frontier()}")
+    # --- second-pass #1: the criterion CERTIFIES, it does not require ---
+    # At t = 0 the observable is exact on its own two sites: the S^z_tot=0 triplet
+    # gives C^zz = -1 with no reference to the rest of the lattice. Any criterion
+    # returning more than that at t = 0 is wrong, and the previous one returned 144.
+    check("the criterion is exact at t = 0",
+          converged.m_certified(0.0) == DEFAULT.obs_support_sites,
+          f"{converged.m_certified(0.0):.0f} sites, matching the exact dimer result")
+    check("the Lieb-Robinson bound vanishes as t -> 0",
+          converged.lr_error(3.0, 0.0) == 0.0
+          and converged.lr_error(3.0, 0.1) < converged.lr_error(3.0, 0.5))
+    check("it is vacuous inside the light cone, not optimistically small",
+          converged.lr_error(0.5, 1.0) == 1.0)
+    # RETRACTED: "nothing classical converges". ED certifies out to t ~ 0.013.
+    tc = converged.classical_t_reach()
+    check("classical DOES certify a converged answer, out to a short time",
+          tc > 0.0, f"ED certifies to t = {tc:.3f} -- the earlier claim of zero was "
+                    "an artifact of a bound with no t -> 0 limit")
     fowc = DEFAULT.but(pl_model="fowler")
-    need = converged.m_required(0.0)
-    check("neither MASQ nor STAR converges at any plotted n",
-          nisq.max_m(1e9, DEFAULT, "pec") < need
-          and ftqc.max_m_star(1e9, DEFAULT) < need,
-          f"MASQ {nisq.max_m(1e9, DEFAULT, 'pec'):.0f}, "
-          f"STAR {ftqc.max_m_star(1e9, DEFAULT):.0f} vs {need:.0f} needed")
-    check("surface FT and Pinnacle do, between n = 1e7 and 1e8",
-          ftqc.max_m_surface(1e7, fowc) < need < ftqc.max_m_surface(1e8, fowc)
-          and ftqc.max_m_pinnacle(1e8, DEFAULT) > need,
-          f"FT {ftqc.max_m_surface(1e7, fowc):.0f} -> "
-          f"{ftqc.max_m_surface(1e8, fowc):.0f}")
+    check("and the FT arms certify further, not infinitely",
+          ftqc.max_m_surface(1e8, fowc) > 5 * classical.ed_frontier(),
+          f"surface FT reaches {ftqc.max_m_surface(1e8, fowc):.0f} sites vs ED's "
+          f"{classical.ed_frontier()}")
+    check("finite-size error has its own ledger share, not Trotter's",
+          DEFAULT.frac_finite > 0
+          and "finite size" in hubbard.error_ledger())
 
     check("the current t_max convention cannot converge",
           converged.m_required(hubbard.t_max(100.0)) > 100.0,
@@ -497,7 +502,7 @@ def main() -> int:
     for name, c in presets.PRESETS.items():
         check(f"preset {name!r} evaluates", nisq.max_m(1e6, c, "pec") > 0)
     check("default config anchor",
-          abs(nisq.max_m(1e6, DEFAULT, "pec") - 16.80) < 0.05,
+          abs(nisq.max_m(1e6, DEFAULT, "pec") - 15.58) < 0.05,
           f"m = {nisq.max_m(1e6, DEFAULT, 'pec'):.3f}")
     # Under the loose bound the fixed-density convention differed by 13x. The
     # exact calibration closes almost all of it: r(m=6) is 12.5 measured against

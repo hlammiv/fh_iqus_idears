@@ -188,6 +188,11 @@ class Config:
                                   # "lieb_robinson" -- the rigorous bound, ~10x v_B
     v_lr: float = 20.0            # rigorous Lieb-Robinson speed, ~2 e J z. Far looser
                                   # than anything observed; included only as an upper edge.
+    obs_support_sites: float = 2.0   # C^zz_nn lives on two adjacent sites. At t = 0 the
+                                  # answer is EXACT on those two sites -- verified: the
+                                  # S^z_tot=0 triplet gives C^zz = -1 with no reference to
+                                  # the rest of the lattice. Any criterion returning more
+                                  # than this at t = 0 is wrong.
     xi: float = 1.0               # correlation length, lattice units. Sets how far past
                                   # the light cone L must reach for finite-size
                                   # convergence: error ~ exp(-(L - 2 v_corr t)/xi).
@@ -226,14 +231,16 @@ class Config:
     # (FT), i.e. 1.4x and 1.9x over. Synthesis and logical get the small shares
     # because both are only logarithmic in the resource, so buying them down is
     # cheap; Trotter and statistics get the rest.
-    frac_trotter: float = 0.25
+    frac_trotter: float = 0.20
+    frac_finite: float = 0.10     # FINITE-SIZE error. Previously it borrowed the Trotter
+                                  # share, double-spending it on two different errors.
     frac_syn: float = 0.10
     frac_logical: float = 0.05
     frac_magic: float = 0.05      # magic-state infidelity, union-bounded over the T count.
                                   # Previously UNBUDGETED: the model consumed T states up
                                   # to 320x too noisy at large n and never checked.
     frac_mitig: float = 0.05      # residual mitigation bias (ZNE); unused by PEC
-    frac_stat: float = 0.50       # statistical HALF-WIDTH at confidence conf_z
+    frac_stat: float = 0.45       # statistical HALF-WIDTH at confidence conf_z
     conf_z: float = 1.9600        # per-time two-sided 95%
     simultaneous: bool = False    # True -> Bonferroni over n_times (z = 3.02 at T=20)
     # FITTED to the published data (Zenodo 17799843), dimer-link C^zz, TFLO+GPR
