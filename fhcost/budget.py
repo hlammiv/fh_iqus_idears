@@ -156,6 +156,10 @@ class Config:
     # antiferromagnetic correlation. The paper reports melting at t ~ 0.4-0.7, that
     # melting is SLOWER for larger U, and that the residual is LARGER for larger U.
     # The residual magnitude is not quoted numerically there, so it is parameterised.
+    bias_frac: float = 0.5        # share of the relative tolerance reserved for RESIDUAL
+                                  # BIAS; the rest is the statistical half-width. Sampling
+                                  # cannot repair bias, so a strategy whose bias exceeds
+                                  # this allowance is infeasible at ANY shot count.
     signal_regime: str = "curve"  # "short" | "long" | "curve" | "fixed" (use s_sig)
     s_short: float = 1.0          # EXACT from the triplet algebra
     s_res_min: float = 0.02       # residual at U = 0 (the paper still sees a slight AF tendency)

@@ -270,9 +270,48 @@ region sits below the ED band anyway.
 
 ## 6. The three extrapolations
 
-**(a) Noise extrapolation.** Richardson ZNE of order k costs e^{2(k+1)Λ} against
-PEC's e^{2Λ}, and carries residual bias that caps Λ ≲ 1. So higher ZNE order is
-*worse*, and PEC is the right envelope: m = 4–5 (ZNE) vs 8 (PEC) at n = 10⁶.
+**(a) Noise extrapolation.** PEC and Richardson ZNE fail for opposite reasons and
+must not be costed with the same formula.
+
+*PEC* samples the inverse-noise quasiprobability decomposition: signed, weighted
+samples, per-shot variance `gamma^2 = exp(2 Lambda)`, but an **unbiased**
+estimator. Cost is exponential in `Lambda`, and shots genuinely buy accuracy.
+
+*Richardson ZNE* runs the circuit at amplified noise `lambda_i` and averages
+**bounded** outcomes. Its variance factor is only `(sum_i |c_i| sqrt(lambda_i))^2`
+under the optimal allocation `N_i ~ |c_i| sqrt(v_i / tau_i)` (with `tau_i` the
+longer runtime of the noise-amplified circuit) — polynomial, not exponential.
+What it pays instead is **residual bias**: the extrapolant recovers the
+noiseless value only to `|1 - sum_i c_i exp(-lambda_i Lambda)|`, and **no number
+of shots removes that.** With half the relative tolerance reserved for bias:
+
+| strategy | max Lambda before bias blows the allowance | variance factor there |
+|---|---|---|
+| unmitigated | 0.05 | 1 |
+| ZNE order 1 | 0.21 | 5.6 |
+| ZNE order 2 | 0.35 | 23.8 |
+| ZNE order 3 | 0.46 | 94.8 |
+| PEC | unbounded (unbiased) | `exp(2 Lambda)` |
+
+**Higher ZNE order buys MORE noise headroom, not less** — an earlier version of
+this model asserted the opposite, and even encoded it as a test. It was wrong:
+that claim came from charging ZNE an exponential variance
+`sum |c_i| exp(lambda_i Lambda)`, i.e. assuming attenuation had to be inverted at
+every node, while never checking the bias at all. Those two errors together
+reported ZNE points carrying **~0.9 relative bias against a 0.1 target** — points
+that are infeasible at any shot count.
+
+The consequence is blunt. At `p = 10^-3` the smallest real lattice, `m = 4`, already
+needs `Lambda = 1.55`, which is **above every ZNE order's bias ceiling**. So under
+this response model **Richardson ZNE cannot do even a 2x2 Hubbard lattice**, and
+the ZNE curves are removed from the figure rather than drawn as feasible. ZNE
+becomes usable again once the noise is low enough (it works at `p = 10^-5`).
+
+*Caveat.* `s(lambda) = s(0) exp(-lambda Lambda)` is a test model, not an
+established description of this observable under gate-local noise. A response
+with less curvature would raise every bias ceiling above, and with it every ZNE
+conclusion here. Measuring the actual noise response of a small compiled Hubbard
+circuit is the check that would settle it.
 
 **(b) Trotter-step extrapolation — the largest single lever.** Order-2k
 multiproduct formulas give r ∝ t^{1+1/2k}(W/ε)^{1/2k}. The shot-noise cost is the

@@ -14,6 +14,33 @@ mitigation_ceiling.py, read-only source, not imported)
   prove the exponential is unavoidable for ANY mitigation strategy, so
   Gamma = exp(Lambda) is an optimistic envelope, not an artifact of PEC.
 
+TWO DIFFERENT ESTIMATORS, TWO DIFFERENT COSTS
+  These are not interchangeable and the model must not blur them:
+
+  * PEC samples a quasiprobability decomposition of the inverse noise channel.
+    Every sample carries a sign and a weight, so the per-shot variance is
+    gamma^2 = exp(2 Lambda) and the cost is exponential in Lambda -- but the
+    estimator is unbiased, so shots really do buy accuracy.
+  * Richardson ZNE runs the circuit at amplified noise levels lambda_i and
+    averages BOUNDED outcomes. Its variance factor is therefore only
+    (sum_i |c_i|)^2 -- polynomial, not exponential. What it pays instead is
+    RESIDUAL BIAS: the extrapolant recovers the noiseless value only to
+    |1 - sum_i c_i exp(-lambda_i Lambda)|, and no number of shots removes that.
+    So ZNE is bias-limited at Lambda ~ 0.2-0.5 while PEC is shot-limited at
+    Lambda ~ 10.
+
+  An earlier version of this model charged ZNE an exponential variance
+  sum |c_i| exp(lambda_i Lambda) -- i.e. it assumed attenuation had to be
+  inverted at every node -- and never checked the bias at all. Both were wrong,
+  and together they reported ZNE points carrying ~0.9 relative bias against a
+  0.1 target. Whether higher ZNE order helps or hurts is now an OUTPUT of the
+  bias/variance trade, not an assumption.
+
+CAVEAT ON THE RESPONSE MODEL
+  s(lambda) = s(0) exp(-lambda Lambda) is a test model, not an established
+  description of this observable under gate-local noise. A response with real
+  curvature would change the residual bias, and with it every ZNE conclusion.
+
 WHY THIS SATURATES IN n
   More qubits do not make gates better. They buy PARALLEL COPIES of the circuit,
   P = floor(n / q_per_copy), hence P times more shots per week. But shots enter
@@ -54,54 +81,72 @@ def richardson_coeffs(nodes: list[float]) -> list[float]:
     return out
 
 
-def overhead(lam: float, strategy: str = "pec") -> float:
-    """Gamma(Lambda): the factor by which the shot count's sqrt is inflated."""
-    if strategy == "none":
-        return 1.0
+def _k_of(strategy: str) -> int:
+    return int(strategy[3:]) if len(strategy) > 3 else 2
+
+
+def residual_bias(lam: float, strategy: str) -> float:
+    """Relative bias the estimator CANNOT remove by sampling."""
     if strategy == "pec":
-        return math.exp(min(lam, 700.0))
+        return 0.0                      # unbiased given exact noise characterisation
+    if strategy == "none":
+        return 1.0 - math.exp(-lam)     # raw attenuation
     if strategy.startswith("zne"):
-        k = int(strategy[3:]) if len(strategy) > 3 else 2
-        nodes = richardson_nodes(k)
+        nodes = richardson_nodes(_k_of(strategy))
         cs = richardson_coeffs(nodes)
-        # optimal shot allocation across nodes -> (sum_i |c_i| e^{l_i Lambda})
-        return sum(abs(c) * math.exp(min(l * lam, 700.0)) for c, l in zip(cs, nodes))
+        return abs(1.0 - sum(c * math.exp(-l * lam) for c, l in zip(cs, nodes)))
     raise ValueError(f"unknown strategy {strategy!r}")
 
 
-def shots_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> float:
-    c = counts(m, cfg)
-    # Gamma^2 = exp(pec_coeff * noise_channels * p * G_cone); lam is half that
-    # exponent so gamma = exp(lam) keeps the ZNE node algebra unchanged.
-    lam = 0.5 * cfg.pec_coeff * cfg.noise_channels * cfg.p * c["g_cone"]
+def cost_factor(lam: float, strategy: str) -> float:
+    """Multiplier on (circuit time / delta^2) for the optimal shot allocation.
+
+    For independent unbiased node estimators with per-shot variance v_i and
+    per-shot time tau_i, minimising sum tau_i N_i subject to
+    sum c_i^2 v_i / N_i <= delta^2 gives N_i ~ |c_i| sqrt(v_i/tau_i) and a
+    minimum total time (sum_i |c_i| sqrt(v_i tau_i))^2 / delta^2.
+    Here v_i = 1 (bounded outcomes) and tau_i = lambda_i x the base circuit time,
+    because a noise-amplified circuit is correspondingly longer.
+    """
     if strategy == "none":
-        # unmitigated: the attenuation bias itself must sit under eps
-        if 1.0 - math.exp(-lam) > cfg.eps:
-            return math.inf
-    g = overhead(lam, strategy)
-    if not math.isfinite(g):
-        return math.inf
-    # multiproduct (Richardson-in-dt) extrapolation cuts the DEPTH but amplifies
-    # shot noise by the coefficient 1-norm. ||c||_1 = O(log k) -- polylogarithmic,
-    # not exponential [Low, Kliuchnikov & Wiebe arXiv:1907.11679; Vazquez et al.,
-    # Quantum 7, 1067 (2023)] -- so the depth saving wins easily.
-    l1 = multiproduct_l1(cfg.trotter_order_k)
-    sig = signal_at(m, cfg)
-    return cfg.n_times * l1 * l1 * g * g / (sig * cfg.eps) ** 2
+        return 1.0
+    if strategy == "pec":
+        if 2.0 * lam > 700.0:
+            return math.inf                          # beyond any conceivable budget
+        return math.exp(2.0 * lam)                   # v = gamma^2, tau = 1
+    if strategy.startswith("zne"):
+        nodes = richardson_nodes(_k_of(strategy))
+        cs = richardson_coeffs(nodes)
+        return sum(abs(c) * math.sqrt(l) for c, l in zip(cs, nodes)) ** 2
+    raise ValueError(f"unknown strategy {strategy!r}")
 
 
-def shots_available(m: float, n: float, cfg: Config = DEFAULT) -> float:
+def lambda_of(m: float, cfg: Config = DEFAULT) -> float:
     c = counts(m, cfg)
-    # fractional copies: with >=1e5 shots the chip is time-shared, so rounding the
-    # packing down is an artifact that puts false staircases on the curve
-    copies = n / c["q_per_copy"]
-    if copies < 1:
-        return 0.0
-    return cfg.budget_s * copies / c["t_circuit"]
+    return 0.5 * cfg.pec_coeff * cfg.noise_channels * cfg.p * c["g_cone"]
+
+
+def time_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> float:
+    """Wall clock on ONE copy to hit the statistical target. inf if bias-blocked."""
+    lam = lambda_of(m, cfg)
+    if residual_bias(lam, strategy) > cfg.bias_frac * cfg.eps:
+        return math.inf                 # no shot count repairs this
+    c = counts(m, cfg)
+    delta = signal_at(m, cfg) * (1.0 - cfg.bias_frac) * cfg.eps
+    l1 = multiproduct_l1(cfg.trotter_order_k)
+    f = cost_factor(lam, strategy)
+    if not math.isfinite(f):
+        return math.inf
+    return cfg.n_times * l1 * l1 * f * c["t_circuit"] / delta ** 2
 
 
 def feasible(m: float, n: float, cfg: Config = DEFAULT, strategy: str = "pec") -> bool:
-    return shots_required(m, cfg, strategy) <= shots_available(m, n, cfg)
+    """Bias must fit its allowance AND the statistics must fit the week."""
+    t_need = time_required(m, cfg, strategy)
+    if not math.isfinite(t_need):
+        return False
+    copies = n / counts(m, cfg)["q_per_copy"]
+    return copies >= 1 and t_need / copies <= cfg.budget_s
 
 
 def max_m(n: float, cfg: Config = DEFAULT, strategy: str = "pec",

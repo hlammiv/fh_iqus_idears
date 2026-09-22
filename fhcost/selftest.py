@@ -37,8 +37,36 @@ def main() -> int:
           hubbard.multiproduct_l1(1) < hubbard.multiproduct_l1(2) < hubbard.multiproduct_l1(4))
 
     print("\nnisq.py")
-    check("PEC beats Richardson ZNE at every Lambda",
-          all(nisq.overhead(l, "pec") < nisq.overhead(l, "zne2") for l in (0.5, 2, 5, 10)))
+    # --- review finding #2: ZNE is bias-limited, not variance-limited ---
+    check("PEC is unbiased; ZNE and the bare device are not",
+          nisq.residual_bias(1.0, "pec") == 0.0
+          and nisq.residual_bias(1.0, "zne2") > 0
+          and nisq.residual_bias(1.0, "none") > 0)
+    check("ZNE bias vanishes at zero noise and grows with it",
+          abs(nisq.residual_bias(0.0, "zne2")) < 1e-12
+          and nisq.residual_bias(0.5, "zne2") < nisq.residual_bias(1.5, "zne2"))
+    check("ZNE variance cost is polynomial, PEC's is exponential",
+          nisq.cost_factor(6.0, "zne2") == nisq.cost_factor(1.0, "zne2")
+          and nisq.cost_factor(6.0, "pec") > 1e4)
+
+    def lam_cap(st):
+        lo, hi = 0.0, 50.0
+        for _ in range(60):
+            mid = 0.5 * (lo + hi)
+            lo, hi = (mid, hi) if nisq.residual_bias(mid, st) <= DEFAULT.bias_frac * DEFAULT.eps else (lo, mid)
+        return lo
+    caps = {st: lam_cap(st) for st in ("none", "zne1", "zne2", "zne3")}
+    check("higher ZNE order buys MORE noise headroom, not less",
+          caps["none"] < caps["zne1"] < caps["zne2"] < caps["zne3"],
+          " < ".join(f"{k}={v:.2f}" for k, v in caps.items()))
+    check("sampling cannot repair bias: blocked points cost infinite time",
+          not math.isfinite(nisq.time_required(4.0, DEFAULT, "zne2")))
+    check("at p=1e-3 no ZNE order reaches even a 2x2 lattice",
+          nisq.lambda_of(4.0) > caps["zne3"]
+          and all(nisq.max_m(1e6, DEFAULT, f"zne{k}") == 0 for k in (1, 2, 3)),
+          f"Lambda(m=4) = {nisq.lambda_of(4.0):.2f} vs cap {caps['zne3']:.2f}")
+    check("...but ZNE does work once the noise is low enough",
+          nisq.max_m(1e6, DEFAULT.but(p=1e-5), "zne2") > 0)
     check("Richardson weights sum to 1",
           abs(sum(nisq.richardson_coeffs(nisq.richardson_nodes(3))) - 1.0) < 1e-9)
     # THE anchor: the vendored mitigation-ceiling table says C_max ~ 3000-4500
@@ -84,9 +112,9 @@ def main() -> int:
     check("U hurts at short time but helps at long time",
           short[8] < short[4] and long_[8] > long_[4],
           f"short {short[4]:.1f}->{short[8]:.1f}, long {long_[4]:.0f}->{long_[8]:.0f}")
-    check("mitigation ordering: none < ZNE < PEC",
-          nisq.max_m(1e6, strategy="none") < nisq.max_m(1e6, strategy="zne2")
-          < nisq.max_m(1e6, strategy="pec"))
+    check("PEC outperforms every ZNE order here",
+          all(nisq.max_m(1e6, strategy="pec") > nisq.max_m(1e6, strategy=f"zne{k}")
+              for k in (1, 2, 3)))
 
     print("\nftqc.py")
     check("p_L falls with d", ftqc.p_logical(25) < ftqc.p_logical(15) < ftqc.p_logical(5))
@@ -187,8 +215,6 @@ def main() -> int:
     check("multiproduct order has an optimum for FT (shot-limited)",
           ftm[2] > ftm[1] and ftm[4] < ftm[2],
           f"order 2/4/6/8 -> {ftm[1]:.0f}/{ftm[2]:.0f}/{ftm[3]:.0f}/{ftm[4]:.0f}")
-    check("higher Richardson ZNE order is WORSE (pays lambda_max)",
-          nisq.max_m(1e6, strategy="zne2") < nisq.max_m(1e6, strategy="zne1"))
     check("surface FT does clear it, at n ~ 1e6",
           s["n_ft_clears_classical_hi"] is not None
           and 1e5 < s["n_ft_clears_classical_hi"] < 5e6,
@@ -215,7 +241,7 @@ def main() -> int:
     for name, c in presets.PRESETS.items():
         check(f"preset {name!r} evaluates", nisq.max_m(1e6, c, "pec") > 0)
     check("default config anchor",
-          abs(nisq.max_m(1e6, DEFAULT, "pec") - 8.97) < 0.05,
+          abs(nisq.max_m(1e6, DEFAULT, "pec") - 8.758) < 0.05,
           f"m = {nisq.max_m(1e6, DEFAULT, 'pec'):.3f}")
     check("Trotter step count is the dominant disagreement",
           nisq.max_m(1e6, DEFAULT.but(trotter_mode="fixed_density"), "pec")
