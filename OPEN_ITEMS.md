@@ -181,8 +181,30 @@ What is NOT established, and would move the band back up:
    observable at this accuracy.
 5. The ED edge itself (24-26) is a memory estimate, never benchmarked.
 
-Until at least one purpose-built classical attack is run, the honest headline is
-"clears the **exact-diagonalisation** frontier", not "clears classical".
+**Does leadership-class scaling change this?** Checked, and the two arms answer
+differently.
+
+*ED: no.* Out-of-core looks attractive -- a 700 PB filesystem holds an m = 30
+vector where 10 PB of memory does not -- but time evolution touches the whole
+vector once per Krylov matvec, so the binding cost is bandwidth. At m = 28 that
+is ~1300 s per matvec and **50 weeks** for the evolution; m = 30 is 837 weeks.
+The in-memory limit of 26 stands, and is now enforced in code.
+
+*Tensor networks: massively, and this is the weak point.* The published run used
+chi = 2048, which is **4.8e14 flops = 0.28 MILLISECONDS of exascale compute**. A
+week of exascale is **2.1e9 times more**. Within the same budget the quantum arms
+are given, chi could be 3e6 -- 1500x higher. **I used a sub-millisecond
+calculation as the classical frontier.** That is a category error.
+
+On the measured slope even chi = 3e6 gives 0.032 against a 0.0064 target, so the
+conclusion may survive. But a 1500x increase in chi buying only 2.4x in error is
+itself evidence the error is not truncation-limited, which means the slope cannot
+be extrapolated in **either** direction. The tensor-network arm is therefore
+**unbounded by the available data**, not bounded and small.
+
+Until at least one purpose-built, leadership-scale classical attack is run, the
+honest headline is "clears the **exact-diagonalisation** frontier", not "clears
+classical".
 
 | # | finding | status |
 |---|---|---|

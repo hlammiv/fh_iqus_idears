@@ -129,7 +129,10 @@ class Config:
                                   # gamma^2 = exp(8 P_Z,1 N)  [Akahoshi et al. Eqs. 6-7, 15]
 
     # --- classical ---
-    ram_bytes: float = 10e15      # 10 PB, Frontier-class
+    ram_bytes: float = 10e15      # 10 PB, Frontier-class in-memory
+    disk_bytes: float = 700e15    # Orion-class parallel filesystem
+    disk_bw: float = 10e12        # ~10 TB/s. Out-of-core ED is memory-feasible but
+                                  # BANDWIDTH-infeasible: see classical.ed_frontier.
     n_krylov_vec: int = 4
     flops: float = 1.7e18         # exascale
     ent_rate: float = 0.6         # bits of entanglement per site at t_max (see classical.py)

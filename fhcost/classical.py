@@ -64,8 +64,23 @@ def ed_runtime_s(m: int, cfg: Config = DEFAULT) -> float:
     return matvecs * dim * 4.0 * m * 2.0 / cfg.flops
 
 
+def ed_io_seconds(m: int, cfg: Config = DEFAULT) -> float:
+    """Wall clock if the state vector does not fit in memory and must be streamed.
+
+    Out-of-core ED looks attractive -- a 700 PB filesystem holds an m = 30 vector
+    where 10 PB of memory does not -- but time evolution touches the whole vector
+    once per Krylov matvec, so the cost is bandwidth, not capacity. At m = 28 that
+    is ~1300 s per matvec and ~50 WEEKS for the evolution. Out-of-core therefore
+    does NOT extend the frontier, and the in-memory limit stands.
+    """
+    vec = BYTES_PER_AMP / 2.0 * hilbert_dim(m)          # complex64 out of core
+    t = t_max(m, cfg)
+    matvecs = max(1.0, 2.0 * t * m * (4.0 + cfg.U_over_J)) * cfg.n_times
+    return matvecs * vec / cfg.disk_bw
+
+
 def ed_frontier(cfg: Config = DEFAULT) -> int:
-    """Largest m satisfying BOTH memory and the one-week clock."""
+    """Largest m satisfying memory, the one-week clock, and (out of core) I/O."""
     m = ed_max_m(cfg)
     while m >= 2 and ed_runtime_s(m, cfg) > cfg.budget_s:
         m -= 2
@@ -141,6 +156,27 @@ TDVP_MEASURED = {256: 0.1002, 512: 0.0846, 1024: 0.0782, 2048: 0.0773}
 TDVP_SLOPE = -0.12          # d log(err) / d log(chi), fitted
 TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
            "source": "Zenodo 17799843, TDVP vs FLO, dimer-link C^zz"}
+
+# AND THAT RUN WAS NOWHERE NEAR A LEADERSHIP-SCALE ATTEMPT.
+# Snake MPS on 28 sites costs ~chi^3 per bond update, ~5.6e4 updates for the full
+# time grid, and ~chi^2 L d amplitudes of memory:
+#     chi = 2048  ->  4.8e14 flops  =  0.28 MILLISECONDS of exascale compute
+#     chi = 1e5   ->  16 TB,   33 s
+#     chi = 1e6   ->  1.6 PB,  9 hours
+#     chi = 3e6   ->  15 PB,   one week
+# A week of exascale is 2.1e9 times the published calculation. So the frontier
+# was never probed: chi could go 500-1500x higher within the same budget the
+# quantum arms are given.
+#
+# On the MEASURED slope that still would not reach our tolerance --
+# chi = 3e6 gives 0.032 against a target of 0.0064. But a 1500x increase in chi
+# buying only 2.4x in error is itself evidence the error is NOT truncation
+# limited, which means the slope cannot be extrapolated in EITHER direction.
+# The tensor-network arm is therefore UNBOUNDED by the available data, not
+# bounded and small. Its absence from the band is a gap, not a finding.
+TDVP_LEADERSHIP = {"published_chi": 2048, "published_flops": 4.8e14,
+                   "week_exascale_flops": 1.0e24, "chi_affordable_week": 3e6,
+                   "err_at_affordable_chi_on_measured_slope": 0.032}
 
 
 def tdvp_chi_for(tol: float) -> float:

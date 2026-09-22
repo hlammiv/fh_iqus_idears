@@ -306,6 +306,15 @@ def main() -> int:
           hi == classical.ed_frontier(DEFAULT.but(ram_bytes=100e15)))
     check("entanglement density respects the 1 bit/site bound",
           classical.ENT_RANGE[1] <= 1.0)
+    # leadership-scale check: does more machine move either classical arm?
+    check("out-of-core ED is bandwidth-bound, so storage does not extend it",
+          classical.ed_io_seconds(28) > 10 * DEFAULT.budget_s
+          and classical.ed_frontier() == 26,
+          f"m=28 would take {classical.ed_io_seconds(28)/DEFAULT.budget_s:.0f} weeks of streaming")
+    check("the published TDVP was 1e9x below a week of exascale",
+          classical.TDVP_LEADERSHIP["week_exascale_flops"]
+          / classical.TDVP_LEADERSHIP["published_flops"] > 1e8,
+          "0.28 ms of exascale compute -- not a frontier attempt")
     # This flipped when the unvalidated entropy-derived MPS arm was removed from
     # the band. It is a statement about the ED frontier, NOT about classical
     # methods in general -- no validated tensor-network estimate exists for this
