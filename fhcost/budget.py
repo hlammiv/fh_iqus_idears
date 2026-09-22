@@ -222,7 +222,10 @@ class Config:
     # cheap; Trotter and statistics get the rest.
     frac_trotter: float = 0.25
     frac_syn: float = 0.10
-    frac_logical: float = 0.10
+    frac_logical: float = 0.05
+    frac_magic: float = 0.05      # magic-state infidelity, union-bounded over the T count.
+                                  # Previously UNBUDGETED: the model consumed T states up
+                                  # to 320x too noisy at large n and never checked.
     frac_mitig: float = 0.05      # residual mitigation bias (ZNE); unused by PEC
     frac_stat: float = 0.50       # statistical HALF-WIDTH at confidence conf_z
     conf_z: float = 1.9600        # per-time two-sided 95%

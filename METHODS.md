@@ -281,6 +281,41 @@ variant (ε_RUS,θ ≈ α_RUS·θ·p with α_RUS/k ≈ 0.40) is the concrete rou
 in a Trotter step are mostly small-angle, so the average injected error falls with
 the angle. That is where STAR's case should be argued, not on p.
 
+## 3b. FT accounting: workspace, magic states, and failure-to-bias (review #7)
+
+Three things the surface-code arm was getting for free.
+
+**Hamming-weight phasing was taking its T-count saving without paying for it.**
+Phasing k identical-angle rotations computes their Hamming weight into a
+ceil(log2 k)-qubit register and applies one rotation per register bit; a
+phase-gradient register of `n_syn` qubits is also needed (catalytic, so paid
+once). That workspace is now charged: 52-72 logical qubits across the plotted
+range.
+
+**Magic-state infidelity was never budgeted.** The model consumed T states from a
+fixed `(15-to-1)` spec at every parameter point, with no check that its 4.5e-8
+output was clean enough. Union-bounding over the T count:
+
+| n | T per shot | p_T required | fixed spec gave | shortfall |
+|---|---|---|---|---|
+| 10^5 | 2.5e4 | 2.6e-8 | 4.5e-8 | 2x |
+| 10^6 | 1.4e5 | 4.4e-9 | 4.5e-8 | 10x |
+| 10^8 | 4.6e6 | 1.4e-10 | 4.5e-8 | **320x** |
+
+The factory is now **selected** per parameter point from a ladder (cultivation,
+15-to-1, cultivation + 15-to-1 cleanup, two-level 15-to-1) as the cheapest whose
+output meets the requirement, and `frac_magic = 0.05` of the tolerance is
+reserved for it. The model switches from cultivation to cultivation + cleanup
+around n = 10^7. If nothing on the ladder is clean enough the point returns None
+rather than passing silently.
+
+**A logical failure biases by twice its probability.** A failure flips a +-1
+outcome, so the distance-selection rule carries a factor 2 it did not have.
+
+Effect at n = 10^6: surface FT falls from 49.2 to **35.1**; at n = 10^8, from 531
+to **297**. The curve also acquires genuine steps where the factory protocol
+changes, so its slope is no longer a clean 4/9.
+
 ## 4b. Pinnacle (QLDPC)
 
 Webster *et al.* (Iceberg Quantum), arXiv:2602.11457v2 (2026);
@@ -498,6 +533,41 @@ one that enters Λ_STAR itself rather than the shot budget. The angle-dependent 
 variant (ε_RUS,θ ≈ α_RUS·θ·p with α_RUS/k ≈ 0.40) is the concrete route: rotations
 in a Trotter step are mostly small-angle, so the average injected error falls with
 the angle. That is where STAR's case should be argued, not on p.
+
+## 3b. FT accounting: workspace, magic states, and failure-to-bias (review #7)
+
+Three things the surface-code arm was getting for free.
+
+**Hamming-weight phasing was taking its T-count saving without paying for it.**
+Phasing k identical-angle rotations computes their Hamming weight into a
+ceil(log2 k)-qubit register and applies one rotation per register bit; a
+phase-gradient register of `n_syn` qubits is also needed (catalytic, so paid
+once). That workspace is now charged: 52-72 logical qubits across the plotted
+range.
+
+**Magic-state infidelity was never budgeted.** The model consumed T states from a
+fixed `(15-to-1)` spec at every parameter point, with no check that its 4.5e-8
+output was clean enough. Union-bounding over the T count:
+
+| n | T per shot | p_T required | fixed spec gave | shortfall |
+|---|---|---|---|---|
+| 10^5 | 2.5e4 | 2.6e-8 | 4.5e-8 | 2x |
+| 10^6 | 1.4e5 | 4.4e-9 | 4.5e-8 | 10x |
+| 10^8 | 4.6e6 | 1.4e-10 | 4.5e-8 | **320x** |
+
+The factory is now **selected** per parameter point from a ladder (cultivation,
+15-to-1, cultivation + 15-to-1 cleanup, two-level 15-to-1) as the cheapest whose
+output meets the requirement, and `frac_magic = 0.05` of the tolerance is
+reserved for it. The model switches from cultivation to cultivation + cleanup
+around n = 10^7. If nothing on the ladder is clean enough the point returns None
+rather than passing silently.
+
+**A logical failure biases by twice its probability.** A failure flips a +-1
+outcome, so the distance-selection rule carries a factor 2 it did not have.
+
+Effect at n = 10^6: surface FT falls from 49.2 to **35.1**; at n = 10^8, from 531
+to **297**. The curve also acquires genuine steps where the factory protocol
+changes, so its slope is no longer a clean 4/9.
 
 ## 4b. Pinnacle (QLDPC)
 

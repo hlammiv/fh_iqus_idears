@@ -182,8 +182,8 @@ def conf_z(cfg: Config = DEFAULT) -> float:
 def error_ledger(cfg: Config = DEFAULT) -> dict:
     """The shares, and a hard check that they fit inside the tolerance."""
     d = {"trotter": cfg.frac_trotter, "synthesis": cfg.frac_syn,
-         "logical": cfg.frac_logical, "mitigation bias": cfg.frac_mitig,
-         "statistical": cfg.frac_stat}
+         "logical": cfg.frac_logical, "magic states": cfg.frac_magic,
+         "mitigation bias": cfg.frac_mitig, "statistical": cfg.frac_stat}
     d["TOTAL"] = sum(d.values())
     if d["TOTAL"] > 1.0 + 1e-9:
         raise ValueError(f"error budget over-allocated: {d['TOTAL']:.3f} > 1")

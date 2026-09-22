@@ -237,7 +237,7 @@ classical".
 | 4 | mitigation theorem is overstated | **fixed** — citation corrected, claims downgraded, demonstrated arm added |
 | 5 | multiproduct gains lack an error bound | **partial** — Trotter error calibrated by exact diagonalisation (alpha 9/4 -> 7/4); branch-cost accounting still open |
 | 6 | Pinnacle calibration needs reconstruction | **fixed** — footprint reproduced with no free parameter; single-engine T supply corrected; connectivity flagged as O11 |
-| 7 | FT resource and error accounting incomplete | open |
+| 7 | FT resource and error accounting incomplete | **fixed** — HWP workspace charged, magic-state error budgeted with per-point factory selection, failure-to-bias factor 2 |
 | 8 | classical band is heuristic, not a ceiling | **partial** — relabelled as capacity, entropy bound fixed, TDVP measured; a validated TN estimate is still missing (O10) |
 | 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured (O5); geometry, cluster matching and velocities still open |
 | 10 | error components do not combine to the tolerance | open |

@@ -50,14 +50,58 @@ FACTORY_CYCLES = 42.6      # rounds per output T state, same source
 CULT_QUBITS = 1024.0       # magic-state cultivation source, 2e-9 output at p=1e-3
 CULT_CYCLES = 100.0        # rounds per state  [Gidney, Shutty & Jones, arXiv:2409.17595]
 
+# Factory ladder: (name, qubits, rounds per output state, output infidelity) at
+# p = 1e-3. A 15-to-1 stage maps input error p_in to ~35 p_in^3 and needs 15
+# input states per output, so a second stage costs ~16x the footprint.
+#   [Litinski, Quantum 3, 205 (2019); Gidney, Shutty & Jones, arXiv:2409.17595]
+FACTORIES = [
+    ("cultivation",                  CULT_QUBITS,            CULT_CYCLES, 2.0e-9),
+    ("15-to-1",                      FACTORY_QUBITS,         FACTORY_CYCLES, 4.5e-8),
+    ("cultivation + 15-to-1 cleanup", 15 * CULT_QUBITS + FACTORY_QUBITS,
+                                      CULT_CYCLES + FACTORY_CYCLES, 35 * 2.0e-9 ** 3),
+    ("two-level 15-to-1",            16 * FACTORY_QUBITS,    FACTORY_CYCLES,
+                                      35 * 4.5e-8 ** 3),
+]
+
+
+def select_factory(p_target: float, cfg: Config = DEFAULT):
+    """Cheapest factory whose output infidelity meets the per-state target.
+
+    Previously a single fixed 15-to-1 spec was used at every parameter point,
+    with no check that its 4.5e-8 output was good enough. Union-bounding the
+    magic error over the T count, the requirement at n = 1e8 is p_T <= 1.4e-10,
+    which that factory misses by 320x.
+    """
+    ok = [f for f in FACTORIES if f[3] <= p_target]
+    if not ok:
+        return None
+    return min(ok, key=lambda f: f[1])
+
 
 def magic_cost(cfg: Config = DEFAULT) -> tuple[float, float]:
-    """(qubits, rounds) per magic-state source. Cultivation is ~4.5x smaller."""
+    """(qubits, rounds) per magic-state source, ignoring the fidelity requirement.
+    Retained for comparison; select_factory() is what the model uses."""
     if cfg.magic_source == "cultivation":
         return CULT_QUBITS, CULT_CYCLES
     if cfg.magic_source == "litinski":
         return FACTORY_QUBITS, FACTORY_CYCLES
     raise ValueError(f"unknown magic_source {cfg.magic_source!r}")
+
+
+def hwp_workspace(m: float, cfg: Config = DEFAULT) -> float:
+    """Logical qubits Hamming-weight phasing needs, which were never charged.
+
+    Phasing k identical-angle rotations computes their Hamming weight into a
+    ceil(log2 k)-qubit register and applies one rotation per register bit, so the
+    T-count saving comes with a workspace cost. A phase-gradient register of
+    n_syn qubits is also needed; it is catalytic, so it is paid once.
+    [Gidney, Quantum 2, 74 (2018)]
+    """
+    c = counts(m, cfg)
+    n_distinct = max(c["n_rot"] / max(m, 1.0), 1.0)
+    eps_syn = cfg.frac_syn * eps_absolute(cfg, m) / max(n_distinct, 1.0)
+    n_syn = ROSS_SELINGER * math.log2(1.0 / eps_syn)
+    return math.ceil(math.log2(max(m, 2.0))) + math.ceil(n_syn)
 
 
 def star_theta(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
@@ -120,21 +164,34 @@ def t_counts(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
 
 
 def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
-    """Footprint and per-shot runtime for lattice size m under full FT."""
-    q_L = 2.0 * m + cfg.n_ancilla              # Jordan-Wigner; see module docstring
+    """Footprint and per-shot runtime for lattice size m under full FT.
+
+    Review #7 added three things that were missing:
+      * Hamming-weight phasing was taking its T-count saving without paying for
+        its workspace or its phase-gradient register,
+      * magic-state infidelity was never budgeted, so the model consumed T states
+        up to 320x too noisy at large n with a fixed factory spec, and
+      * a logical failure flips a +-1 outcome, biasing the estimator by up to
+        TWICE the failure probability, not once.
+    """
+    q_L = 2.0 * m + cfg.n_ancilla + hwp_workspace(m, cfg)
     n_t, d_t = t_counts(m, cfg)
     eps_L = cfg.frac_logical * eps_absolute(cfg, m)
+    fac = select_factory(cfg.frac_magic * eps_absolute(cfg, m) / max(n_t, 1.0), cfg)
+    if fac is None:
+        return None                     # no available factory is clean enough
+    fname, fq, fc, f_pT = fac
     for d in range(3, cfg.d_max, 2):
-        rounds = d_t * d                        # PER SHOT
-        if q_L * rounds * p_logical(d, cfg) > eps_L:
+        rounds = d_t * d                                    # PER SHOT
+        if 2.0 * q_L * rounds * p_logical(d, cfg) > eps_L:  # failure -> bias is x2
             continue
-        # factories sized for throughput: n_t states in `rounds` rounds
-        fq, fc = magic_cost(cfg)
         need_fac = max(1.0, math.ceil(n_t * fc / rounds))
         n_fac = max(float(cfg.n_factories), need_fac)
         phys = q_L * storage_per_logical(d, cfg) + n_fac * fq
         return {"m": m, "d": d, "q_L": q_L, "n_t": n_t, "d_t": d_t,
                 "rounds": rounds, "n_fac": n_fac, "phys": phys,
+                "factory": fname, "p_T": f_pT,
+                "workspace": hwp_workspace(m, cfg),
                 "t_shot": rounds * cfg.t_round}
     return None
 
