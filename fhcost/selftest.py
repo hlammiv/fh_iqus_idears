@@ -289,10 +289,33 @@ def main() -> int:
     print("\ncurves.py -- the headline")
     s = curves.summary()
     lo, hi = s["classical_band"]
-    check("classical band is m ~ 24-62", 20 <= lo <= 30 and 50 <= hi <= 80,
+    check("classical band is ED-set, m ~ 24-26", 20 <= lo <= 30 and 24 <= hi <= 32,
           f"{lo:.0f} .. {hi:.0f}")
-    check("PEC-NISQ never clears the optimistic classical edge",
-          s["n_pec_clears_classical_hi"] is None)
+    # --- review finding #8: measured tensor-network performance ---
+    check("TDVP error is flat in chi", abs(classical.TDVP_SLOPE) < 0.3
+          and classical.TDVP_MEASURED[2048] / classical.TDVP_MEASURED[256] > 0.5,
+          f"{classical.TDVP_MEASURED[256]:.3f} -> {classical.TDVP_MEASURED[2048]:.3f} "
+          "over an 8x range in chi")
+    check("its plateau exceeds the late-time signal",
+          classical.TDVP_MEASURED[2048] > hubbard.s_residual())
+    check("the entropy model contradicts that datum",
+          classical.mps_bond_bits(28.0, DEFAULT.but(tmax_mode="const", tmax_const=2.0,
+                                                    ent_rate=0.6)) < 20,
+          "it predicts chi ~ 6.6e3 suffices where chi = 2048 gives 0.077 and is flat")
+    check("so the entropy-derived MPS reach is NOT folded into the band",
+          hi == classical.ed_frontier(DEFAULT.but(ram_bytes=100e15)))
+    check("entanglement density respects the 1 bit/site bound",
+          classical.ENT_RANGE[1] <= 1.0)
+    # This flipped when the unvalidated entropy-derived MPS arm was removed from
+    # the band. It is a statement about the ED frontier, NOT about classical
+    # methods in general -- no validated tensor-network estimate exists for this
+    # observable. See OPEN_ITEMS.md O10.
+    check("PEC-NISQ clears the ED frontier under the measured calibration",
+          s["n_pec_clears_classical_hi"] is not None,
+          f"at n = {s['n_pec_clears_classical_hi']:.1e}")
+    check("...but not under the loose Trotter bound",
+          curves.summary(DEFAULT.but(trotter="extensive"))["n_pec_clears_classical_hi"]
+          is None, "so the flip rests on the calibration too, not the band alone")
     check("STAR clears the classical band only under the measured calibration",
           curves.summary(DEFAULT.but(trotter="extensive"))["n_star_clears_classical_hi"] is None
           and s["n_star_clears_classical_hi"] is not None,

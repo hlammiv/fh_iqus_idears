@@ -115,20 +115,51 @@ def cluster_max_m(cfg: Config = DEFAULT) -> float:
     return best
 
 
-# Entanglement density across a cut at the light-cone-crossing time, in bits per
-# site. The state is near-volume-law there; Hubbard saturates at 2 bits/site, and
-# a generic quench reaches an O(1) fraction of that. This is the single most
-# sensitive classical input, so the band is reported ACROSS the range.
-ENT_RANGE = (0.3, 1.5)
+# Entanglement density across a balanced cut at the light-cone-crossing time, in
+# bits per SITE. Hard bound: each half has Hilbert dimension 4^(m/2), so a
+# balanced cut carries at most m bits, i.e. ent_rate <= 1. An earlier version
+# used 1.5, which is unphysical.
+ENT_RANGE = (0.3, 1.0)
+
+# MEASURED tensor-network performance on exactly this problem, from the TDVP
+# series published with arXiv:2510.26300 (Zenodo 17799843): |C^zz_nn| on dimer
+# links at U = 0, against the exact free-fermion result, for chi = 256 .. 2048.
+#
+#   chi    256     512    1024    2048
+#   err  0.100   0.085   0.078   0.077     (mean over t in [0.5, 2])
+#
+# The error is essentially FLAT in chi -- err ~ chi^-0.12, so doubling the bond
+# dimension buys 9%. It has plateaued at ~0.077, which at late times is several
+# times LARGER than the signal itself (exact |C^zz| = 0.021-0.031 for t >= 1.5).
+# Extrapolating that slope, reaching our tolerance would need chi ~ 2e12.
+#
+# This is the datum the entropy model has to answer to, and it fails: at the same
+# point (m=28, t=2, ent_rate=0.6) the entropy model predicts chi ~ 6.6e3 would
+# suffice. It is not merely mis-calibrated, it is the wrong shape -- an entropy
+# argument cannot see an error that saturates in chi.
+TDVP_MEASURED = {256: 0.1002, 512: 0.0846, 1024: 0.0782, 2048: 0.0773}
+TDVP_SLOPE = -0.12          # d log(err) / d log(chi), fitted
+TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
+           "source": "Zenodo 17799843, TDVP vs FLO, dimer-link C^zz"}
+
+
+def tdvp_chi_for(tol: float) -> float:
+    """Bond dimension the MEASURED convergence implies for a given absolute error."""
+    e0 = TDVP_MEASURED[2048]
+    return 2048.0 * (e0 / max(tol, 1e-12)) ** (1.0 / abs(TDVP_SLOPE))
 
 
 def band(cfg: Config = DEFAULT) -> dict:
-    """The classical band: the union over methods, RAM and entanglement density.
+    """ESTIMATED CAPACITY of specified classical methods under stated machine
+    assumptions. **Not** a classical impossibility boundary -- exceeding it does
+    not establish that every competitive classical method fails, and sitting
+    below it does not establish that a point is easy in practice.
 
-    Low edge = the most pessimistic defensible classical machine (1 PB ED, or a
-    strongly entangled state for the tensor network). High edge = the most
-    optimistic (100 PB, weakly entangled). Quantum only counts as advantage
-    above the HIGH edge.
+    The band is set by exact diagonalisation. The tensor-network edge is reported
+    but NOT used to widen it, because the only published attempt on this problem
+    (TDVP, chi up to 2048) does not converge on this observable: its error is flat
+    in chi and larger than the signal at late times. An entropy-derived chi is
+    therefore not evidence of capability here.
     """
     ed_lo = ed_frontier(cfg.but(ram_bytes=1e15))
     ed_hi = ed_frontier(cfg.but(ram_bytes=100e15))
@@ -137,10 +168,13 @@ def band(cfg: Config = DEFAULT) -> dict:
     # A classical attacker picks the BEST method available, so each edge is a
     # max over methods; the edges differ only in how favourable the assumptions
     # are (RAM, entanglement density).
-    lo = max(ed_lo, mps_lo)
-    hi = max(ed_hi, mps_hi)
+    # ED sets the band. The entropy-derived MPS reach is carried alongside as a
+    # diagnostic, not folded in -- see the docstring and TDVP_MEASURED.
+    lo, hi = ed_lo, ed_hi
     return {"ed_lo_1PB": ed_lo, "ed_mid": ed_frontier(cfg), "ed_hi_100PB": ed_hi,
             "mps_strong_ent": mps_lo, "mps_mid": mps_max_m(cfg),
+            "tdvp_err_at_chi2048": TDVP_MEASURED[2048],
+            "tdvp_chi_for_tol": tdvp_chi_for(0.1 * 0.064),
             "mps_weak_ent": mps_hi, "cluster": cluster_max_m(cfg),
             "band": (lo, hi)}
 

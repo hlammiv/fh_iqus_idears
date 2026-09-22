@@ -334,28 +334,64 @@ RSA-2048, a far deeper and more T-heavy circuit where the rate advantage
 compounds over a much longer schedule. On a shallow dynamics workload at modest
 m, block granularity (k = 14–16 logical qubits per block) wastes some capacity.
 
-## 5. The classical band
+## 5. The classical frontier
 
-Drawn horizontally because the x axis is qubits and classical compute does not
-live on it. At t_max = √m/v_B the light cone has crossed the lattice, which kills
-every structural shortcut at once:
+**This is an estimated CAPACITY of specified methods under stated machine
+assumptions, not a classical impossibility boundary.** Exceeding it does not
+establish that every competitive classical method fails; sitting below it does
+not establish that a point is easy in practice.
 
-| method | reach | why |
-|---|---|---|
-| Krylov / state vector | m = 24 (1 PB) – 26 (100 PB) | dim = C(m,m/2)², memory-bound |
-| snake MPS / PEPS | m = 12–58 | S ≈ α·m ⇒ χ ~ 2^{αm}; χ³ runtime binds, not memory |
-| light-cone cluster | m ≈ 24 | cone is ~4m sites > m; strictly worse than ED |
+**Band: m = 24-26**, set by exact diagonalisation alone (dim = C(m,m/2)^2 at half
+filling, 16 B/amplitude, 4 Krylov vectors, 1-100 PB).
 
-**Band: m = 24–56.** The spread is dominated by α, the entanglement density per
-site — the least-pinned classical input. Published 2D Hubbard ED sits near m = 20.
+### Why the tensor-network arm was removed rather than widened
 
-**On noise-induced classical simulability:** Pauli-path methods give quasi-poly
-simulation of noisy circuits at fixed p, which would swallow the unmitigated-NISQ
-region. We considered drawing this as a second band and **rejected it**: at
-γ = 10⁻³ and depth ~10⁴ the required Pauli-weight truncation is ℓ ≈ 7000 ≫ 3m, so
-the theorem is asymptotically true but numerically vacuous at these sizes. The
-simpler statement is also the stronger one — the entire mitigated-NISQ and STAR
-region sits below the ED band anyway.
+The old upper edge of 62 came from an entropy argument: assume an entanglement
+density, convert to a bond dimension, convert to cost. Two things killed it.
+
+First, a normalisation error the review caught: a balanced cut of m spinful sites
+carries at most **m bits**, so `ent_rate <= 1`. The old range topped out at 1.5.
+
+Second, and decisively, the model can be checked against real data. The TDVP
+series published with the experiment (Zenodo 17799843) gives |C^zz_nn| on dimer
+links at U = 0 against the exact free-fermion result:
+
+| chi | 256 | 512 | 1024 | 2048 |
+|---|---|---|---|---|
+| mean abs. error | 0.100 | 0.085 | 0.078 | **0.077** |
+
+The error is **flat in chi** -- `err ~ chi^-0.12`, so doubling the bond dimension
+buys 9% -- and it has plateaued at 0.077, which at late times is several times
+larger than the signal itself (exact |C^zz| = 0.021-0.031 for t >= 1.5).
+Extrapolating that slope to our tolerance would need `chi ~ 2e12`.
+
+At the same operating point the entropy model predicts `chi ~ 6.6e3` suffices.
+It is not mis-calibrated, it is **the wrong shape**: an entropy argument cannot
+represent an error that saturates in chi. So it was removed rather than refitted.
+
+### What this does and does not license
+
+Removing it narrows the band from 24-62 to 24-26, and that narrowing is what
+flips "mitigated NISQ never clears classical" into "clears at n ~ 1.7e4". **The
+band narrowed because an unvalidated arm was deleted, not because tensor networks
+were shown to fail** -- a change in the direction that flatters the quantum
+curves, and one to be suspicious of accordingly.
+
+That TDVP run was a comparison baseline, not a best-effort classical attack; the
+error plateau looks systematic rather than truncation-limited, which would void
+the chi-extrapolation entirely; a snake MPS on a doubly periodic 7x4 torus is
+close to worst-case geometry; and no PEPS, neural-quantum-state or Pauli-path
+attempt exists for this observable at this accuracy.
+
+**So the defensible claim is "clears the exact-diagonalisation frontier", not
+"clears classical".** See `OPEN_ITEMS.md` O10, which is the item most likely to
+reverse a headline.
+
+### Noise-induced classical simulability
+
+Considered and **rejected** as a band: at p = 1e-3 and depth ~1e4 the required
+Pauli-weight truncation is far larger than the register, so the published
+quasi-polynomial results are asymptotically true but numerically vacuous here.
 
 ## 6. The three extrapolations
 

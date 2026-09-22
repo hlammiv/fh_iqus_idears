@@ -152,7 +152,37 @@ and tau up to ~13.
 Because of this every arm is now reported as a **band** between Campbell's bound
 and the calibration, rather than as a point value. Neither edge is the answer.
 
-## Review status
+### O10. The tensor-network question is OPEN, not resolved
+*Raised by #8. This is the item most likely to reverse a headline.*
+
+The classical band is now **ED-only, m = 24-26**, down from 24-62. That narrowing
+is what flips "mitigated NISQ never clears classical" into "it clears at
+n ~ 1.7e4". **The band narrowed because an unvalidated arm was removed, not
+because tensor networks were shown to fail** -- and removing an arm is a change in
+the direction that flatters the quantum curves, which deserves suspicion.
+
+What is actually established: the only published tensor-network attempt on this
+problem (TDVP, chi = 256-2048, Zenodo 17799843) does not converge on this
+observable. Its error is flat in chi (err ~ chi^-0.12, so doubling chi buys 9%),
+plateaus at 0.077, and at late times exceeds the signal itself. The entropy model
+that set the old upper edge predicts chi ~ 6.6e3 would suffice at that same point
+-- it is the wrong shape, not merely mis-calibrated, because an entropy argument
+cannot see an error that saturates.
+
+What is NOT established, and would move the band back up:
+1. **That was not a best-effort classical attack.** They ran TDVP as a
+   comparison, not as an optimised attempt to beat their own experiment.
+2. **The plateau looks systematic, not truncation-limited.** If it is TDVP
+   time-step or projection error, the chi-extrapolation to 2e12 is meaningless
+   and a better-converged run could do far better.
+3. **The geometry is close to worst case for MPS**: a snake on a 7x4 torus,
+   periodic in both directions. A cylinder or PEPS would do better.
+4. **No PEPS, neural-quantum-state or Pauli-path attempt exists** for this
+   observable at this accuracy.
+5. The ED edge itself (24-26) is a memory estimate, never benchmarked.
+
+Until at least one purpose-built classical attack is run, the honest headline is
+"clears the **exact-diagonalisation** frontier", not "clears classical".
 
 | # | finding | status |
 |---|---|---|
@@ -163,7 +193,7 @@ and the calibration, rather than as a point value. Neither edge is the answer.
 | 5 | multiproduct gains lack an error bound | **partial** — Trotter error calibrated by exact diagonalisation (alpha 9/4 -> 7/4); branch-cost accounting still open |
 | 6 | Pinnacle calibration needs reconstruction | open |
 | 7 | FT resource and error accounting incomplete | open |
-| 8 | classical band is heuristic, not a ceiling | open |
+| 8 | classical band is heuristic, not a ceiling | **partial** — relabelled as capacity, entropy bound fixed, TDVP measured; a validated TN estimate is still missing (O10) |
 | 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured (O5); geometry, cluster matching and velocities still open |
 | 10 | error components do not combine to the tolerance | open |
 | 11 | implementation and reporting issues | open |
