@@ -139,13 +139,16 @@ the unmitigated bias and every ZNE bias ceiling — is unchanged, as it must be:
 costing convention cannot move a physical damping rate. `selftest` now asserts
 that invariance directly.
 
-*Convention asymmetry, flagged not hidden.* The bare-NISQ arm now uses the
-one-norm derived above, while STAR's overhead is taken from its own paper's
-`gamma^2 = exp(8 P_Z,1 N)`. Those come from different sources and the STAR
-expression has not been re-derived the same way. With NISQ corrected upward,
-STAR now beats it at every `n` it can run (1.04x at 10^4 rising to 1.94x at
-10^8), where before it lost below `n ~ 5x10^4`. Part of that gap may be
-convention rather than architecture.
+*Is STAR costed the same way?* Checked, and yes. Its injected-rotation error is a
+Z-type Pauli channel with RUS-total probability `q = 4p/15`; the signed inverse
+gives `gamma = 1/(1-2q)` and `2 ln(gamma)/p = 1.0670`, reproducing the STAR
+paper's `gamma^2 = exp(8 P_Z,1 N)` exactly. **Both arms are cancellation
+one-norms.** With NISQ corrected upward STAR now beats it at every `n` it can run
+(1.04x at 10^4 rising to 1.94x at 10^8), where before it lost below `n ~ 5x10^4`.
+The margin is set by NISQ paying over all two-qubit gates while STAR pays only
+over rotations — a real architectural difference, but one whose size rests on the
+assumed ratio `c_rot/c_g = 5/15`, which has not been checked against a compiled
+circuit. See `OPEN_ITEMS.md` O1.
 
 ## 3. Surface-code FT
 
