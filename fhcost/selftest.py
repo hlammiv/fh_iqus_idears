@@ -113,6 +113,22 @@ def main() -> int:
     # dimerised S^z_tot=0 TRIPLET start is not one, which is what rescues it.
     check("triplet start gives |C^zz| = 1 exactly at t = 0",
           abs(hubbard.signal(0.0) - 1.0) < 1e-12)
+    # EXTERNAL validation: published dimer-link |C^zz| (TFLO+GPR), Zenodo 17799843
+    PUB = {0: [(0.1, 0.9500), (0.3, 0.6378), (0.5, 0.2810), (0.7, 0.0854),
+               (1.0, 0.0680), (1.5, 0.0326), (2.0, 0.0295)],
+           4: [(0.1, 0.9527), (0.3, 0.6603), (0.5, 0.3292), (0.7, 0.1414),
+               (1.0, 0.0902), (1.5, 0.0466), (2.0, 0.0532)]}
+    resid = [hubbard.signal(t, DEFAULT.but(U_over_J=u)) - v
+             for u, rows in PUB.items() for t, v in rows]
+    rms = (sum(r * r for r in resid) / len(resid)) ** 0.5
+    check("signal model reproduces the published data", rms < 0.02, f"RMS = {rms:.4f}")
+    # a quench has dC/dt = 0 at t = 0, so the Gaussian must be far flatter at the
+    # origin than the exponential that was there before
+    drop_g = 1.0 - hubbard.signal(0.02, DEFAULT.but(signal_beta=2.0))
+    drop_e = 1.0 - hubbard.signal(0.02, DEFAULT.but(signal_beta=1.0))
+    check("the decay is Gaussian, not exponential",
+          DEFAULT.signal_beta == 2.0 and drop_g < 0.1 * drop_e,
+          f"drop at t=0.02: {drop_g:.2e} (Gaussian) vs {drop_e:.2e} (exponential)")
     check("order melts more slowly at larger U",
           hubbard.t_melt(DEFAULT.but(U_over_J=8)) > hubbard.t_melt(DEFAULT.but(U_over_J=4))
           > hubbard.t_melt(DEFAULT.but(U_over_J=0)))
@@ -241,9 +257,9 @@ def main() -> int:
     check("multiproduct order has an optimum for FT (shot-limited)",
           ftm[2] > ftm[1] and ftm[4] < ftm[2],
           f"order 2/4/6/8 -> {ftm[1]:.0f}/{ftm[2]:.0f}/{ftm[3]:.0f}/{ftm[4]:.0f}")
-    check("surface FT does clear it, at n ~ 1e6",
+    check("surface FT does clear it, at n ~ 1e7",
           s["n_ft_clears_classical_hi"] is not None
-          and 1e5 < s["n_ft_clears_classical_hi"] < 5e6,
+          and 1e5 < s["n_ft_clears_classical_hi"] < 5e7,
           f"n = {s['n_ft_clears_classical_hi']:.2g}")
 
     print("\nconverged.py -- finite-size extrapolation")
@@ -267,7 +283,7 @@ def main() -> int:
     for name, c in presets.PRESETS.items():
         check(f"preset {name!r} evaluates", nisq.max_m(1e6, c, "pec") > 0)
     check("default config anchor",
-          abs(nisq.max_m(1e6, DEFAULT, "pec") - 6.89) < 0.05,
+          abs(nisq.max_m(1e6, DEFAULT, "pec") - 5.254) < 0.05,
           f"m = {nisq.max_m(1e6, DEFAULT, 'pec'):.3f}")
     check("Trotter step count is the dominant disagreement",
           nisq.max_m(1e6, DEFAULT.but(trotter_mode="fixed_density"), "pec")

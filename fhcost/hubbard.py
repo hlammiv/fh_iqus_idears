@@ -68,8 +68,11 @@ def qubits_per_copy(m: float, cfg: Config = DEFAULT) -> float:
 
 
 def t_melt(cfg: Config = DEFAULT) -> float:
-    """Time for the initial triplet order to melt. Slower at larger U."""
-    return cfg.t_melt0 * (1.0 + cfg.U_over_J / 4.0) / 2.0
+    """Melting time of the initial triplet order. Slower at larger U, but only
+    just: the fit gives 0.426 -> 0.447 between U/J = 0 and 4, a 5% effect. The
+    paper's much larger visual difference comes from the residual, not the
+    timescale."""
+    return cfg.t_melt_base + cfg.t_melt_slope * (cfg.U_over_J / 4.0)
 
 
 def s_residual(cfg: Config = DEFAULT) -> float:
@@ -93,7 +96,9 @@ def signal(t: float, cfg: Config = DEFAULT) -> float:
     res = s_residual(cfg)
     if cfg.signal_regime == "long":
         return res
-    return res + (cfg.s_short - res) * math.exp(-t / max(t_melt(cfg), 1e-9))
+    # Gaussian kernel (beta = 2), not exponential: the quench has dC/dt = 0 at t = 0.
+    return res + (cfg.s_short - res) * math.exp(
+        -((t / max(t_melt(cfg), 1e-9)) ** cfg.signal_beta))
 
 
 def signal_at(m: float, cfg: Config = DEFAULT) -> float:

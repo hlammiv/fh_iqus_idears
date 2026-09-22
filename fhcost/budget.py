@@ -171,11 +171,20 @@ class Config:
                                   # BIAS; the rest is the statistical half-width. Sampling
                                   # cannot repair bias, so a strategy whose bias exceeds
                                   # this allowance is infeasible at ANY shot count.
+    # FITTED to the published data (Zenodo 17799843), dimer-link C^zz, TFLO+GPR
+    # mitigated, t in [0.1,2], 20 points, both U. The decay is GAUSSIAN, not
+    # exponential: a free stretch exponent fits beta = 2.15 +- 0.09 (U=0) and
+    # 1.98 +- 0.05 (U=4), i.e. consistent with exactly 2, as a quench requires
+    # (dC/dt = 0 at t = 0). Forcing beta = 1 drives s_short to 1.22-1.25, which is
+    # 7-8 sigma above the exact triplet value of 1 -- a clean sign the form, not
+    # the data, is wrong.
     signal_regime: str = "curve"  # "short" | "long" | "curve" | "fixed" (use s_sig)
-    s_short: float = 1.0          # EXACT from the triplet algebra
-    s_res_min: float = 0.02       # residual at U = 0 (the paper still sees a slight AF tendency)
-    s_res_slope: float = 0.10     # residual growth per unit (U/J)/4      ESTIMATE
-    t_melt0: float = 0.5          # melting time at U/J = 4, in 1/J       (paper: 0.4-0.7)
+    signal_beta: float = 2.0      # stretch exponent; 2 = Gaussian    FITTED
+    s_short: float = 1.0          # EXACT from the triplet algebra; fit gives 1.000 +- 0.004
+    s_res_min: float = 0.043      # residual at U = 0                 FITTED +- 0.006
+    s_res_slope: float = 0.021    # residual growth per (U/J)/4       FITTED +- 0.003
+    t_melt_base: float = 0.426    # melting time at U = 0, in 1/J     FITTED +- 0.007
+    t_melt_slope: float = 0.021   # melting-time growth per (U/J)/4   FITTED +- 0.008
 
     def but(self, **kw) -> "Config":
         return replace(self, **kw)

@@ -32,11 +32,25 @@ What is left to check:
    and only residual logical error (which is separately budgeted through `p_L`
    and the code distance).
 
-### O2. Signal parameters are placeholders pending a fit
-`s_res_min = 0.02` and `s_res_slope = 0.10` are estimates; the residual
-antiferromagnetic correlation is not quoted numerically in arXiv:2510.26300.
-A fit to their Zenodo deposit (record 17799843) is outstanding. `s_short = 1.0`
-and `t_melt0 ~ 0.4-0.7` are sourced.
+### O2. Signal parameters — **fitted**, with residual caveats
+Fitted to Zenodo 17799843 (dimer-link C^zz, TFLO+GPR, both U). The decay is
+**Gaussian**, not exponential (free stretch exponent 2.15 +- 0.09 and
+1.98 +- 0.05). `s_short = 1.000 +- 0.004` confirms the triplet algebra.
+The placeholder `s_res_slope = 0.10` was **5x too large** (fitted 0.021).
+
+Remaining caveats:
+1. **Only two U values.** `s_res_slope` and `t_melt_slope` are a two-point
+   interpolation with zero constraint on curvature. No basis for extrapolating
+   beyond U/J = 4; the linear form is an assumption.
+2. **`s_res` is not a real plateau.** |C| oscillates with period ~1.0-1.1 J^-1 and
+   an amplitude comparable to the residual itself (U=0: |C| spans 0.021-0.077
+   over t in [1,2], a +-50% swing about 0.043). A single scalar is a coarse
+   summary; the honest form is Gaussian decay plus a damped revival.
+3. **No per-link exact reference at U=4** in the deposit, so `s_res(U=4)` rests on
+   mitigated data validated only globally (via n_triplets vs Majorana
+   propagation, which agree to ~3%).
+4. Do **not** use TDVP as ground truth for the residual: even chi=2048 gives
+   0.125 at U=0 against 0.043 exact, a 3x overestimate.
 
 ### O3. Pinnacle code family exhausts above n ~ 1e10
 Only five published generalised bicycle codes, topping out at `d = 24`, so the
