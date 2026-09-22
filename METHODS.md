@@ -463,7 +463,13 @@ allocation over branches, minimum total time
 
 So multiproduct is worth about **1.4x for NISQ and 1.15x for FT**, not the ~3x
 the old charge implied, and there is a genuine **optimum at order 4-6** rather
-than a monotone gain. FT falls off faster than NISQ because it has no PEC
+than a monotone gain.
+
+The size of the undercharge itself depends on the Trotter model, because it
+scales with `Lambda`: **11-14x** under the loose commutator bound but only
+**2.7-6.7x** under the measured calibration, since shorter circuits mean a
+smaller PEC exponent for the deepest branch to amplify. An earlier estimate of
+13-280x was computed under the loose bound and does not survive the calibration. FT falls off faster than NISQ because it has no PEC
 overhead to amortise, so the deepest branch's runtime is the whole cost.
 
 **(c) Finite-size extrapolation.** For a local observable, once the lattice is
