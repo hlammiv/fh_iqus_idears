@@ -78,23 +78,25 @@ def m_required(t: float, cfg: Config = DEFAULT) -> float:
 
     The boundary sits L/2 from the observable, so the condition is
     (L/2) > v t + xi ln(1/eps_fs), i.e. L > 2 v t + 2 xi ln(1/eps_fs).
+    m_required_extrapolated() is the same law with gain applied, and must agree
+    with this at gain = 1.
     """
-    eps_fs = cfg.frac_trotter * eps_absolute(cfg)
-    L = 2.0 * (fs_speed(cfg) * t + cfg.xi * math.log(1.0 / max(eps_fs, 1e-12)))
-    return L * L
+    return m_required_extrapolated(t, cfg, gain=1.0)["m_required"]
 
 
 def m_required_extrapolated(t: float, cfg: Config = DEFAULT, n_sizes: int = 4,
-                            gain: float = 10.0) -> float:
-    """m needed when you FIT the finite-size trend instead of waiting it out.
+                            gain: float = 10.0) -> dict:
+    """Same finite-size law as m_required, with the residual reduced by `gain`.
 
-    Running n_sizes lattices and fitting exp(-(L-2 v_corr t)/xi) removes a factor
-    `gain` of the residual, so the required L drops by xi*ln(gain) -- a constant
-    shift, not a change of scaling. It is paid for with n_sizes x the shots.
+    Fitting the trend over `n_sizes` lattices removes a factor `gain` of the
+    residual, so the required L drops by xi*ln(gain) -- a constant shift, not a
+    change of scaling. It is paid for with n_sizes times the shots, which is
+    returned rather than silently dropped (it previously was).
     """
     eps_fs = cfg.frac_trotter * eps_absolute(cfg)
-    L = 2.0 * cfg.v_corr * t + cfg.xi * math.log(1.0 / max(eps_fs * gain, 1e-12))
-    return max(L, 1.0) ** 2
+    L = 2.0 * (fs_speed(cfg) * t
+               + cfg.xi * math.log(1.0 / max(eps_fs * gain, 1e-12)))
+    return {"m_required": max(L, 1.0) ** 2, "shot_multiplier": float(n_sizes)}
 
 
 def classical_t_reach(cfg: Config = DEFAULT) -> float:

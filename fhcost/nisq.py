@@ -199,7 +199,7 @@ def feasible(m: float, n: float, cfg: Config = DEFAULT, strategy: str = "pec") -
     t_need = time_required(m, cfg, strategy)
     if not math.isfinite(t_need):
         return False
-    copies = n / counts(m, cfg)["q_per_copy"]
+    copies = math.floor(n / counts(m, cfg)["q_per_copy"])
     return copies >= 1 and t_need / copies <= cfg.budget_s
 
 

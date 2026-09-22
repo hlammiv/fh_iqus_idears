@@ -192,7 +192,7 @@ function pinn(m,c){const qL=2*m+(c.obs==="local"?0:c.anc),T=tcounts(m,c),eL=.3*e
     return{d,k,units:u,phys:u*npb*(1+PIN_ENG),tshot:cy*dt*c.tround}}
   return null}
 const maxPinn=(n,c)=>bis(m=>{const p=pinn(m,c);if(!p||p.phys>n)return false;
-  const cp=n/p.phys;return cp>=1&&nShots(c)*p.tshot/cp<=c.budget},1e6);
+  const cp=Math.floor(n/p.phys);return cp>=1&&nShots(c)*p.tshot/cp<=c.budget},1e6);
 
 const wComm=c=>9.5+(24.3-9.5)*(c.U-4)/4;
 const tMax=(m,c)=>c.tmax==="sqrt_m"?Math.sqrt(m)/c.v:c.tmax==="const"?1:1/m;
@@ -226,7 +226,7 @@ function nisqOK(m,n,c,st){const q=counts(m,c),
   // Gamma^2 = exp(peccoef * nchan * p * G_cone). This model 32/15; alt model 4.
   lam=.5*c.peccoef*c.nchan*c.p*q.gc;
   if(st==="none"&&1-Math.exp(-lam)>c.eps)return false;
-  const cp=n/q.q; if(cp<1)return false;
+  const cp=Math.floor(n/q.q); if(cp<1)return false;
   const g=gamma(lam,st); if(!isFinite(g))return false;
   const L=l1(c.k);
   const need=Math.log(c.nt*L*L)+2*Math.log(g)-2*Math.log(c.s*c.eps);
@@ -248,27 +248,27 @@ function tcounts(m,c){const q=counts(m,c),nd=Math.max(q.nrot/Math.max(m,1),1);
   return{nt:Math.max(q.r*c.crot*(4*(m-1)+L*ns),1),dt:Math.max(q.r*c.crot*(2*L+ns),1)}}
 function surf(m,c){const qL=2*m+c.anc,T=tcounts(m,c),eL=.3*epsAbs(c);
   const fq=c.magic==="cultivation"?1024:FQ, fc=c.magic==="cultivation"?100:FC;
-  for(let d=3;d<101;d+=2){const rd=T.dt*d/Math.max(c.lanes,1);
+  for(let d=3;d<101;d+=2){const rd=T.dt*d;   // factories are sized for throughput; no lanes divisor
     if(qL*rd*pL(d,c)>eL)continue;
     const nf=Math.max(c.nfac,Math.ceil(T.nt*fc/rd));
     return{d,qL,rounds:rd,phys:qL*c.routing*2*d*d+nf*fq,tshot:rd*c.tround}}
   return null}
 const maxSurf=(n,c)=>bis(m=>{const p=surf(m,c);if(!p||p.phys>n)return false;
-  const cp=n/p.phys;return cp>=1&&nShots(c)*p.tshot/cp<=c.budget},1e6);
+  const cp=Math.floor(n/p.phys);return cp>=1&&nShots(c)*p.tshot/cp<=c.budget},1e6);
 function starLam(m,c){
   if(c.starlaw==="angle"){const L=Math.sqrt(m),t=tMax(m,c),q=counts(m,c);
     const th=(5*m-4*L)*t, R=Math.max((16*L*(L-1)+2*m-2)*q.r+1,1);
     return .5*(4*c.salpha*c.p*th+4*c.sfloor*R)}
   return c.kappa*c.p*Math.max(counts(m,c).nrotc,1)}
 function star(m,c){const q=counts(m,c),qL=2*m+c.anc,eL=.3*epsAbs(c);
-  for(let d=3;d<101;d+=2){const rd=q.r*c.srps*d/Math.max(c.lanes,1);
+  for(let d=3;d<101;d+=2){const rd=q.r*c.srps*d;   // logical depth; nothing to parallelise
     if(qL*rd*pL(d,c)>eL)continue;
     // cone-restricted, exactly as NISQ's gc is: applying the light cone to one
     // and not the other penalises STAR by 3x and makes it look strictly worse
     return{d,lam:starLam(m,c),phys:qL*c.routing*2*d*d,tshot:rd*c.tround}}
   return null}
 const maxStar=(n,c)=>bis(m=>{const p=star(m,c);if(!p||p.phys>n)return false;
-  const cp=n/p.phys;if(cp<1)return false;
+  const cp=Math.floor(n/p.phys);if(cp<1)return false;
   return Math.log(nShots(c))+2*p.lam<=Math.log(c.budget*cp/p.tshot)},1e6);
 
 // --- classical ------------------------------------------------------------

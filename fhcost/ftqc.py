@@ -123,6 +123,10 @@ def p_logical(d: int, cfg: Config = DEFAULT) -> float:
     if cfg.pl_model == "fowler":
         return 0.1 * (cfg.p / cfg.p_th) ** ((d + 1) / 2.0)
     if cfg.pl_model == "willow":
+        # A FIXED EXPERIMENTAL ANCHOR at the measured device error, not a
+        # p-dependent family: this expression has no cfg.p in it. Sweeping p with
+        # pl_model="willow" therefore moves nothing, and a p-sensitivity column
+        # computed that way is fixed by construction rather than by physics.
         return 1.43e-3 * 2.14 ** (-(d - 7) / 2.0)
     if cfg.pl_model == "star_fit":      # Akahoshi et al. Eq. 18
         return 0.0679 * (cfg.p / 0.00385) ** ((d + 1) / 2.0)
@@ -182,7 +186,11 @@ def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
         return None                     # no available factory is clean enough
     fname, fq, fc, f_pT = fac
     for d in range(3, cfg.d_max, 2):
-        rounds = d_t * d                                    # PER SHOT
+        # PER SHOT. No `lanes` divisor here: the factory bank below is already
+        # SIZED for throughput (need_fac delivers n_t states within `rounds`), so
+        # dividing again would count the same parallelism twice. `lanes` applies
+        # only where supply is genuinely serialised -- Pinnacle's single engine.
+        rounds = d_t * d
         if 2.0 * q_L * rounds * p_logical(d, cfg) > eps_L:  # failure -> bias is x2
             continue
         need_fac = max(1.0, math.ceil(n_t * fc / rounds))
@@ -202,7 +210,7 @@ def max_m_surface(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
         pt = surface_point(m, cfg)
         if pt is None or pt["phys"] > n:
             return False
-        copies = n / pt["phys"]
+        copies = math.floor(n / pt["phys"])
         if copies < 1:
             return False
         return n_tot * pt["t_shot"] / copies <= cfg.budget_s
@@ -252,7 +260,7 @@ def max_m_star(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
         pt = star_point(m, cfg)
         if pt is None or pt["phys"] > n:
             return False
-        copies = n / pt["phys"]
+        copies = math.floor(n / pt["phys"])
         if copies < 1:
             return False
         need_log = math.log(n_shots_total(cfg, m)) + 2 * pt["lam"]
@@ -383,7 +391,7 @@ def max_m_pinnacle(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
         pt = pinnacle_point(m, cfg)
         if pt is None or pt["phys"] > n:
             return False
-        copies = n / pt["phys"]
+        copies = math.floor(n / pt["phys"])
         return copies >= 1 and n_tot * pt["t_shot"] / copies <= cfg.budget_s
 
     if not ok(M_MIN):

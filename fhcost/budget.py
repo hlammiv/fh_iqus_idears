@@ -70,7 +70,13 @@ class Config:
     tmax_const: float = 1.0       # used when tmax_mode == "const"
 
     # --- circuit model (estimates) ---
-    encoding: str = "compact"     # "compact" (Derby-Klassen) | "jw"
+    encoding: str = "compact"     # "compact" (Derby-Klassen) | "jw".
+                                  # Applies to the BARE arms (NISQ). Both surface-code
+                                  # FT and STAR use Jordan-Wigner internally: under
+                                  # lattice surgery the circuit is a sequence of
+                                  # pi/8 Pauli-PRODUCT rotations whose cost does not
+                                  # depend on Pauli weight, so paying 1.5 qubits/mode
+                                  # for locality buys nothing there.
     c_g: float = 15.0             # 2q gates / site / step
     c_rot: float = 5.0            # rotations / site / step
     c_w: float = 1.0              # Trotter commutator prefactor

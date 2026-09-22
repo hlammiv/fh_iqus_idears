@@ -68,10 +68,13 @@ def evaluate(n_grid, cfg: Config = DEFAULT) -> dict:
     return {k: np.array(v, float) for k, v in out.items()}
 
 
-def crossing(f, target: float, lo: float = 1e2, hi: float = 1e10) -> float | None:
+CROSSING_LIMIT = 1e10
+
+
+def crossing(f, target: float, lo: float = 1e2, hi: float = CROSSING_LIMIT) -> float | None:
     """Smallest n with f(n) >= target, bisected in log n. None if never."""
     if f(hi) < target:
-        return None
+        return None            # NOT reached within the search range -- see fmt_crossing
     if f(lo) >= target:
         return lo
     for _ in range(70):
@@ -106,6 +109,20 @@ def extrapolation_table(n: float = 1e6, cfg: Config = DEFAULT) -> list[tuple]:
         rows.append((f"  + MPF order {2*k}", ftqc.max_m_surface(n, c),
                      f"(b) Trotter, ||c||_1={hubbard.multiproduct_l1(k):.2f}"))
     return rows
+
+
+def fmt_crossing(v) -> str:
+    """Report an unfound crossing honestly: the search was bounded."""
+    return f"not reached below n = {CROSSING_LIMIT:.0e}" if v is None else f"{v:.2e}"
+
+
+def max_integer_L(m: float) -> int:
+    """Largest integer side length fitting a continuous capacity m.
+
+    The curves solve for a CONTINUOUS m, which is a capacity proxy, not an actual
+    square lattice. A machine with capacity m = 63 runs a 7x7, not a 7.94x7.94.
+    """
+    return int(math.floor(math.sqrt(max(m, 0.0))))
 
 
 def summary(cfg: Config = DEFAULT) -> dict:

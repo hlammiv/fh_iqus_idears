@@ -208,6 +208,10 @@ def band(cfg: Config = DEFAULT) -> dict:
     # diagnostic, not folded in -- see the docstring and TDVP_MEASURED.
     lo, hi = ed_lo, ed_hi
     return {"ed_lo_1PB": ed_lo, "ed_mid": ed_frontier(cfg), "ed_hi_100PB": ed_hi,
+            # `band` is a FIXED 1-100 PB uncertainty envelope and deliberately
+            # ignores cfg.ram_bytes. `ed_at_cfg_ram` is the single-machine
+            # sensitivity; sweeping RAM should move that, not the band.
+            "ed_at_cfg_ram": ed_frontier(cfg),
             "mps_strong_ent": mps_lo, "mps_mid": mps_max_m(cfg),
             "tdvp_err_at_chi2048": TDVP_MEASURED[2048],
             "tdvp_chi_for_tol": tdvp_chi_for(0.1 * 0.064),

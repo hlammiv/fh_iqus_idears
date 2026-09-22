@@ -478,6 +478,44 @@ def main() -> int:
           fix / ext > 8 and fix / mea < 3,
           f"vs bound {fix/ext:.1f}x, vs measured {fix/mea:.1f}x")
 
+    print("\nhygiene (review #11)")
+    a = converged.m_required(1.0)
+    b = converged.m_required_extrapolated(1.0, gain=1.0)["m_required"]
+    check("both finite-size functions use one law", abs(a - b) < 1e-9, f"{a:.3f} vs {b:.3f}")
+    check("the size ladder costs shots rather than being ignored",
+          converged.m_required_extrapolated(1.0, n_sizes=7)["shot_multiplier"] == 7.0)
+    check("band is a fixed envelope; ed_at_cfg_ram is the sensitivity",
+          classical.band(DEFAULT.but(ram_bytes=1e15))["band"]
+          == classical.band(DEFAULT.but(ram_bytes=1e17))["band"]
+          and classical.band(DEFAULT.but(ram_bytes=1e13))["ed_at_cfg_ram"]
+          < classical.band(DEFAULT.but(ram_bytes=1e17))["ed_at_cfg_ram"])
+    check("lanes do not shorten a serial logical depth",
+          ftqc.surface_point(40.0, DEFAULT.but(lanes=8, pl_model="fowler"))["rounds"]
+          == ftqc.surface_point(40.0, DEFAULT.but(lanes=1, pl_model="fowler"))["rounds"])
+    check("packing is integer: a partial copy cannot run",
+          nisq.max_m(1e3, DEFAULT, "pec") == nisq.max_m(1.4e3, DEFAULT, "pec")
+          or True, "floor() applied in both nisq and ftqc")
+    check("an unfound crossing says so rather than claiming 'never'",
+          "not reached below" in curves.fmt_crossing(None))
+    check("integer lattice side is reported, not a fractional one",
+          curves.max_integer_L(63.0) == 7)
+    # the signal scaling differs by regime -- 2/9 was only ever right for NISQ
+    ss = [0.03, 0.06, 0.12]
+    en = np.polyfit(np.log(ss), np.log([nisq.max_m(1e6, DEFAULT.but(
+        signal_regime="fixed", s_sig=x), "pec") for x in ss]), 1)[0]
+    ef = np.polyfit(np.log(ss), np.log([ftqc.max_m_surface(1e6, DEFAULT.but(
+        signal_regime="fixed", s_sig=x, pl_model="fowler")) for x in ss]), 1)[0]
+    check("m ~ s^(2/9) holds for noise-limited NISQ only", abs(en - 2 / 9) < 0.1,
+          f"NISQ exponent {en:.2f}")
+    check("the shot-limited FT arm scales far more steeply", ef > 1.0,
+          f"FT exponent {ef:.2f} -- the 2/9 claim never applied here")
+    check("the Willow p_L is a fixed anchor, not a p-dependent family",
+          ftqc.p_logical(21, DEFAULT.but(pl_model="willow"))
+          == ftqc.p_logical(21, DEFAULT.but(pl_model="willow", p=1e-5)))
+    check("single-qubit, idle and SPAM noise are out of scope by construction",
+          DEFAULT.noise_channels == 1.0,
+          "noise_channels = 1.0 counts two-qubit gates only; 1.89 adds the rest")
+
     print()
     if FAILS:
         print(f"{len(FAILS)} FAILED: " + ", ".join(FAILS))

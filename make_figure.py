@@ -29,7 +29,7 @@ F.setup()
 C, L = curves.COLORS, curves.LABELS
 BAND_LO, BAND_HI = classical.band(DEFAULT)["band"]
 
-n_grid = np.logspace(0, 8, 130)   # from a single physical qubit
+n_grid = np.logspace(2, np.log10(3e8), 140)
 Y = curves.evaluate(n_grid, DEFAULT)
 B = curves.evaluate_band(n_grid, DEFAULT)
 
@@ -40,9 +40,9 @@ axA, axB, axC = (fig.add_subplot(g) for g in gs)
 # ---------------------------------------------------------------- (a) m vs n
 ax = axA
 ax.axhspan(BAND_LO, BAND_HI, color=F.PALEGREY, alpha=0.55, lw=0, zorder=0)
-ax.axhline(BAND_HI, color=F.GREY, lw=0.6, ls=(0, (4, 2)), zorder=1)
-ax.text(1.4, BAND_HI * 1.25, f"classically easy  ($m\\leq{BAND_HI:.0f}$)",
-        fontsize=6.0, color=F.DARKGREY, va="bottom", ha="left")
+ax.axhline(BAND_HI, color=F.DARKGREY, lw=0.9, ls=(0, (4, 2)), zorder=3)
+ax.text(1.3e2, 12.0, f"classically easy  ($m\\leq{BAND_HI:.0f}$)",
+        fontsize=6.0, color=F.DARKGREY, va="center", ha="left")
 
 def msk(y):
     return np.where(y > 0, y, np.nan)
@@ -52,14 +52,14 @@ if np.nanmax(Y["nisq_none"]) > 0:
     ax.plot(n_grid, msk(Y["nisq_none"]), color=C["nisq_none"], lw=1.4, zorder=3)
 else:
     # bias-limited below the smallest real lattice: there is no curve to draw
-    ax.text(1.4, 1.38, r"unmitigated: $m<4$ at every $n$ (bias-limited)",
+    ax.text(1.3e2, 2.75, r"unmitigated: $m<4$ at every $n$ (bias-limited)",
             fontsize=5.8, color=C["nisq_none"], va="bottom", ha="left")
 ax.fill_between(n_grid, msk(Y["nisq_pec"]), msk(Y["nisq_pec_mpf"]),
                 color=C["nisq_pec"], alpha=0.10, lw=0, zorder=2)
 for _k, _c in (("nisq_pec", C["nisq_pec"]), ("star", C["star"]),
                ("surface", C["surface"]), ("pinnacle", C["pinnacle"])):
     _lo, _hi = B[_k]
-    ax.fill_between(n_grid, msk(_lo), msk(_hi), color=_c, alpha=0.16, lw=0, zorder=2)
+    ax.fill_between(n_grid, msk(_lo), msk(_hi), color=_c, alpha=0.11, lw=0, zorder=2)
 ax.plot(n_grid, msk(Y["nisq_pec"]), color=C["nisq_pec"], lw=1.6, zorder=4)
 ax.plot(n_grid, msk(Y["nisq_pec_mpf"]), color=C["nisq_pec"], lw=1.3,
         ls=(0, (3, 1.6)), zorder=4)
@@ -70,8 +70,8 @@ ax.plot(n_grid, msk(Y["surface_willow"]), color=C["surface"], lw=1.0,
 ax.plot(n_grid, msk(Y["pinnacle"]), color=C["pinnacle"], lw=1.9, zorder=6)
 
 ax.set_xscale("log"); ax.set_yscale("log")
-ax.set_xlim(1, 1e8); ax.set_ylim(1.2, 2e4)
-ax.set_xticks([10.0 ** e for e in range(0, 9, 2)])
+ax.set_xlim(1e2, 3e8); ax.set_ylim(2.5, 1.2e3)
+ax.set_xticks([10.0 ** e for e in range(2, 9, 2)])
 ax.set_xlabel(r"$n$ (physical qubits)")
 ax.set_ylabel(r"$m$ (resolvable lattice sites)")
 ax.tick_params(which="both", direction="in", top=True, right=True, length=2.6)
@@ -99,25 +99,27 @@ def y_of(key):
 
 fig.tight_layout(pad=0.35)
 fig.canvas.draw()
-safe_label(ax, 8e3, "ideal", r"$p=0$", C["ideal"], side=-1, pad=6.5, fontsize=6.2)
-safe_label(ax, 1.1e3, "nisq_pec", "NISQ + PEC", C["nisq_pec"], side=-1, pad=5.5, fontsize=6.2)
-safe_label(ax, 2.5e6, "nisq_pec_mpf", "NISQ + PEC + MPF-4", C["nisq_pec"], side=1, pad=5.0, fontsize=6.2)
+safe_label(ax, 2.2e3, "ideal", r"$p=0$", C["ideal"], side=-1, pad=6.5, fontsize=6.2)
+safe_label(ax, 4e3, "nisq_pec", "NISQ + PEC", C["nisq_pec"], side=-1, pad=5.5, fontsize=6.2)
+safe_label(ax, 4e3, "nisq_pec_mpf", "NISQ + PEC + MPF-4", C["nisq_pec"], side=1, pad=5.0, fontsize=6.2)
 
-safe_label(ax, 4e7, "star", "STAR", C["star"], side=-1, pad=5.5, fontsize=6.2)
-safe_label(ax, 2.5e7, "surface", "surface-code FT", C["surface"], side=-1, pad=6, fontsize=6.2)
-safe_label(ax, 4e6, "pinnacle", "Pinnacle (QLDPC)", C["pinnacle"], side=1, pad=6, fontsize=6.2)
-safe_label(ax, 1.0e7, "surface_willow", "measured $p_L$", C["surface"], side=-1, pad=5.5, fontsize=5.6)
+safe_label(ax, 2.2e7, "star", "STAR", C["star"], side=-1, pad=6.0, fontsize=6.2)
+safe_label(ax, 9e7, "surface", "surface-code FT", C["surface"], side=-1, pad=6.5, fontsize=6.2)
+safe_label(ax, 2.5e7, "pinnacle", "Pinnacle (QLDPC)", C["pinnacle"], side=1, pad=6, fontsize=6.2)
+safe_label(ax, 1.5e8, "surface_willow", "measured $p_L$", C["surface"], side=-1, pad=5.5, fontsize=5.6)
 ax.text(0.965, 0.955, "(a)", transform=ax.transAxes, fontsize=7.5, va="top", ha="right")
 
 xc = curves.summary()["n_pinnacle_clears_classical_hi"]
 if xc:
     ax.plot([xc], [BAND_HI], marker="o", ms=5.5, mfc="none",
             mec=C["pinnacle"], mew=1.2, zorder=7)
-    _ratio = curves.summary()["n_ft_clears_classical_hi"] / xc
-ax.annotate(f"QLDPC clears it\n{_ratio:.0f}$\\times$ earlier", xy=(xc, BAND_HI),
-                xytext=(1.5, 3500), fontsize=6.2, color=C["pinnacle"], ha="left",
-                arrowprops=dict(arrowstyle="->", color=C["pinnacle"], lw=0.8,
-                                connectionstyle="arc3,rad=-0.25"))
+    _xf = curves.summary()["n_ft_clears_classical_hi"]
+    if _xf:
+        ax.annotate(f"QLDPC clears it\n{_xf / xc:.0f}$\\times$ earlier",
+                    xy=(xc, BAND_HI), xytext=(1.4e2, 420), fontsize=6.2,
+                    color=C["pinnacle"], ha="left",
+                    arrowprops=dict(arrowstyle="->", color=C["pinnacle"], lw=0.8,
+                                    connectionstyle="arc3,rad=-0.25"))
 
 # ------------------------------------------------- (b) extrapolation ladder
 ax = axB

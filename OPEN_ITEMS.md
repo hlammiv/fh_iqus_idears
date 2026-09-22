@@ -241,4 +241,4 @@ classical".
 | 8 | classical band is heuristic, not a ceiling | **partial** — relabelled as capacity, entropy bound fixed, TDVP measured; a validated TN estimate is still missing (O10) |
 | 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured (O5); geometry, cluster matching and velocities still open |
 | 10 | error components do not combine to the tolerance | open |
-| 11 | implementation and reporting issues | open |
+| 11 | implementation and reporting issues | **fixed** — all eleven; headlines now generated from one record |
