@@ -582,10 +582,70 @@ def main() -> int:
           DEFAULT.noise_channels == 1.0,
           "noise_channels = 1.0 counts two-qubit gates only; 1.89 adds the rest")
 
-    print()
-    if FAILS:
-        print(f"{len(FAILS)} FAILED: " + ", ".join(FAILS))
-        return 1
+    # ---- magic-state plant (second-pass review #4) --------------------------
+    # 1. the published operating points are reproduced, not refitted
+    for dX, dZ, dm, q_pub in ((7, 3, 3, 810), (9, 3, 3, 1150),
+                              (11, 5, 5, 2070), (17, 7, 7, 4620)):
+        q_for = 2 * (dX + 4 * dZ) * 3 * dX + 4 * dm
+        check(f"Litinski footprint formula reproduces (15-to-1)_{dX},{dZ},{dm}",
+              abs(q_for - q_pub) <= 5,
+              f"2(dX+4dZ)3dX+4dm = {q_for}, Table 1 says {q_pub}")
+    for name, pp, po, qb, cy, fam in ftqc.MAGIC_SOURCES:
+        if fam != "litinski":
+            continue
+        check(f"rejection is inside the published cycle count: {name}",
+              cy > 0,
+              f"{cy} cycles/state at p_phys = {pp:.0e}, p_out = {po:.1e}")
+        break
+    lit1e3 = [r for r in ftqc.MAGIC_SOURCES if r[1] == 1e-3 and r[5] == "litinski"]
+    check("single-level (15-to-1)_17,7,7 cycles exceed 6 d_m by the failure rate",
+          42.0 < lit1e3[0][4] < 6 * 7 * 1.05,
+          f"6 d_m = 42, published {lit1e3[0][4]} -> p_fail = "
+          f"{1 - 42 / lit1e3[0][4]:.3f}")
+
+    # 2. cleaner inputs do NOT drive the output to zero: there is a circuit floor
+    cubic = 35 * 4.5e-8 ** 3
+    two_level = min(r[2] for r in lit1e3 if "x (15-to-1)" in r[0])
+    check("the cubic input law is optimistic against the simulated two-level value",
+          two_level > cubic and two_level / cubic > 5,
+          f"35 p_in^3 = {cubic:.1e} vs Litinski's simulated {two_level:.1e} "
+          f"({two_level / cubic:.0f}x)")
+    check("and no source beats its family's circuit floor at fixed p_phys",
+          min(r[2] for r in lit1e3) == 4.5e-20,
+          "the best published 1e-3 protocol is 4.5e-20, not 0")
+
+    # 3. the plant responds to the physical error rate
+    sel = {q: ftqc.select_factory(1e-10, DEFAULT.but(p=q))
+           for q in (1e-5, 1e-4, 1e-3, 3e-3)}
+    check("factory selection depends on p (it did not before)",
+          sel[1e-4] is not None and sel[1e-3] is not None
+          and sel[1e-4][0] != sel[1e-3][0],
+          f"p=1e-4 -> {sel[1e-4][0]}; p=1e-3 -> {sel[1e-3][0]}")
+    check("above the tabulated range the model refuses rather than extrapolates",
+          sel[3e-3] is None and ftqc.max_m_surface(1e6, DEFAULT.but(p=3e-3)) == 0.0,
+          "Litinski and cultivation both stop at p = 1e-3")
+    m_p4 = ftqc.max_m_surface(1e6, DEFAULT.but(p=1e-4))
+    m_p5 = ftqc.max_m_surface(1e6, DEFAULT.but(p=1e-5))
+    check("and so does the reachable m, which was p-degenerate before",
+          m_p5 > 1.5 * m_p4,
+          f"m(1e-5) = {m_p5:.0f} vs m(1e-4) = {m_p4:.0f}; both were 48.73")
+
+    # 4. the plant is sized by total qubits, not by the smallest single unit
+    pt = ftqc.surface_point(64.0, DEFAULT)
+    if pt is not None:
+        rows, _, _ = ftqc.factory_ladder(DEFAULT)
+        ok = [r for r in rows if r[2] <= pt["p_T_target"]]
+        plants = {r[0]: max(1.0, math.ceil(pt["n_t"] * r[4] / pt["rounds"])) * r[3]
+                  for r in ok}
+        check("the chosen source minimises TOTAL magic qubits",
+              abs(plants[pt["factory"]] - min(plants.values())) < 1e-9,
+              f"{pt['factory']}: {plants[pt['factory']]:.0f} qubits, "
+              f"cheapest of {len(plants)}")
+        check("magic and logical channels use the SAME failure-to-bias factor",
+              abs(pt["p_T_target"] * 2.0 * pt["n_t"]
+                  - DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, 64.0)) < 1e-18,
+              "both carry the factor 2 for a flipped +-1 outcome")
+
     # ---- one model, one record (second-pass review #3) ----------------------
     import json
     from . import record as _rec
@@ -607,6 +667,10 @@ def main() -> int:
     # the JS port itself is checked in a headless browser by check_parity.py;
     # selftest stays pure arithmetic and does not shell out
 
+    print()
+    if FAILS:
+        print(f"{len(FAILS)} FAILED: " + ", ".join(FAILS))
+        return 1
     print("all checks passed")
     return 0
 

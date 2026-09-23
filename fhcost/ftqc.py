@@ -45,47 +45,143 @@ from .hubbard import (counts, step_depth, eps_absolute, multiproduct_l1,
 from .nisq import M_MIN
 
 ROSS_SELINGER = 3.0        # T gates per Rz = 3 log2(1/eps) (Ross & Selinger 2016)
-FACTORY_QUBITS = 4620.0    # (15-to-1)_{17,7,7} at p=1e-3  [Litinski, Quantum 3, 205 (2019)]
-FACTORY_CYCLES = 42.6      # rounds per output T state, same source
-CULT_QUBITS = 1024.0       # magic-state cultivation source, 2e-9 output at p=1e-3
-CULT_CYCLES = 100.0        # rounds per state  [Gidney, Shutty & Jones, arXiv:2409.17595]
 
-# Factory ladder: (name, qubits, rounds per output state, output infidelity) at
-# p = 1e-3. A 15-to-1 stage maps input error p_in to ~35 p_in^3 and needs 15
-# input states per output, so a second stage costs ~16x the footprint.
-#   [Litinski, Quantum 3, 205 (2019); Gidney, Shutty & Jones, arXiv:2409.17595]
-FACTORIES = [
-    ("cultivation",                  CULT_QUBITS,            CULT_CYCLES, 2.0e-9),
-    ("15-to-1",                      FACTORY_QUBITS,         FACTORY_CYCLES, 4.5e-8),
-    ("cultivation + 15-to-1 cleanup", 15 * CULT_QUBITS + FACTORY_QUBITS,
-                                      CULT_CYCLES + FACTORY_CYCLES, 35 * 2.0e-9 ** 3),
-    ("two-level 15-to-1",            16 * FACTORY_QUBITS,    FACTORY_CYCLES,
-                                      35 * 4.5e-8 ** 3),
+# Cultivation ends by escaping into a d = 15 grafted matchable code, so one unit
+# occupies a d = 15 patch. Its expected volume per ACCEPTED state, retries
+# included, is read off Fig. 1 of arXiv:2409.17595 at ~3e4 qubit-rounds; that is
+# a value read from a log-log scatter plot, good to about a factor of two, and
+# it is the weakest number in this file. Cycles = volume / footprint.
+CULT_FOOTPRINT = 2.0 * 15 * 15        # 450 qubits, one d = 15 patch
+CULT_VOLUME_1E3 = 3.0e4               # qubit-rounds per accepted state, p = 1e-3
+CULT_CYCLES_1E3 = CULT_VOLUME_1E3 / CULT_FOOTPRINT
+# "a 2x noise strength improvement ... becomes a 50x logical error rate
+# improvement and a 10x cost reduction" -- same construction, so the footprint
+# is held and the volume divided.
+CULT_CYCLES_5E4 = CULT_CYCLES_1E3 / 10.0
+
+# ---------------------------------------------------------------------------
+# MAGIC-STATE SOURCES -- published operating points, not a formula
+#
+# The previous ladder gave a two-level factory an output error of 35 (4.5e-8)^3
+# = 3.2e-21 and charged it 42.6 cycles. Both are wrong, and wrong in the
+# optimistic direction. The cubic law describes the suppression of INPUT-state
+# error only; it says nothing about faults in the distillation circuitry, whose
+# footprint and cycle count do not shrink when the inputs get cleaner. Litinski
+# determines p_out NUMERICALLY (5-qubit density-matrix simulation including
+# storage errors and faulty T measurements) and reports 4.5e-20 at 128 cycles
+# for the comparable two-level protocol -- 14x worse in error and 3x slower.
+#
+# So the table below IS the model: every row is a published operating point at a
+# stated physical error rate. Nothing is extrapolated between rows, and nothing
+# is extrapolated in p.
+#
+#   LITINSKI  Quantum 3, 205 (2019), arXiv:1905.06903, Table 1.
+#             "Cycles" is already per OUTPUT state, so the 20-to-4 protocols'
+#             four outputs are divided in. The rejection rate is already inside
+#             it too: the time cost is 6 d_m / (1 - p_fail), and the published
+#             counts exceed 6 d_m by 0-2%, which IS p_fail.
+#             Footprint cross-check: a (15-to-1)_{dX,dZ,dm} block costs
+#             2 (dX + 4 dZ) 3 dX + 4 dm qubits, which reproduces 810, 1150,
+#             2070 and 4620 to the table's rounding. selftest asserts this.
+#
+#   CULTIVATION  Gidney, Shutty & Jones, arXiv:2409.17595, Fig. 1-2. End-to-end
+#             (grown) error 2e-9 at p = 1e-3 with a 99% DISCARD rate, and 4e-11
+#             at p = 5e-4 with 90%. Their cost axis is expected volume in
+#             qubit-rounds INCLUDING retries, so the discard rate is paid there.
+#
+# (name, p_phys, p_out, qubits, cycles per ACCEPTED state, family)
+MAGIC_SOURCES = [
+    # --- Litinski Table 1, p_phys = 1e-4 ---
+    ("(15-to-1)_7,3,3",                      1e-4, 4.4e-8,    810.0,  18.1, "litinski"),
+    ("(15-to-1)_9,3,3 small-footprint",      1e-4, 1.5e-9,    762.0,  36.2, "litinski"),
+    ("(15-to-1)_9,3,3",                      1e-4, 9.3e-10,  1150.0,  18.1, "litinski"),
+    ("(15-to-1)_11,5,5",                     1e-4, 1.9e-11,  2070.0,  30.0, "litinski"),
+    ("(15-to-1)^4_9,3,3 x (20-to-4)_15,7,9", 1e-4, 2.4e-15, 16400.0,  90.3, "litinski"),
+    ("(15-to-1)^4_9,3,3 x (15-to-1)_25,9,9", 1e-4, 6.3e-25, 18600.0,  67.8, "litinski"),
+    # --- Litinski Table 1, p_phys = 1e-3 ---
+    ("(15-to-1)_17,7,7",                     1e-3, 4.5e-8,   4620.0,  42.6, "litinski"),
+    ("(15-to-1)_9,5,5 x (15-to-1)_21,9,11",  1e-3, 6.1e-10,  7780.0, 469.0, "litinski"),
+    ("(15-to-1)^6_13,5,5 x (20-to-4)_23,11,13", 1e-3, 1.4e-10, 43300.0, 130.0, "litinski"),
+    ("(15-to-1)^4_13,5,5 x (20-to-4)_27,13,15", 1e-3, 2.6e-11, 46800.0, 157.0, "litinski"),
+    ("(15-to-1)^6_11,5,5 x (15-to-1)_25,11,11", 1e-3, 2.7e-12, 30700.0,  82.5, "litinski"),
+    ("(15-to-1)^6_13,5,5 x (15-to-1)_29,11,13", 1e-3, 3.3e-14, 39100.0,  97.5, "litinski"),
+    ("(15-to-1)^6_17,7,7 x (15-to-1)_41,17,17", 1e-3, 4.5e-20, 73400.0, 128.0, "litinski"),
+    # --- cultivation ---
+    ("cultivation d1=5",                     1e-3, 2.0e-9,  CULT_FOOTPRINT, CULT_CYCLES_1E3, "cultivation"),
+    ("cultivation d1=5",                     5e-4, 4.0e-11, CULT_FOOTPRINT, CULT_CYCLES_5E4, "cultivation"),
 ]
 
+LADDER_P = sorted({row[1] for row in MAGIC_SOURCES})     # 5e-4, 1e-3 ... and 1e-4
 
-def select_factory(p_target: float, cfg: Config = DEFAULT):
-    """Cheapest factory whose output infidelity meets the per-state target.
 
-    Previously a single fixed 15-to-1 spec was used at every parameter point,
-    with no check that its 4.5e-8 output was good enough. Union-bounding the
-    magic error over the T count, the requirement at n = 1e8 is p_T <= 1.4e-10,
-    which that factory misses by 320x.
+def factory_ladder(cfg: Config = DEFAULT) -> tuple[list, float | None, str]:
+    """(rows, ladder p_phys, status) for this machine's physical error rate.
+
+    There is no honest interpolation of a numerically simulated p_out in p, so
+    nothing is interpolated: every row tabulated at a p_phys AT OR ABOVE cfg.p is
+    admissible, because a factory characterised on noisier hardware also works on
+    quieter hardware. That makes the ladder pessimistic off the tabulated points
+    and exact on them. Above the largest tabulated p_phys there is no published
+    operating point at all and the model REFUSES rather than extrapolating --
+    which is why the FT arms vanish above p = 1e-3, and that is the honest answer
+    rather than a modelling gap hidden behind a fitted curve.
     """
-    ok = [f for f in FACTORIES if f[3] <= p_target]
+    rows = [r for r in MAGIC_SOURCES if r[1] >= cfg.p]
+    if cfg.magic_source in ("litinski", "cultivation"):
+        rows = [r for r in rows if r[5] == cfg.magic_source]
+    if not rows:
+        if cfg.p > max(LADDER_P):
+            return [], None, (f"no published factory at p = {cfg.p:.1e}; Litinski "
+                              f"and cultivation both stop at {max(LADDER_P):.0e}")
+        return [], None, f"no {cfg.magic_source} source tabulated at p >= {cfg.p:.1e}"
+    q = min(r[1] for r in rows)
+    status = ("exact" if any(abs(r[1] - cfg.p) < 1e-18 for r in rows) else
+              f"conservative: nearest tabulated p_phys is {q:.0e}, machine is "
+              f"{cfg.p:.1e}")
+    return rows, q, status
+
+
+def select_factory(p_target: float, cfg: Config = DEFAULT,
+                   n_t: float | None = None, rounds: float | None = None):
+    """The source minimising TOTAL magic qubits, not the smallest single unit.
+
+    Two corrections over the previous version, both from review #4:
+
+      * it consults cfg.p. Before, the same specification came out at p = 1e-5,
+        1e-3 and 3e-3, which cannot be read as a hardware sensitivity.
+      * it optimises the whole magic plant. Picking the smallest unit and only
+        then asking how many are needed is the wrong order: cultivation's 450
+        qubits beat a 4620-qubit 15-to-1 block per unit, but at 67 cycles per
+        accepted state against 42.6 it needs more units, and which wins depends
+        on the T rate the circuit actually demands. With n_t and rounds given,
+        the cost compared is units x footprint; without them it falls back to
+        the unit footprint and says so.
+
+    Returns (name, qubits, cycles, p_out, units) or None.
+    """
+    rows, _, _ = factory_ladder(cfg)
+    ok = [r for r in rows if r[2] <= p_target]
     if not ok:
         return None
-    return min(ok, key=lambda f: f[1])
+
+    def plant(r):
+        if n_t is None or rounds is None or rounds <= 0:
+            return r[3], 1.0                      # no throughput information
+        u = max(1.0, math.ceil(n_t * r[4] / rounds))
+        return u * r[3], u
+
+    best = min(ok, key=lambda r: plant(r)[0])
+    return (best[0], best[3], best[4], best[2], plant(best)[1])
 
 
 def magic_cost(cfg: Config = DEFAULT) -> tuple[float, float]:
-    """(qubits, rounds) per magic-state source, ignoring the fidelity requirement.
-    Retained for comparison; select_factory() is what the model uses."""
-    if cfg.magic_source == "cultivation":
-        return CULT_QUBITS, CULT_CYCLES
-    if cfg.magic_source == "litinski":
-        return FACTORY_QUBITS, FACTORY_CYCLES
-    raise ValueError(f"unknown magic_source {cfg.magic_source!r}")
+    """(qubits, cycles) of the cheapest source in this ladder, ignoring fidelity.
+    Diagnostic only; select_factory() is what the model uses."""
+    rows, _, _ = factory_ladder(cfg)
+    if not rows:
+        raise ValueError(f"no magic-state source tabulated at p = {cfg.p:.1e}")
+    r = min(rows, key=lambda x: x[3])
+    return r[3], r[4]
 
 
 def hwp_workspace(m: float, cfg: Config = DEFAULT) -> float:
@@ -177,28 +273,42 @@ def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
         up to 320x too noisy at large n with a fixed factory spec, and
       * a logical failure flips a +-1 outcome, biasing the estimator by up to
         TWICE the failure probability, not once.
+
+    Second-pass review #4 added two more:
+      * the SAME factor of two now applies to the magic budget. A faulty T state
+        corrupts a +-1 measurement exactly as a logical failure does, so charging
+        the logical channel 2 p_L and the magic channel 1 p_T was an inconsistency
+        in the ledger, not a modelling choice. It costs a factor of two in the
+        per-state target, which moves the factory one rung up the ladder.
+      * the factory is chosen INSIDE the distance loop and by total plant size.
+        The number of units needed depends on `rounds`, which depends on d, so
+        choosing the source first and counting units afterwards optimises the
+        wrong quantity.
     """
     q_L = 2.0 * m + cfg.n_ancilla + hwp_workspace(m, cfg)
     n_t, d_t = t_counts(m, cfg)
     eps_L = cfg.frac_logical * eps_absolute(cfg, m)
-    fac = select_factory(cfg.frac_magic * eps_absolute(cfg, m) / max(n_t, 1.0), cfg)
-    if fac is None:
-        return None                     # no available factory is clean enough
-    fname, fq, fc, f_pT = fac
+    # per-state magic target: union bound over n_t states, x2 for the sign flip
+    p_target = cfg.frac_magic * eps_absolute(cfg, m) / (2.0 * max(n_t, 1.0))
     for d in range(3, cfg.d_max, 2):
         # PER SHOT. No `lanes` divisor here: the factory bank below is already
-        # SIZED for throughput (need_fac delivers n_t states within `rounds`), so
-        # dividing again would count the same parallelism twice. `lanes` applies
-        # only where supply is genuinely serialised -- Pinnacle's single engine.
+        # SIZED for throughput (the unit count delivers n_t states within
+        # `rounds`), so dividing again would count the same parallelism twice.
+        # `lanes` applies only where supply is genuinely serialised -- Pinnacle's
+        # single engine.
         rounds = d_t * d
         if 2.0 * q_L * rounds * p_logical(d, cfg) > eps_L:  # failure -> bias is x2
             continue
-        need_fac = max(1.0, math.ceil(n_t * fc / rounds))
-        n_fac = max(float(cfg.n_factories), need_fac)
+        fac = select_factory(p_target, cfg, n_t=n_t, rounds=rounds)
+        if fac is None:
+            return None                 # no published source is clean enough
+        fname, fq, fc, f_pT, units = fac
+        n_fac = max(float(cfg.n_factories), units)
         phys = q_L * storage_per_logical(d, cfg) + n_fac * fq
         return {"m": m, "d": d, "q_L": q_L, "n_t": n_t, "d_t": d_t,
                 "rounds": rounds, "n_fac": n_fac, "phys": phys,
-                "factory": fname, "p_T": f_pT,
+                "factory": fname, "p_T": f_pT, "p_T_target": p_target,
+                "magic_qubits": n_fac * fq,
                 "workspace": hwp_workspace(m, cfg),
                 "t_shot": rounds * cfg.t_round}
     return None

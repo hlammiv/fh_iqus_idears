@@ -318,6 +318,66 @@ Effect at n = 10^6: surface FT falls from 49.2 to **35.1**; at n = 10^8, from 53
 to **297**. The curve also acquires genuine steps where the factory protocol
 changes, so its slope is no longer a clean 4/9.
 
+### The magic plant is published operating points, not a formula (review #4)
+
+The earlier ladder built its two-level entries from the cubic input law,
+`35 p_in^3`, giving `35 (4.5e-8)^3 = 3.2e-21` at 42.6 cycles. Both numbers are
+optimistic, because the cubic law describes the suppression of **input-state**
+error and says nothing about faults in the distillation circuitry — whose
+footprint and cycle count do not shrink when the inputs get cleaner. Litinski
+determines `p_out` numerically (a five-qubit density-matrix simulation including
+storage errors and faulty T measurements) and reports **4.5e-20 at 128 cycles**
+for the comparable two-level protocol: 14× worse in error, 3× slower.
+
+The table is therefore the model. Every row is a published operating point at a
+stated physical error rate — thirteen from Litinski's Table 1 at `p = 1e-4` and
+`1e-3`, plus magic-state cultivation at `1e-3` and `5e-4`. Nothing is
+interpolated between rows and nothing is interpolated in `p`.
+
+**Cross-check.** A `(15-to-1)_{dX,dZ,dm}` block costs `2(dX + 4dZ)·3dX + 4dm`
+physical qubits, which reproduces 810, 1150, 2070 and 4620 to the table's
+rounding, and takes `6 dm / (1 - p_fail)` code cycles — so the published counts
+exceeding `6 dm` by 0–2% **are** the rejection rate. Rejection is already paid.
+Cultivation's cost is quoted by its authors as expected volume in qubit·rounds
+*including retries*, which matters: its end-to-end discard rate at `p = 1e-3` is
+**99%**.
+
+**Selection now consults `p`, and optimises the plant.** Before, an output target
+of 1e-10 returned the same specification at `p = 1e-5`, `1e-3` and `3e-3`, which
+cannot be read as a hardware sensitivity; and the cheapest *unit* was chosen
+before asking how many units the T rate demands. Both are fixed: rows tabulated
+at any `p_phys ≥ p` are admissible (pessimistic off the tabulated points, exact
+on them), and the source minimising **units × footprint** wins, chosen inside the
+distance loop because the unit count depends on `d`.
+
+**Above `p = 1e-3` the model refuses.** Neither source is characterised there, so
+`surface_point` returns nothing rather than extrapolating a simulated
+infidelity. That is why the FT arms vanish above `1e-3` in the explorer.
+
+**The ledger is now consistent.** A faulty T state corrupts a ±1 measurement
+exactly as a logical failure does, so the magic budget carries the same factor of
+two the logical check already carried. It costs a factor of two in the per-state
+target, which moves the plant one rung up the ladder.
+
+**What this changes** (`n = 10^6`, surface FT):
+
+| p | before | after |
+|---|---|---|
+| 10⁻⁵ | 48.7 | **227** |
+| 10⁻⁴ | 48.7 | **108** |
+| 10⁻³ | 25.7 | 25.7 |
+| 3×10⁻³ | 5.0 | **0 — not tabulated** |
+
+The two identical entries at 10⁻⁵ and 10⁻⁴ were the review's complaint visible in
+the top-line answer. At `n = 10^7`–`10^8` the fabricated cleanup factory is
+replaced by Litinski's `(15-to-1)^6_{11,5,5} × (15-to-1)_{25,11,11}`, and m rises
+slightly (49.8 → 52.6, 236 → 251) because the plant-level optimisation needs 31
+units where the old model needed 52.
+
+**Not fixed here:** Pinnacle's magic engine is not held to this ledger at all, so
+it survives at `p = 3×10⁻³` where the surface code does not. That is second-pass
+finding #5.
+
 ## 4b. Pinnacle (QLDPC)
 
 Webster *et al.* (Iceberg Quantum), arXiv:2602.11457v2 (2026);

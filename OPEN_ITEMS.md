@@ -315,13 +315,39 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 1 | the convergence criterion fails an exact physical limit | **fixed** — factorial Lieb-Robinson form, exact t -> 0 limit |
 | 2 | the default Trotter calibration is used beyond its evidence | **partial** — order-2k coefficients measured (O11b); domain still exceeded (O9) |
 | 3 | Python, the explorer and the documents disagree | **fixed** — one model, one record; see below |
-| 4 | factory cleanup neglects circuit-level errors | open |
-| 5 | Pinnacle lacks the common FT resource/error ledger | open |
+| 4 | factory cleanup neglects circuit-level errors | **fixed** — published operating points replace the cubic law; selection is p-aware and plant-level |
+| 5 | Pinnacle lacks the common FT resource/error ledger | open — and now visibly so: Pinnacle survives at p = 3e-3 where the surface code refuses |
 | 6 | Hamming-weight workspace does not match the cited circuit | open |
 | 7 | the classical baseline misses the U = 0 easy limit | open |
 | 8 | the signal fit does not support per-time relative accuracy | open |
 | 9 | zero uncertainty edges disappear from the plot | open |
 | 10 | integer lattice reporting ignores initial-state constraints | open |
+
+### What #4 closed, and what it did not
+
+The magic plant is now **thirteen published operating points from Litinski's
+Table 1 plus two cultivation points**, not a formula. The cubic input law
+`35 p_in^3` is gone: it described the suppression of input-state error and
+ignored faults in the distillation circuitry, giving a two-level factory 3.2e-21
+at 42.6 cycles where Litinski's simulation says 4.5e-20 at 128.
+
+Selection now consults `cfg.p` (it did not — the same specification came out at
+1e-5, 1e-3 and 3e-3) and minimises **units x footprint** inside the distance
+loop, rather than picking the smallest unit and counting afterwards. The magic
+budget carries the same factor-of-two failure-to-bias conversion as the logical
+check. Rejection was verified to be already inside both sources' published time
+costs: Litinski's cycles are `6 d_m / (1 - p_fail)`, cultivation's volume is
+quoted including retries at a 99% discard rate.
+
+Consequence at `n = 1e6`: surface FT goes 48.7 -> 227 at `p = 1e-5`, 48.7 -> 108
+at `1e-4`, is unchanged at `1e-3`, and **refuses** above it, because neither
+source is characterised there.
+
+**Still open from #4:** cultivation's expected volume (~3e4 qubit-rounds at
+`p = 1e-3`) is read off a log-log scatter plot in arXiv:2409.17595 Fig. 1 and is
+good to about a factor of two. It is the weakest number in `ftqc.py`, and it
+matters, because cultivation wins the plant comparison at every point below
+`n ~ 1e7`. A digitised value, or the authors' tabulated volume, would settle it.
 
 ### What #3 closed, and what it did not
 

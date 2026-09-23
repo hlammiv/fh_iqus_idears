@@ -85,8 +85,9 @@ def generated_block(rec: dict) -> str:
          f"const W_MPF_TAU_MAX = {js(hubbard.W_MPF_TAU_MAX)};",
          "// generalised bicycle codes [n, k, d, cycles/logical cycle, qubits/block]",
          f"const GB_CODES = {js([list(x) for x in ftqc.GB_CODES])};",
-         "// magic-state sources [name, qubits, cycles per state, output infidelity]",
-         f"const FACTORIES = {js([list(x) for x in ftqc.FACTORIES])};",
+         "// published magic-state operating points, NOT a formula:",
+         "// [name, p_phys, p_out, qubits, cycles per accepted state, family]",
+         f"const MAGIC_SOURCES = {js([list(x) for x in ftqc.MAGIC_SOURCES])};",
          "// the Python answers this port must reproduce, intermediates included",
          f"const PARITY = {js(parity)};",
          END]

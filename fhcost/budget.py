@@ -124,7 +124,10 @@ class Config:
     t_round: float = 1e-6
     routing: float = 2.0          # 2 tiles per algorithmic qubit -> ~4d^2 (Litinski data block)
     pl_model: str = "fowler"      # "fowler" (idealised) | "willow" (measured); see ftqc.py
-    n_factories: int = 8
+    # A FLOOR on the magic plant, not its size: the unit count is set by the T
+    # rate the circuit demands (select_factory). The old default of 8 was
+    # arbitrary and never binds at any plotted point.
+    n_factories: int = 1
     d_max: int = 101
 
     # --- STAR (least-pinned; see METHODS.md) ---
@@ -173,7 +176,11 @@ class Config:
                                   # "angle" = 4*alpha*p*Theta + 4*floor*R (theirs)
     star_alpha: float = 1.5       # angle law slope   [Toshio et al., PRX 15, 021057]
     star_floor: float = 1e-5      # residual per-rotation error that angle cannot remove
-    magic_source: str = "litinski"  # "litinski" 15-to-1 | "cultivation" [Gidney 2409.17595]
+    # Which magic-state families the plant may draw on. "auto" is the default
+    # because the previous select_factory ignored this field entirely and always
+    # considered both -- restricting it to "litinski" now would silently change
+    # the baseline rather than preserve it.
+    magic_source: str = "auto"      # "auto" | "litinski" 15-to-1 | "cultivation"
     lanes: float = 1.0            # concurrent logical delivery lanes (theirs: 4)
     routing_power: float = 0.0    # EXTRA powers of L = sqrt(m) in the 2-qubit gate
                                   # count from routing/SWAP on a NN grid.
