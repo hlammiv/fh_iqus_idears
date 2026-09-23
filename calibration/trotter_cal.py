@@ -231,6 +231,12 @@ TRAJ_STEPS = (1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)
 KRYLOV_BUDGET_GB = 1.5      # cap the Lanczos basis; substep to make up accuracy
 TAUS = (0.25, 0.5, 1.0, 2.0)
 STEPS = (1, 2, 4, 8, 16, 32, 64)
+# Base step counts for the multiproduct branches. Only bases >= r_min are
+# asymptotic, so with r_min = 4 the old list (1,2,4,8) left just TWO usable
+# points per (order, tau) -- which is why the extracted W_2k swings 6-10x at
+# tau >= 1 where the observable error has zero crossings. Five usable bases lets
+# the fit see the plateau instead of averaging across a crossing (O11b).
+MPF_BASES = (1, 2, 4, 8)
 OUT_NAME = "data/trotter_cal.json"
 MEM_CAP_GB = 3.0        # this machine has ~10 GB free; n = 16 belongs on lenore
 CAMPBELL_W = 9.5            # commutator norm per site at U/J = 4
@@ -369,9 +375,10 @@ def main():
         # instead of clamping. State infidelity is already recorded per row and
         # is monotone with no crossings, so it pins the coefficient where the
         # observable cannot.
-        global TAUS, STEPS, OUT_NAME
+        global TAUS, STEPS, OUT_NAME, MPF_BASES
         TAUS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
         STEPS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 64, 96, 128)
+        MPF_BASES = (1, 2, 3, 4, 6, 8, 12, 16)
         OUT_NAME = "data/trotter_cal_fine.json"
         sys.argv = [a for a in sys.argv if a != "--fine"]
     if "--clamp" in sys.argv:
@@ -412,7 +419,7 @@ def main():
             # classical multiproduct extrapolation of the EXPECTATION VALUES
             for k in (2, 3, 4):
                 w = mp_weights(k)
-                for base in (1, 2, 4, 8):
+                for base in MPF_BASES:
                     ks = [base * i for i in range(1, k + 1)]
                     for ki in ks:                       # branches are their own circuits
                         if ki not in vals:
