@@ -386,6 +386,10 @@ def main() -> int:
         got = ftqc.p_logical_gb(k, d)
         check(f"p_L fit reproduces their Table III, d={d}",
               0.7 < got / want < 1.4, f"{got:.1e} vs {want:.0e}")
+    # Pinnacle needs connectivity the slide's grid does not provide, and that is
+    # now ENFORCED rather than noted, so its tests run on the hardware the codes
+    # actually require. PIN is the two-coupler-layer chip of Bravyi et al.
+    PIN = DEFAULT.but(platform="sc_long_range")
     # footprint reproduced with NO free parameter (review #6): their published
     # n = 1620 ceil((L^2+1)/8) + 4410, i.e. d=24 blocks plus ONE magic engine
     paper_IV = {8: 19e3, 12: 35e3, 16: 58e3, 20: 87e3}
@@ -414,14 +418,14 @@ def main() -> int:
     check("and away from that edge the two stay within a small factor",
           _r7 < 3.0, f"ratio {_r6:.2f} at n=1e6, {_r7:.2f} at n=1e7")
     check("Pinnacle and the surface code stay within a small factor",
-          0.5 < ftqc.max_m_pinnacle(1e8) / ftqc.max_m_surface(1e8, fow) < 2.5,
-          f"ratio {ftqc.max_m_pinnacle(1e8)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8")
+          0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
+          f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
     check("engine count has an optimum -- engines cost 4410 qubits each",
-          ftqc.max_m_pinnacle(1e6, DEFAULT.but(pin_engines=16))
-          > ftqc.max_m_pinnacle(1e6, DEFAULT.but(pin_engines=64)))
+          ftqc.max_m_pinnacle(1e6, PIN.but(pin_engines=16))
+          > ftqc.max_m_pinnacle(1e6, PIN.but(pin_engines=64)))
     check("the plotted range stays inside the published GB code family",
-          ftqc.pinnacle_point(ftqc.max_m_pinnacle(1e8))["d"] <= 24
-          and ftqc.max_m_pinnacle(1e8) < ftqc.max_m_pinnacle(1e9),
+          ftqc.pinnacle_point(ftqc.max_m_pinnacle(1e8, PIN), PIN)["d"] <= 24
+          and ftqc.max_m_pinnacle(1e8, PIN) < ftqc.max_m_pinnacle(1e9, PIN),
           "family exhausts near n ~ 1e10, above the plotted range")
     check("GB rate advantage grows with d",
           (ftqc.GB_CODES[4][4] / ftqc.GB_CODES[4][1]) / (4 * 24 ** 2)
@@ -778,6 +782,63 @@ def main() -> int:
                   - DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, 64.0)) < 1e-18,
               "both carry the factor 2 for a flipped +-1 outcome")
 
+    # ---- hardware platforms: connectivity, parallelism, clock ---------------
+    from . import platform as plat
+    # 1. the status quo is reproduced exactly by the platform path
+    for _n in (1e5, 1e6, 1e7, 1e8):
+        _sc = DEFAULT.but(platform="superconducting")
+        check(f"platform path reproduces the status quo at n = {_n:.0e}",
+              abs(nisq.max_m(_n, _sc, "pec") - nisq.max_m(_n, DEFAULT, "pec")) < 1e-12
+              and abs(ftqc.max_m_surface(_n, _sc) - ftqc.max_m_surface(_n, DEFAULT)) < 1e-12,
+              "superconducting IS the old implicit machine, written down")
+    # 2. unlimited parallelism is algebraically the old formula
+    _c = DEFAULT.but(use_platform_clock=True, platform="superconducting")
+    _q, _q0 = hubbard.counts(64.0, _c), hubbard.counts(64.0, DEFAULT)
+    check("with unlimited parallelism the clock reduces to depth x t_gate",
+          abs(_q["t_circuit"] - _q0["t_circuit"]) / _q0["t_circuit"] < 1e-12,
+          f"{_q['t_circuit']:.4e} s either way")
+    # 3. published anchors
+    check("Helios anchors match the paper",
+          plat.HELIOS.n_demonstrated == 98 and plat.HELIOS.n_parallel_2q == 4.0
+          and plat.HELIOS.p_2q == 7.9e-4 and plat.HELIOS.t_layer == 55e-3,
+          "98 qubits, 4 two-qubit zones, 7.9e-4, 55 ms/layer (arXiv:2511.05465)")
+    check("transport dominates the gate on a mobile-qubit machine",
+          plat.HELIOS.t_layer / plat.HELIOS.t_2q > 500,
+          f"55 ms per layer against a 70 us gate = "
+          f"{plat.HELIOS.t_layer / plat.HELIOS.t_2q:.0f}x -- ion sorting, not gating")
+    check("and no gate count could have predicted it",
+          plat.HELIOS.layer_seconds(1e9) == plat.HELIOS.t_layer,
+          "a measured layer time overrides the derived one")
+    # 4. admissibility is enforced, not decorative
+    check("GB codes are refused on the slide's nearest-neighbour grid",
+          ftqc.max_m_pinnacle(1e8, DEFAULT) == 0.0
+          and ftqc.max_m_pinnacle(1e8, DEFAULT.but(platform="sc_long_range")) > 0,
+          "pin_nonlocal was documented to do this and was read by nothing")
+    check("two coupler layers are enough -- all-to-all is not required",
+          plat.admits("gb", "sc_long_range") and not plat.admits("gb", "superconducting"),
+          "Bravyi et al.: degree 6, two edge-disjoint planar subgraphs")
+    check("the surface code is unaffected by connectivity",
+          abs(ftqc.max_m_surface(1e7, DEFAULT.but(platform="sc_long_range"))
+              - ftqc.max_m_surface(1e7, DEFAULT)) < 1e-12,
+          "it only ever needed a planar grid")
+    # 5. the trade actually computes: all-to-all removes the swap network
+    _aa = DEFAULT.but(platform="helios", encoding="jw")
+    check("all-to-all removes the Kivlichan swap network",
+          hubbard.step_depth(256.0, _aa)
+          < hubbard.step_depth(256.0, DEFAULT.but(encoding="jw")),
+          f"{hubbard.step_depth(256.0, _aa):.0f} layers against "
+          f"{hubbard.step_depth(256.0, DEFAULT.but(encoding='jw')):.0f}")
+    _h = DEFAULT.but(platform="helios", use_platform_clock=True, encoding="jw")
+    check("but the clock cost swamps it on this workload",
+          hubbard.counts(64.0, _h)["t_circuit"]
+          > 1e5 * hubbard.counts(64.0, DEFAULT)["t_circuit"],
+          f"{hubbard.counts(64.0, _h)['t_circuit']:.2e} s per shot against "
+          f"{hubbard.counts(64.0, DEFAULT)['t_circuit']:.2e} s")
+    check("the hypothetical chip is marked as one",
+          plat.SC_LONG_RANGE.n_demonstrated == 0
+          and plat.HELIOS.n_demonstrated > 0,
+          "n_demonstrated = 0 means nobody has built it")
+
     # ---- how far the calibration actually reaches (second-pass #2) ----------
     _dc = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "domain_check.json"
     if _dc.exists():
@@ -1019,23 +1080,26 @@ def main() -> int:
           "t_me = max(2 d_a + 4r, t_r + 4r, d_a + t_r + 3r) with t_r = 10")
 
     # 1. the magic allocation is certified at every plotted point
-    worst = 0.0
+    _PIN = DEFAULT.but(platform=curves.PINNACLE_PLATFORM)
+    worst, seen = 0.0, 0
     for n in (1e5, 1e6, 1e7, 1e8):
-        mm = ftqc.max_m_pinnacle(n, DEFAULT)
-        pp = ftqc.pinnacle_point(mm, DEFAULT) if mm else None
+        mm = ftqc.max_m_pinnacle(n, _PIN)
+        pp = ftqc.pinnacle_point(mm, _PIN) if mm else None
         if pp is None:
             continue
-        allow = DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, mm)
+        seen += 1
+        allow = _PIN.frac_magic * hubbard.eps_absolute(_PIN, mm)
         worst = max(worst, 2.0 * pp["n_t"] * pp["engine_p_out"] / allow)
     check("every plotted Pinnacle point certifies its own magic allowance",
-          worst <= 1.0,
-          f"worst 2 n_T p_out / allowance = {worst:.2f}; it was 9.5 at n = 1e8")
+          seen == 4 and worst <= 1.0,
+          f"worst 2 n_T p_out / allowance = {worst:.2f} over {seen} points; "
+          f"it was 9.5 at n = 1e8")
 
     # 2. consumption never exceeds successful production
-    mm = ftqc.max_m_pinnacle(1e7, DEFAULT)
-    pp = ftqc.pinnacle_point(mm, DEFAULT)
+    mm = ftqc.max_m_pinnacle(1e7, _PIN)
+    pp = ftqc.pinnacle_point(mm, _PIN)
     produced = (pp["rounds"] / (max(float(pp["d"]) + 2.0, pp["engine_cycles"])
-                                / (1.0 - pp["p_reject"]))) * max(DEFAULT.pin_engines, 1)
+                                / (1.0 - pp["p_reject"]))) * max(_PIN.pin_engines, 1)
     check("T consumption never exceeds successful engine production",
           produced >= pp["n_t"] * (1 - 1e-9),
           f"schedule delivers {produced:.3e} accepted states for {pp['n_t']:.3e} needed")
@@ -1044,15 +1108,15 @@ def main() -> int:
           "10% for both p = 1e-3 engines, their own estimate")
 
     # 3. a plotted point where the processor outruns the engine and stalls
-    m5 = ftqc.max_m_pinnacle(1e5, DEFAULT)
-    p5 = ftqc.pinnacle_point(m5, DEFAULT) if m5 else None
+    m5 = ftqc.max_m_pinnacle(1e5, _PIN)
+    p5 = ftqc.pinnacle_point(m5, _PIN) if m5 else None
     check("there is a plotted point where the processor stalls on the engine",
           p5 is not None and p5["stalled"] and p5["d"] == 16,
           f"d = 16 has an 18-cycle logical cycle; distillation needs "
           f"{p5['engine_cycles']:.0f}" if p5 else "no point")
 
     # 4. the two architectures now agree field-by-field on the shared rows
-    led = {row[0]: row for row in ftqc.ledger_comparison(64.0, DEFAULT)}
+    led = {row[0]: row for row in ftqc.ledger_comparison(64.0, _PIN)}
     shared = ["T states per shot", "sequential T layers", "HWP workspace (logical)",
               "logical qubits", "logical-failure -> bias", "magic-failure -> bias",
               "magic allowance", "per-state target"]
@@ -1065,7 +1129,7 @@ def main() -> int:
           not diffs, f"{len(shared)} shared rows agree; architecture-specific rows "
                      f"(magic qubits, seconds per shot) still differ, as they must")
     check("Pinnacle refuses above the tabulated p, as the surface code does",
-          ftqc.max_m_pinnacle(1e6, DEFAULT.but(p=3e-3)) == 0.0,
+          ftqc.max_m_pinnacle(1e6, _PIN.but(p=3e-3)) == 0.0,
           "it reached m = 13.9 there while nothing checked its engine")
 
     # ---- one model, one record (second-pass review #3) ----------------------

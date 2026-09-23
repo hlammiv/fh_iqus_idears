@@ -1,6 +1,6 @@
 # Crossovers and sensitivity
 
-Model `90e49ba5d473` -- the same fingerprint the figure and `explorer.html`
+Model `5f032fcd3a4f` -- the same fingerprint the figure and `explorer.html`
 carry. Differing ids mean differing models; do not compare across them.
 
 All entries are `m` at `n = 10^6` unless the column says otherwise, for one
@@ -48,6 +48,19 @@ Each row changes ONE input from the baseline.
 | HWP batch 64 | 24–26 | 13.1 | 20 | 22.0 | 13 | 7 | 8.1e+06 |
 | no HWP (plain synthesis) | 24–26 | 13.1 | 20 | 22.0 | 8 | 5 | 5.9e+07 |
 
+## Hardware platforms: what connectivity costs in clock
+
+Each arm on the hardware it needs, with the constraint that actually binds.
+Generalised bicycle codes are not embeddable in a nearest-neighbour grid, so
+Pinnacle is unavailable -- not small -- on the slide's machine.
+
+| platform | connectivity | layer | NISQ+PEC | STAR | surface | QLDPC | binds at 1e6 |
+|---|---|---:|---:|---:|---:|---:|---|
+| superconducting grid | nn grid | 10 ns gate | 13.1 | 21.7 | 12.5 | 0.0 | clock (NISQ) |
+| superconducting, two coupler layers | thickness 2 | 10 ns gate | 13.1 | 21.7 | 12.5 | 24.8 | clock (NISQ) |
+| Quantinuum Helios | all to all | 55 ms | 6.9 | 0.0 | 0.0 | 0.0 | clock (NISQ) |
+| neutral atom (reconfigurable) | all to all | 275 ns gate | 10.8 | 7.0 | 0.0 | 0.0 | clock (NISQ) |
+
 ## Architecture ledgers, field by field, at m = 64
 
 The same compiled circuit costed on both architectures (review #5, test 4).
@@ -59,16 +72,16 @@ architectural trade, not a bookkeeping difference.
 | T states per shot | 3.675e+05 | 3.675e+05 | shared circuit |
 | sequential T layers | 4.054e+04 | 4.054e+04 | shared circuit |
 | HWP workspace (logical) | 63 | 63 | now charged on both |
-| logical qubits | 192 | 192 | same definition |
+| logical qubits | 192 | None | same definition |
 | logical-failure -> bias | 2 | 2 | a flipped +-1 outcome |
 | magic-failure -> bias | 2 | 2 | same conversion |
 | magic allowance | 0.0001917 | 0.0001917 | same share of the ledger |
-| per-state target | 2.608e-10 | 2.608e-10 | allowance / (2 n_T) |
-| source output infidelity | 2.7e-12 | 1e-11 | selected, not assumed |
-| magic qubits | 1.013e+06 | 5430 | plant vs engine |
-| rejection | in published cycles | 0.1 | Litinski folds it in; Pinnacle states it |
-| physical qubits | 1.419e+06 | 2.487e+04 |  |
-| seconds per shot | 0.9324 | 10.62 |  |
+| per-state target | 2.608e-10 | None | allowance / (2 n_T) |
+| source output infidelity | 2.7e-12 | None | selected, not assumed |
+| magic qubits | 1.013e+06 | None | plant vs engine |
+| rejection | in published cycles | None | Litinski folds it in; Pinnacle states it |
+| physical qubits | 1.419e+06 | None |  |
+| seconds per shot | 0.9324 | None |  |
 
 ## What each extrapolation buys, at n = 1e6
 

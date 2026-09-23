@@ -51,6 +51,10 @@ VARIANTS = {
     # the independent parallel model's declared assumption set, as a whole. If the
     # explorer's "alt model" preset ever drifts from fhcost.presets, this catches it.
     "arch_comparison": None,        # filled in below from the preset
+    # hardware platforms: connectivity, gate parallelism and clock
+    "helios": None,
+    "neutral_atom": None,
+    "two_layer_sc": None,
 }
 def _preset_overrides(name: str) -> dict:
     from dataclasses import fields as _fields
@@ -137,7 +141,12 @@ def reach_probe(n: float, cfg: Config) -> dict:
         "nisq_zne2": _f(nisq.max_m(n, cfg, "zne2")),
         "star":      _f(ftqc.max_m_star(n, cfg)),
         "surface":   _f(ftqc.max_m_surface(n, cfg)),
-        "pinnacle":  _f(ftqc.max_m_pinnacle(n, cfg)),
+        # Pinnacle is costed on the hardware its codes require, exactly as
+        # curves.evaluate plots it -- otherwise the record and the figure would
+        # disagree, which is the whole point of having one record.
+        "pinnacle":  _f(ftqc.max_m_pinnacle(
+            n, cfg.but(platform=curves.PINNACLE_PLATFORM))),
+        "pinnacle_on_grid": _f(ftqc.max_m_pinnacle(n, cfg)),
     }
 
 
@@ -154,7 +163,7 @@ def build() -> dict:
     }
     for name, over in VARIANTS.items():
         if over is None:
-            over = _preset_overrides("alt_model")
+            over = _preset_overrides({"arch_comparison": "alt_model"}.get(name, name))
         cfg = DEFAULT.but(**over) if over else DEFAULT
         b = classical.band(cfg)
         out["variants"][name] = {

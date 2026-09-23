@@ -150,11 +150,28 @@ class Patch:
         vec_gb = self.dim * 16 / 2 ** 30
         if krylov is None:
             krylov = int(max(8, min(40, KRYLOV_BUDGET_GB / max(vec_gb, 1e-9))))
-        sub = sub or max(1, int(np.ceil(tau * 4)), int(np.ceil(tau * 40 / krylov)))
+        # A Krylov space of dimension k resolves exp(-iHt) only while
+        # ||H|| dt <~ k/3. Capping k for memory therefore REQUIRES more substeps,
+        # and the first version of this did not: at n = 14 the cap took k to 8,
+        # left sub at 10, and the "exact" reference came out wrong by 2e-2 while
+        # every smaller patch was at 1e-15. Scale the substep by the spectral
+        # radius, not by tau alone.
+        if sub is None:
+            nrm = self._hnorm()
+            sub = max(1, int(np.ceil(tau * 4)),
+                      int(np.ceil(3.0 * tau * nrm / max(krylov, 1))))
         P = self.psi0.copy()
         for _ in range(sub):
             P = self._expv(P, tau / sub, krylov)
         return P
+
+    def _hnorm(self):
+        """Cheap upper bound on ||H||: hopping bandwidth plus the on-site term."""
+        if getattr(self, "_hn", None) is None:
+            hop = sum(max(abs(A).sum(axis=1).max(), abs(B).sum(axis=1).max())
+                      for A, B in self.hop)
+            self._hn = float(hop + np.abs(self.V).max())
+        return self._hn
 
     def _expv(self, P, dt, m):
         beta = np.linalg.norm(P)

@@ -44,6 +44,7 @@ from .hubbard import (counts, step_depth, eps_absolute, eps_statistical,
                       multiproduct_l1, trotter_steps, multiproduct_branches,
                       t_max, signal_at, conf_z)
 from .nisq import M_MIN
+from .platform import admits as platform_admits
 
 ROSS_SELINGER = 3.0        # T gates per Rz = 3 log2(1/eps) (Ross & Selinger 2016)
 
@@ -298,6 +299,14 @@ def p_logical(d: int, cfg: Config = DEFAULT) -> float:
     raise ValueError(f"unknown pl_model {cfg.pl_model!r}")
 
 
+def t_round_s(cfg: Config = DEFAULT) -> float:
+    """Syndrome cycle. The platform's if we are honouring its clock."""
+    if not cfg.use_platform_clock:
+        return cfg.t_round
+    from .platform import get as _plat
+    return _plat(cfg.platform).t_round
+
+
 def storage_per_logical(d: int, cfg: Config = DEFAULT) -> float:
     return cfg.routing * 2.0 * d * d
 
@@ -358,6 +367,8 @@ def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
         choosing the source first and counting units afterwards optimises the
         wrong quantity.
     """
+    if not platform_admits("surface", cfg.platform):
+        return None
     q_L = 2.0 * m + cfg.n_ancilla + hwp_workspace(m, cfg)
     n_t, d_t = t_counts(m, cfg)
     eps_L = cfg.frac_logical * eps_absolute(cfg, m)
@@ -383,7 +394,7 @@ def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
                 "factory": fname, "p_T": f_pT, "p_T_target": p_target,
                 "magic_qubits": n_fac * fq,
                 "workspace": hwp_workspace(m, cfg),
-                "t_shot": rounds * cfg.t_round}
+                "t_shot": rounds * t_round_s(cfg)}
     return None
 
 
@@ -421,6 +432,8 @@ def _star_lam(m: float, cfg: Config = DEFAULT) -> float:
 
 
 def star_point(m: float, cfg: Config = DEFAULT) -> dict | None:
+    if not platform_admits("star", cfg.platform):
+        return None
     c = counts(m, cfg)
     q_L = 2.0 * m + cfg.n_ancilla
     n_rot = max(c["n_rot"], 1.0)
@@ -434,7 +447,7 @@ def star_point(m: float, cfg: Config = DEFAULT) -> dict | None:
                 # an injected rotation error.
                 "lam": _star_lam(m, cfg),
                 "phys": q_L * storage_per_logical(d, cfg),      # no factories
-                "t_shot": rounds * cfg.t_round}
+                "t_shot": rounds * t_round_s(cfg)}
     return None
 
 
@@ -610,6 +623,14 @@ def pinnacle_point(m: float, cfg: Config = DEFAULT) -> dict | None:
     assumption from every other curve on the figure, and the comparison is not
     like-for-like. See OPEN_ITEMS.md O11.
     """
+    # THE CAVEAT, NOW ENFORCED. Generalised bicycle codes are not embeddable in a
+    # nearest-neighbour grid, and the slide specifies one. pin_nonlocal was
+    # documented to mark this and was read by nothing, so the arm was plotted
+    # unconditionally against curves costed on a grid. Bravyi et al.
+    # (arXiv:2308.07915) put the real requirement at degree-6 with two
+    # edge-disjoint planar subgraphs -- two coupler layers, not all-to-all.
+    if not platform_admits("gb", cfg.platform):
+        return None
     q_L = 2.0 * m + cfg.n_ancilla + hwp_workspace(m, cfg)   # same ledger as surface
     n_t, d_t = t_counts(m, cfg)
     eps_L = cfg.frac_logical * eps_absolute(cfg, m)
@@ -639,7 +660,7 @@ def pinnacle_point(m: float, cfg: Config = DEFAULT) -> dict | None:
                 "stalled": eng["cycles"] > dt,
                 "magic_limited": cyc_magic > cyc_proc,
                 "workspace": hwp_workspace(m, cfg),
-                "t_shot": cyc_tot * cfg.t_round}
+                "t_shot": cyc_tot * t_round_s(cfg)}
     return None
 
 

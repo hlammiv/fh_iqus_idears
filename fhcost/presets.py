@@ -52,7 +52,20 @@ SWAPS = {
     "routing -> G ~ L^3 (compiled)":     dict(routing_power=1.0),
 }
 
-PRESETS = {"this_repo": THIS_REPO, "alt_model": ARCH_COMPARISON}
+# --- hardware platforms (fhcost/platform.py) -------------------------------
+# Each honours its machine's clock AND its connectivity. The slide's grid is the
+# baseline and is deliberately identical to THIS_REPO.
+SLIDE_GRID   = DEFAULT.but(platform="superconducting", use_platform_clock=True)
+HELIOS       = DEFAULT.but(platform="helios", use_platform_clock=True,
+                           encoding="jw",     # no swap network to pay for
+                           p=7.9e-4)          # their measured 2q infidelity
+NEUTRAL_ATOM = DEFAULT.but(platform="neutral_atom", use_platform_clock=True,
+                           encoding="jw", p=5e-3)
+TWO_LAYER_SC = DEFAULT.but(platform="sc_long_range", use_platform_clock=True)
+
+PRESETS = {"this_repo": THIS_REPO, "alt_model": ARCH_COMPARISON,
+           "slide_grid": SLIDE_GRID, "helios": HELIOS,
+           "neutral_atom": NEUTRAL_ATOM, "two_layer_sc": TWO_LAYER_SC}
 
 
 if __name__ == "__main__":

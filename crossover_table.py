@@ -80,6 +80,29 @@ VARS = [
 for cfg, lab in VARS:
     W(row(cfg, lab) + "\n")
 
+W("\n## Hardware platforms: what connectivity costs in clock\n\n")
+W("Each arm on the hardware it needs, with the constraint that actually binds.\n"
+  "Generalised bicycle codes are not embeddable in a nearest-neighbour grid, so\n"
+  "Pinnacle is unavailable -- not small -- on the slide's machine.\n\n")
+W("| platform | connectivity | layer | NISQ+PEC | STAR | surface | QLDPC | binds at 1e6 |\n")
+W("|---|---|---:|---:|---:|---:|---:|---|\n")
+from fhcost import platform as _pl
+import math as _m
+for _k in ("superconducting", "sc_long_range", "helios", "neutral_atom"):
+    _p = _pl.get(_k)
+    _c = DEFAULT.but(platform=_k, use_platform_clock=True)
+    if _p.connectivity == "all_to_all":
+        _c = _c.but(encoding="jw")
+    _lay = f"{_p.t_layer*1e3:.0f} ms" if _p.t_layer else f"{_p.t_2q*1e9:.0f} ns gate"
+    _mm = nisq.max_m(1e6, _c, "pec")
+    _cp = _m.floor(1e6 / hubbard.counts(_mm, _c)["q_per_copy"]) if _mm else 1
+    _fr = nisq.time_required(_mm, _c, "pec") / max(_cp, 1) / _c.budget_s if _mm else 0
+    W(f"| {_p.name} | {_p.connectivity.replace('_',' ')} | {_lay} | "
+      f"{_mm:.1f} | {ftqc.max_m_star(1e6,_c):.1f} | "
+      f"{ftqc.max_m_surface(1e6,_c.but(pl_model='fowler')):.1f} | "
+      f"{ftqc.max_m_pinnacle(1e6,_c):.1f} | "
+      f"{'clock' if _fr > 0.5 else 'qubits'} (NISQ) |\n")
+
 W("\n## Architecture ledgers, field by field, at m = 64\n\n")
 W("The same compiled circuit costed on both architectures (review #5, test 4).\n"
   "The shared rows agree by construction; the rows that differ are the real\n"

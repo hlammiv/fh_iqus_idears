@@ -141,7 +141,16 @@ class Config:
                                   # at one per logical cycle regardless of lattice size.
                                   # Exposed because adding engines is the obvious scaling
                                   # lever, but >1 is OUR extrapolation, not theirs.
-    pin_nonlocal: bool = True     # Pinnacle needs qLDPC connectivity, which the slide's
+    # WHICH MACHINE. Supplies connectivity, gate parallelism and clock; see
+    # fhcost/platform.py. dt_gate / dt_meas / t_round below remain OVERRIDES so
+    # existing scenarios still work, but the platform is what decides whether a
+    # code is hostable at all and how long a layer takes.
+    platform: str = "superconducting"
+    # Honour the platform's clock instead of the slide's spec. Default False so
+    # every existing number is unchanged; the platform arms set it True.
+    use_platform_clock: bool = False
+    pin_nonlocal: bool = True     # SUPERSEDED by platform connectivity; kept so
+                                  # old configs load. Pinnacle needs qLDPC
                                   # nearest-neighbour 2D grid does NOT provide. Keeping
                                   # this True means the arm is costed under a DIFFERENT
                                   # hardware assumption from every other curve.

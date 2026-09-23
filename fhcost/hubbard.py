@@ -506,9 +506,16 @@ def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None
 
 
 def step_depth(m: float, cfg: Config = DEFAULT) -> float:
-    """Two-qubit-gate layers per Trotter step."""
+    """Two-qubit-gate layers per Trotter step.
+
+    All-to-all connectivity removes the Kivlichan swap network: there is no
+    network to route through. That is where the connectivity advantage is
+    actually paid back, and it has to be set against the clock cost rather than
+    asserted (Kivlichan et al., arXiv:1711.04789).
+    """
+    from .platform import swap_network_free
     base = 12.0                                  # 4 hopping colour classes x 2 spins + onsite
-    if cfg.encoding == "jw":
+    if cfg.encoding == "jw" and not swap_network_free(cfg.platform):
         base += 2.0 * math.sqrt(m)               # Kivlichan fermionic swap network
     return base
 
@@ -519,8 +526,10 @@ def counts(m: float, cfg: Config = DEFAULT) -> dict:
     t = t_max(m, cfg)
     depth = r * step_depth(m, cfg)
     # routing_power adds powers of L = sqrt(m): a compiled NN-grid circuit needs
-    # SWAP networks that a per-site gate estimate does not see.
-    route = m ** (0.5 * cfg.routing_power)
+    # SWAP networks that a per-site gate estimate does not see. On an all-to-all
+    # machine there is no routing to pay for.
+    from .platform import swap_network_free, get as _plat
+    route = 1.0 if swap_network_free(cfg.platform) else m ** (0.5 * cfg.routing_power)
     g_total = cfg.c_g * m * r * route
     # Fraction of the circuit's gates that actually damp the observable.
     if cfg.damping_model == "support":
@@ -549,8 +558,29 @@ def counts(m: float, cfg: Config = DEFAULT) -> dict:
         "n_rot_cone": cfg.c_rot * m * r * route * frac,
         "damp_frac": frac,
         "depth": depth,
-        "t_circuit": depth * cfg.dt_gate + cfg.dt_meas,
+        "t_circuit": _t_circuit(depth, g_total, cfg),
     }
+
+
+def _t_circuit(depth: float, g_total: float, cfg: Config) -> float:
+    """Wall clock for one shot.
+
+    The old expression, depth * dt_gate + dt_meas, assumed every gate in a layer
+    runs at once. That is right for a planar superconducting grid and wrong for
+    a mobile-qubit machine: Helios has four two-qubit zones, and its layer time
+    is set by ion transport (55 ms measured) rather than by its 70 us gate.
+
+    Two constraints bind, and a MEASURED layer time overrides both:
+        depth-limited      depth x (layer time)
+        throughput-limited total gates / parallel gates x t_2q
+    """
+    if not cfg.use_platform_clock:
+        return depth * cfg.dt_gate + cfg.dt_meas      # unchanged default
+    from .platform import get as _plat
+    p = _plat(cfg.platform)
+    per_layer = p.layer_seconds(max(g_total / max(depth, 1.0), 1.0))
+    serial = g_total / p.n_parallel_2q * p.t_2q
+    return max(depth * per_layer, serial) + p.t_meas
 
 
 def multiproduct_branches(k: int) -> list[tuple[int, float]]:

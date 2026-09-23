@@ -21,6 +21,7 @@ from __future__ import annotations
 import json, math, pathlib, sys
 from dataclasses import fields
 from fhcost import record, hubbard, ftqc, curves, classical
+from fhcost import platform as _plat
 from fhcost.budget import DEFAULT
 from fhcost.presets import PRESETS
 
@@ -33,7 +34,8 @@ MD_END   = "<!-- END GENERATED -->"
 # keeps the page responsive; keeping it MORE than one variant is what makes the
 # check meaningful, since a single operating point is easy to match by accident.
 JS_VARIANTS = ("default", "p_1e-4", "eps_0.01", "tmax_const", "mpf_k3",
-               "trotter_bound", "u8", "u0", "arch_comparison")
+               "trotter_bound", "u8", "u0", "arch_comparison",
+               "helios", "neutral_atom", "two_layer_sc")
 
 
 def js(x) -> str:
@@ -93,6 +95,12 @@ def generated_block(rec: dict) -> str:
          "// [p_phys, p_out, qubits, reject rate, d_a, r]",
          f"const PIN_ENGINE_TABLE = {js([list(x) for x in ftqc.PIN_ENGINE_TABLE])};",
          f"const PIN_REACTION_CYCLES = {js(ftqc.PIN_REACTION_CYCLES)};",
+         "// hardware platforms, from published specs -- see refs/README.md:",
+         "// [name, connectivity, t_2q, t_meas, t_round, n_parallel_2q,",
+         "//  t_layer (null = derive), p_2q, n_demonstrated]",
+         f"const PLATFORMS = {js({k: [v.name, v.connectivity, v.t_2q, v.t_meas, v.t_round, (None if v.n_parallel_2q == float('inf') else v.n_parallel_2q), v.t_layer, v.p_2q, v.n_demonstrated] for k, v in _plat.PLATFORMS.items()})};",
+         f"const ADMITS = {js({k: sorted(v) for k, v in _plat.ADMITS.items()})};",
+         f"const PINNACLE_PLATFORM = {js(curves.PINNACLE_PLATFORM)};",
          "// U = 0 free-fermion estimator: MEASURED single-core cost, validated",
          "// to 1.7e-15 against exact many-body evolution",
          f"const FF_SECONDS_PER_SITE = {js(classical.FF_SECONDS_PER_SITE)};",
@@ -131,7 +139,11 @@ def headline_lines(rec: dict) -> list[str]:
          f"{r8['nisq_pec']:.1f} at n = 10^8 -- **5 decades of qubits buy "
          f"{r8['nisq_pec'] / max(r3['nisq_pec'], 1e-9):.2f}x in m.**",
          f"- At n = 10^6: NISQ+PEC {r6['nisq_pec']:.0f}, STAR {r6['star']:.0f}, "
-         f"surface FT {r6['surface']:.0f}, Pinnacle {r6['pinnacle']:.0f}.",
+         f"surface FT {r6['surface']:.0f}, Pinnacle {r6['pinnacle']:.0f} -- but "
+         f"Pinnacle is costed on a chip with TWO COUPLER LAYERS, which its "
+         f"generalised bicycle codes require and the slide's nearest-neighbour "
+         f"grid does not provide. On that grid it is "
+         f"{r6['pinnacle_on_grid']:.0f}: not small, unavailable.",
          f"- Clearing the ED frontier: "
          f"Pinnacle {curves.fmt_crossing(s['n_pinnacle_clears_classical_hi'])}, "
          f"STAR {curves.fmt_crossing(s['n_star_clears_classical_hi'])}, "

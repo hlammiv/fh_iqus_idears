@@ -284,6 +284,22 @@ Until at least one purpose-built, leadership-scale classical attack is run, the
 honest headline is "clears the **exact-diagonalisation** frontier", not "clears
 classical".
 
+### O11. Connectivity was a caveat, not a constraint -- **CLOSED**
+`ftqc.pinnacle_point` and `METHODS.md` both pointed at an O11 that was never
+written. It said generalised bicycle codes need connectivity the slide's grid
+does not provide, and the model costed the arm anyway. `pin_nonlocal` was
+supposed to mark this and was read by NOTHING -- setting it changed `model_id`
+and no number.
+
+Closed by `fhcost/platform.py`: connectivity now gates code admissibility, so
+`max_m_pinnacle` returns 0 on a nearest-neighbour grid. Bravyi et al.
+(arXiv:2308.07915) also make the requirement milder than the caveat implied --
+degree 6, two edge-disjoint planar subgraphs, i.e. two coupler layers rather than
+all-to-all. The arm is plotted on that chip and labelled with it.
+
+**Still open:** `pin_nonlocal` is now dead weight. It is kept so old configs load
+but should be removed once nothing references it.
+
 ### O11b. Multiproduct coefficients are calibrated only to tau <= 0.5
 *Tier-1 done; tier-2 rerun queued. (Second-pass finding #2.)*
 

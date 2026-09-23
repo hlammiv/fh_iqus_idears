@@ -605,6 +605,94 @@ rows agree by construction. The rows that differ — 1.04M magic qubits against
 5430, and 0.56 s per shot against 6.66 s — are the actual trade: qLDPC buys
 storage and gives it back in serialised T supply.
 
+## 4c. Which machine? Connectivity, parallelism and clock
+
+Every arm above was costed on **one implicit machine**: a nearest-neighbour 2D
+superconducting grid, 10 ns two-qubit gates, unlimited gate parallelism. That
+was prose in a docstring, never a parameter, and it is the most load-bearing
+input in the model — three of four operating points are clock-limited, not
+qubit-limited. `fhcost/platform.py` makes it data, in the same style as the
+magic-state tables: published operating points, sourced line by line, with a
+refusal outside the tabulated range. Every number is in `refs/README.md`.
+
+| platform | connectivity | t₂q | layer | parallel 2q | p₂q | built |
+|---|---|---:|---:|---:|---:|---:|
+| superconducting grid | nearest-neighbour | 10 ns | derived | ∞ | 1e-3 | 105 |
+| Quantinuum Helios | all-to-all | 70 µs | **55 ms** | 4 | **7.9e-4** | 98 |
+| neutral atom | reconfigurable | 275 ns | derived | 60 | 5e-3 | 60 |
+| SC, two coupler layers | degree-6 | 10 ns | derived | ∞ | 1e-3 | **0** |
+
+### The layer time is not the gate time
+
+The thing that changed how the module is written. Helios needs ~70 µs for a
+two-qubit gate and **55 ms for a circuit layer** — their own "depth-1 time",
+which they call their characteristic figure of merit for processor speed. The
+breakdown is Rotate 18.2 + Global Shift 7.9 + Junction 4.5 + Other Shifts 4.3 +
+Split/Combine 4.1 + Four-ion Shift 1.7 + Static 0.3 ms ≈ **41 ms of ion
+transport**, against 70 µs of gating: transport dominates by **786×**.
+
+No gate count predicts ion sorting, so `Platform.layer_seconds` uses a *measured*
+layer time wherever a paper publishes one and only derives one otherwise. Helios
+has one; neutral atoms do not for a *reconfiguring* circuit, so that row leaves
+it unset rather than inventing it.
+
+Per-shot time is now the binding of two constraints, with a measured layer time
+overriding both:
+
+```
+t_circuit = max( depth × layer_time,  G_total / n_parallel_2q × t_2q ) + t_meas
+```
+
+With `n_parallel_2q = ∞` this is algebraically the old `depth·dt_gate + dt_meas`,
+so the default is unchanged — asserted, not assumed.
+
+### Connectivity now gates the codes
+
+`pin_nonlocal` was documented as marking an arm "costed under a DIFFERENT
+hardware assumption" and **was read by nothing**. Setting it changed the model
+fingerprint and no number. It is superseded by `platform.ADMITS`:
+
+* **nearest-neighbour grid** — surface code and STAR. Generalised bicycle codes
+  are *not* embeddable, so `max_m_pinnacle` returns **0**, not a small number.
+* **two coupler layers** — adds BB/GB codes. Bravyi *et al.* (arXiv:2308.07915)
+  put the requirement at vertex degree six with **two edge-disjoint planar
+  subgraphs**, which is far weaker than all-to-all. The Pinnacle caveat had
+  implied more than the codes actually need.
+* **all-to-all** — everything, and the Kivlichan swap network disappears: at
+  m = 256, 12 layers per Trotter step instead of 44, with the routing penalty
+  going to zero.
+
+So Pinnacle is no longer plotted against grid-costed curves as though it ran on
+the grid. It is computed on the two-coupler-layer chip it requires and labelled
+with it, and `curves.summary` reports both — 26.9 on that chip at n = 10⁶, and
+**0 on the slide's grid**.
+
+### Is the trade worth taking? No, and not close
+
+All-to-all deletes the swap network and Helios has a *better* gate than the slide
+assumes. Against that, at m = 64 one shot costs 1.2×10⁻⁵ s on the grid and
+**65.8 s** on Helios. Reach at n = 10⁶:
+
+| arm | m |
+|---|---:|
+| SC grid, NISQ+PEC | 13.1 |
+| SC ×2 layers, QLDPC | **24.8** |
+| Helios, NISQ+PEC | 7.6 |
+| neutral atom, NISQ+PEC | 4.8 |
+| Helios / atoms, any FT arm | **0 at every n** |
+
+The mobile-qubit machines cannot host a fault-tolerant arm at any qubit count in
+range: a 55 ms syndrome round against a week of wall clock leaves no shots. The
+connectivity is real and the gate is good; the clock is five orders of magnitude
+out, and this workload is shot-heavy. `figures/fh_platforms.pdf` panel (b) shows
+which constraint binds for each, because that is what decides whether gate speed
+matters at all.
+
+**What this does not say.** These are today's published machines on *this*
+workload. A shallower circuit, a smaller shot budget, or a machine with the same
+connectivity and a faster layer would move the answer, and the model computes
+rather than assumes it.
+
 ## 5. The classical frontier
 
 **This is an estimated CAPACITY of specified methods under stated machine

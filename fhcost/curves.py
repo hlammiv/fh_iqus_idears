@@ -24,11 +24,21 @@ LABELS = {
     "nisq_pec_mpf": r"NISQ + PEC + MPF-4",
     "star":         r"STAR",
     "surface":      r"Surface-code FT",
-    "pinnacle":     r"Pinnacle (QLDPC)",
+    "pinnacle":     "Pinnacle (QLDPC)\n2 coupler layers",
     "surface_mpf":  r"Surface-code FT + MPF-4",
 }
 
 MPF_ORDER = 2      # k=2 -> order-4 multiproduct
+
+# Pinnacle is costed on DIFFERENT HARDWARE from every other curve, and now says
+# so instead of burying it in a docstring. Generalised bicycle codes are not
+# embeddable in the slide's nearest-neighbour grid; Bravyi et al.
+# (arXiv:2308.07915) put the requirement at degree-6 with two edge-disjoint
+# planar subgraphs, i.e. two coupler layers. On the slide's grid this arm
+# returns 0 -- not "small", unavailable. Keeping it on the figure under its own
+# hardware, clearly labelled, is more informative than dropping it and more
+# honest than pretending it runs on the grid.
+PINNACLE_PLATFORM = "sc_long_range"
 
 # The Trotter step count is the dominant uncertainty, so every arm is reported
 # across TWO SCENARIOS rather than as a point value:
@@ -67,7 +77,8 @@ def evaluate(n_grid, cfg: Config = DEFAULT) -> dict:
         out["surface"].append(ftqc.max_m_surface(n, fow))
         out["surface_willow"].append(ftqc.max_m_surface(n, wil))
         out["surface_mpf"].append(ftqc.max_m_surface(n, mpf_fow))
-        out["pinnacle"].append(ftqc.max_m_pinnacle(n, cfg))
+        out["pinnacle"].append(
+            ftqc.max_m_pinnacle(n, cfg.but(platform=PINNACLE_PLATFORM)))
     return {k: np.array(v, float) for k, v in out.items()}
 
 
@@ -240,6 +251,7 @@ def summary(cfg: Config = DEFAULT) -> dict:
     mpf = cfg.but(trotter_order_k=MPF_ORDER)
     fow = cfg.but(pl_model="fowler")
     wil = cfg.but(pl_model="willow")
+    pin = cfg.but(platform=PINNACLE_PLATFORM)
     return {
         "classical_band": (lo, hi),
         "n_ft_clears_classical_lo": crossing(lambda n: ftqc.max_m_surface(n, fow), lo),
@@ -257,9 +269,10 @@ def summary(cfg: Config = DEFAULT) -> dict:
         "ft_fowler_at_1e6": ftqc.max_m_surface(1e6, fow),
         "ft_willow_at_1e6": ftqc.max_m_surface(1e6, wil),
         "ft_mpf_at_1e6": ftqc.max_m_surface(1e6, mpf.but(pl_model="fowler")),
-        "pinnacle_at_1e6": ftqc.max_m_pinnacle(1e6, cfg),
+        "pinnacle_at_1e6": ftqc.max_m_pinnacle(1e6, pin),
         "n_pinnacle_clears_classical_hi": crossing(
-            lambda n: ftqc.max_m_pinnacle(n, cfg), hi),
+            lambda n: ftqc.max_m_pinnacle(n, pin), hi),
+        "pinnacle_on_slide_grid": ftqc.max_m_pinnacle(1e6, cfg),
     }
 
 
