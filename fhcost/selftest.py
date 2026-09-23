@@ -740,6 +740,43 @@ def main() -> int:
                   - DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, 64.0)) < 1e-18,
               "both carry the factor 2 for a flipped +-1 outcome")
 
+    # ---- zero band edges stay visible (second-pass review #9) ---------------
+    # 1. a synthetic band with ONE zero edge must survive
+    _lo = np.array([0.0, 0.0, 5.0, 7.0])
+    _hi = np.array([0.0, 13.0, 20.0, 30.0])
+    _ld, _hd, _off = curves.band_for_plot(_lo, _hi, 2.5)
+    check("a zero lower edge is clipped to the axis floor, not dropped",
+          _ld[1] == 2.5 and _hd[1] == 13.0 and bool(_off[1]),
+          "the band stays visible and is flagged off-scale")
+    # 2. all-infeasible and partially feasible both behave
+    check("an all-infeasible column is NaN on both edges, not a fake band",
+          np.isnan(_ld[0]) and np.isnan(_hd[0]) and not _off[0],
+          "nothing is drawn; the figure annotates instead")
+    check("and feasible columns are untouched",
+          (_ld[2:] == _lo[2:]).all() and (_hd[2:] == _hi[2:]).all()
+          and not _off[2:].any())
+    # 3. every band the figure draws has an identifiable encoding, and the
+    #    off-scale case is actually exercised by the default configuration --
+    #    it was not merely possible, it was happening at EVERY plotted n
+    _ng = np.logspace(2, np.log10(3e8), 60)
+    _B = curves.evaluate_band(_ng, DEFAULT)
+    _drawn, _hatched = [], []
+    for _k in ("nisq_pec", "star", "surface", "pinnacle"):
+        _l, _h = _B[_k]
+        _a, _b, _o = curves.band_for_plot(_l, _h, 2.5)
+        _vis = np.isfinite(_a) & np.isfinite(_b) & (_b > _a)
+        _drawn.append(_vis.any())
+        _hatched.append(_o.any())
+    check("every plotted scenario band has visible extent somewhere",
+          all(_drawn), "nisq_pec, star, surface, pinnacle")
+    _l, _h = _B["nisq_pec"]
+    check("and NISQ+PEC was the invisible one: zero lower edge at EVERY n",
+          (_l <= 0).all() and (_h > 0).all(),
+          f"lower edge 0 at all {len(_l)} grid points, upper edge "
+          f"{_h.min():.1f}-{_h.max():.1f} -- no shading was drawn at all")
+    check("the hatched encoding is exercised, not just available",
+          any(_hatched), f"{sum(_hatched)} of 4 arms run off the bottom")
+
     # ---- the U = 0 easy limit (second-pass review #7) -----------------------
     ff = classical.FREE_FERMION
     check("the U = 0 estimator is validated against exact evolution, not asserted",

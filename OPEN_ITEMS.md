@@ -320,8 +320,31 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 6 | Hamming-weight workspace does not match the cited circuit | **fixed** — Campbell Thm 2; workspace, T-count, depth and synthesis all from one construction |
 | 7 | the classical baseline misses the U = 0 easy limit | **fixed** — free-fermion estimator implemented and validated to 1.7e-15; band relabelled |
 | 8 | the signal fit does not support per-time relative accuracy | **fixed** — envelope separated from bound, per-time tolerances, floor independent of the fit |
-| 9 | zero uncertainty edges disappear from the plot | open |
+| 9 | zero uncertainty edges disappear from the plot | **fixed** — clipped and hatched, scenario span labelled, rendered check added |
 | 10 | integer lattice reporting ignores initial-state constraints | open |
+
+### What #9 closed, and what it did not
+
+Worse than the review found: on the default configuration the NISQ+PEC scenario
+band had a zero lower edge at **every one of the 60 plotted points**, so that arm
+had no shading at all -- not a gap, a complete absence. The slide figure's Willow
+band lost half its range the same way.
+
+`curves.band_for_plot` clips a zero lower edge to the axis floor and returns the
+clipped region as a mask; the figures hatch it under a dashed `m = 4` line, so
+the band visibly runs off the bottom. All-infeasible columns return NaN on both
+edges and are annotated rather than drawn. The shading is labelled at the foot of
+the panel as a **scenario span, not a confidence interval**, since this style has
+no legend to put that in.
+
+`check_figure.py` is a rendered check, not a logic check: it measures the filled
+area of each polygon. The NaN-masked version renders 0 px^2 where the clipped one
+renders 13402.
+
+**Still open from #9:** the hatched strip sits between the axis floor (2.5) and
+`m = 4`, which is only about 13% of a decade -- legible but cramped, and four
+overlapping hatched arms at the bottom of panel (a) are busy. Lowering the axis
+floor would give it room at the cost of empty space everywhere else.
 
 ### What #8 closed, and what it did not
 

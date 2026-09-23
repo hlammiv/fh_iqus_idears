@@ -903,6 +903,31 @@ knife edge, `Lambda(m=4) = 0.222` against an order-3 ceiling of 0.217. **ZNE's
 viability here is set by how much of the budget its residual bias is allocated,
 not by the physics** -- at the old 0.5 share it runs, at 0.05 it does not.
 
+### Zero band edges are a statement, not missing data (review #9)
+
+Scenario bands were NaN-masked at any `n` where an edge was zero, so the shading
+vanished exactly where the model is most pessimistic. On the default
+configuration this was not an edge case: the **NISQ+PEC band had a zero lower
+edge at every one of the 60 plotted points**, so no shading was drawn for that
+arm at all. The Willow arm on the slide figure lost half its range the same way.
+
+A zero edge says the commutator-bound scenario does not reach even a 2×2
+lattice. That is the most informative thing the band has to say. `band_for_plot`
+now clips the lower edge to the axis floor, returns the clipped region as a
+mask, and the figure hatches it — so the band visibly runs off the bottom of the
+axis under a dashed `m = 4` line. Where the *upper* edge is zero too, nothing is
+feasible, both edges come back NaN, and the panel annotates instead of drawing a
+band that does not exist.
+
+The shading is also now labelled for what it is, at the foot of the panel rather
+than in a legend this style does not have: **a scenario span between two Trotter
+models, not a confidence interval.** Neither edge is a guaranteed bound and the
+truth is not required to lie between them.
+
+`check_figure.py` renders these cases and measures the filled area of each
+polygon, because the logic test and the ink are different things: the
+NaN-masked version renders **0 px²** where the clipped version renders 13402.
+
 ## 7. What the figure changes about the slide
 
 1. The sketch's "logical advantage = where FT overtakes NISQ" marks the wrong

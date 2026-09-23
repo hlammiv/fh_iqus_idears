@@ -71,6 +71,33 @@ def evaluate(n_grid, cfg: Config = DEFAULT) -> dict:
     return {k: np.array(v, float) for k, v in out.items()}
 
 
+M_FLOOR = 4.0      # smallest real lattice: a 2x2. Below it there is nothing to run
+
+
+def band_for_plot(lo, hi, y_floor: float, m_floor: float = M_FLOOR):
+    """(lo_drawn, hi_drawn, off_scale) for a SCENARIO band on a log axis.
+
+    A zero edge is not missing data. It says the pessimistic scenario does not
+    reach even a 2x2 lattice -- which is the most informative thing the band has
+    to say, and NaN-masking it made the band vanish precisely there. On the
+    default configuration the NISQ+PEC band had a zero lower edge at EVERY
+    plotted n, so no shading was drawn at all (review #9).
+
+    The lower edge is therefore clipped to the axis floor and the clipped region
+    returned as `off_scale`, so the figure can hatch it and say what it means.
+    Where the UPPER edge is zero too, nothing is feasible and both edges come
+    back NaN -- there is genuinely no band, and the figure annotates instead.
+    """
+    lo = np.asarray(lo, float)
+    hi = np.asarray(hi, float)
+    dead = hi <= 0.0                       # nothing feasible at all
+    off = (lo <= 0.0) & ~dead              # pessimistic edge below m_floor
+    lo_d = np.where(off, y_floor, lo)
+    lo_d = np.where(dead, np.nan, lo_d)
+    hi_d = np.where(dead, np.nan, hi)
+    return lo_d, hi_d, off
+
+
 CROSSING_LIMIT = 1e10
 
 

@@ -31,8 +31,18 @@ ax.plot(n_grid, msk(Y["ideal"]), color=C["ideal"], lw=1.6, ls=(0, (6, 3)), zorde
 ax.plot(n_grid, msk(Y["nisq_pec"]), color=C["nisq_pec"], lw=2.6, zorder=4)
 ax.plot(n_grid, msk(Y["nisq_pec_mpf"]), color=C["nisq_pec"], lw=2.0, ls=(0, (4, 2)), zorder=4)
 ax.plot(n_grid, msk(Y["star"]), color=C["star"], lw=2.6, zorder=4)
-ax.fill_between(n_grid, msk(Y["surface_willow"]), msk(Y["surface"]),
-                color=C["surface"], alpha=0.18, lw=0, zorder=2)
+# The Willow edge is zero over half the range: NaN-masking made the band vanish
+# exactly where the measured p_L cannot run a 2x2 (review #9). Clip to the axis
+# floor and hatch the clipped part instead.
+_YF = 2.0
+_wl, _wh, _woff = curves.band_for_plot(Y["surface_willow"], Y["surface"], _YF)
+ax.fill_between(n_grid, _wl, _wh, color=C["surface"], alpha=0.18, lw=0, zorder=2)
+if _woff.any():
+    ax.fill_between(n_grid, _YF, np.minimum(_wh, curves.M_FLOOR), where=_woff,
+                    color=C["surface"], alpha=0.18, lw=0, zorder=2,
+                    hatch="///", edgecolor=C["surface"])
+    ax.text(1.2, 2.06, r"hatched: measured $p_L$ does not reach $m=4$",
+            fontsize=8.0, color=H.GREY, va="bottom", ha="left")
 ax.plot(n_grid, msk(Y["surface"]), color=C["surface"], lw=2.8, zorder=5)
 ax.plot(n_grid, msk(Y["surface_willow"]), color=C["surface"], lw=1.6, ls=(0, (2, 2)), zorder=5)
 

@@ -41,8 +41,8 @@ axA, axB, axC = (fig.add_subplot(g) for g in gs)
 ax = axA
 ax.axhspan(BAND_LO, BAND_HI, color=F.PALEGREY, alpha=0.55, lw=0, zorder=0)
 ax.axhline(BAND_HI, color=F.DARKGREY, lw=0.9, ls=(0, (4, 2)), zorder=3)
-ax.text(1.3e2, 12.0, f"estimated ED capacity  ($m\\leq{BAND_HI:.0f}$)",
-        fontsize=6.0, color=F.DARKGREY, va="center", ha="left")
+ax.text(1.3e2, BAND_HI * 1.30, f"estimated ED capacity  ($m\\leq{BAND_HI:.0f}$)",
+        fontsize=6.0, color=F.DARKGREY, va="bottom", ha="left")
 # the Trotter calibration covers m <= 12 only; everything above is extrapolated
 from fhcost.hubbard import W_DOMAIN as _WD
 ax.axhline(_WD["sites"][1], color=F.GREY, lw=0.7, ls=(0, (1, 2)), zorder=1)
@@ -53,18 +53,45 @@ def msk(y):
     return np.where(y > 0, y, np.nan)
 
 ax.plot(n_grid, msk(Y["ideal"]), color=C["ideal"], lw=1.0, ls=(0, (5, 2)), zorder=3)
-if np.nanmax(Y["nisq_none"]) > 0:
+_NO_CURVE = not (np.nanmax(Y["nisq_none"]) > 0)
+if not _NO_CURVE:
     ax.plot(n_grid, msk(Y["nisq_none"]), color=C["nisq_none"], lw=1.4, zorder=3)
 else:
     # bias-limited below the smallest real lattice: there is no curve to draw
-    ax.text(1.3e2, 2.75, r"unmitigated: $m<4$ at every $n$ (bias-limited)",
-            fontsize=5.8, color=C["nisq_none"], va="bottom", ha="left")
+    _NO_CURVE = True
 ax.fill_between(n_grid, msk(Y["nisq_pec"]), msk(Y["nisq_pec_mpf"]),
                 color=C["nisq_pec"], alpha=0.10, lw=0, zorder=2)
+# SCENARIO envelopes (commutator bound vs exact-diagonalisation calibration),
+# not statistical uncertainty. A zero lower edge means the pessimistic scenario
+# does not reach even a 2x2, so the band is drawn off the bottom of the axis and
+# hatched there rather than silently vanishing (review #9).
+Y_FLOOR = 2.5
+_any_off = False
 for _k, _c in (("nisq_pec", C["nisq_pec"]), ("star", C["star"]),
                ("surface", C["surface"]), ("pinnacle", C["pinnacle"])):
     _lo, _hi = B[_k]
-    ax.fill_between(n_grid, msk(_lo), msk(_hi), color=_c, alpha=0.11, lw=0, zorder=2)
+    _ld, _hd, _off = curves.band_for_plot(_lo, _hi, Y_FLOOR)
+    ax.fill_between(n_grid, _ld, _hd, color=_c, alpha=0.11, lw=0, zorder=2)
+    if _off.any():
+        _any_off = True
+        ax.fill_between(n_grid, Y_FLOOR, np.minimum(_hd, curves.M_FLOOR),
+                        where=_off, color=_c, alpha=0.11, lw=0, zorder=2,
+                        hatch="///", edgecolor=_c)
+ax.axhline(curves.M_FLOOR, color=F.GREY, lw=0.6, ls=(0, (2, 2)), zorder=1)
+ax.text(2.6e8, curves.M_FLOOR * 1.05, r"$m=4$", fontsize=5.4, color=F.GREY,
+        va="bottom", ha="right")
+# The shading is a SCENARIO envelope between two Trotter models, not a
+# confidence interval -- the review asked that this be said where the shading is
+# (there is no boxed legend in this style), so it heads the note block.
+_notes = [r"shading: Trotter \textit{scenario} span, not a confidence interval"
+          if False else r"shading: scenario span, not a confidence interval"]
+if _NO_CURVE:
+    _notes.append(r"unmitigated: $m<4$ at every $n$")
+if _any_off:
+    _notes.append(r"hatched: bound scenario below $m=4$")
+ax.text(1.35e2, 2.55, "\n".join(_notes), fontsize=4.8, color=F.DARKGREY,
+        va="bottom", ha="left", linespacing=1.28,
+        bbox=dict(facecolor="white", alpha=0.72, edgecolor="none", pad=0.9))
 ax.plot(n_grid, msk(Y["nisq_pec"]), color=C["nisq_pec"], lw=1.6, zorder=4)
 ax.plot(n_grid, msk(Y["nisq_pec_mpf"]), color=C["nisq_pec"], lw=1.3,
         ls=(0, (3, 1.6)), zorder=4)
