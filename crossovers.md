@@ -1,6 +1,6 @@
 # Crossovers and sensitivity
 
-Model `a713bd19ce92` -- the same fingerprint the figure and `explorer.html`
+Model `ead92718a4b6` -- the same fingerprint the figure and `explorer.html`
 carry. Differing ids mean differing models; do not compare across them.
 
 All entries are `m` at `n = 10^6` unless the column says otherwise, for one
@@ -20,15 +20,15 @@ Each row changes ONE input from the baseline.
 | variation | ED capacity | NISQ+PEC | +MPF-4 | STAR | FT (Fowler) | FT (Willow) | n: FT clears classical |
 |---|---|---|---|---|---|---|---|
 | p = 1e-4 | 24–26 | 45.8 | 87 | 73.5 | 52 | 7 | 2.7e+05 |
-| p = 1e-5 | 24–26 | 162.1 | 339 | 218.5 | 106 | 7 | 7.0e+04 |
+| p = 1e-5 | 24–26 | 162.1 | 339 | 218.5 | 106 | 7 | 7.1e+04 |
 | p = 3e-3 (today) | 24–26 | 6.9 | 11 | 9.9 | 0 | 0 | never |
 | eps = 0.01 | 24–26 | 5.8 | 13 | 6.0 | 0 | 0 | 4.0e+09 |
 | fixed s = 0.03 (weak) | 24–26 | 11.5 | 21 | 17.5 | 8 | 0 | 2.7e+07 |
-| fixed s = 0.3 (strong) | 24–26 | 26.8 | 35 | 56.6 | 156 | 30 | 8.2e+04 |
+| fixed s = 0.3 (strong) | 24–26 | 26.8 | 35 | 56.6 | 156 | 30 | 8.1e+04 |
 | signal data 40% uncertain | 24–26 | 11.7 | 21 | 19.2 | 8 | 6 | 1.4e+07 |
 | absolute floor 0.05 | 24–26 | 14.4 | 24 | 24.5 | 17 | 7 | 4.9e+06 |
 | envelope bound (superseded) | 24–26 | 15.8 | 25 | 27.6 | 26 | 9 | 3.2e+06 |
-| 1 day | 24–26 | 11.6 | 21 | 15.8 | 10 | 4 | 6.8e+07 |
+| 1 day | 24–26 | 11.6 | 21 | 15.8 | 9 | 4 | 6.8e+07 |
 | 1 month | 24–26 | 13.0 | 23 | 24.2 | 12 | 9 | 2.4e+06 |
 | v = 4J (correlation front) | 24–26 | 24.7 | 39 | 38.4 | 31 | 16 | 2.4e+05 |
 | t_max = 1 (fixed) | 24–26 | 333333.3 | 333333 | 378.1 | 186 | 25 | 1.1e+05 |
