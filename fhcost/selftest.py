@@ -646,6 +646,62 @@ def main() -> int:
                   - DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, 64.0)) < 1e-18,
               "both carry the factor 2 for a flipped +-1 outcome")
 
+    # ---- Pinnacle on the common ledger (second-pass review #5) --------------
+    check("engine_cycles reproduces their Eq. (11) at all four operating points",
+          [ftqc.engine_cycles(a, r) for _, _, _, _, a, r in ftqc.PIN_ENGINE_TABLE]
+          == [14.0, 18.0, 23.0, 26.0],
+          "t_me = max(2 d_a + 4r, t_r + 4r, d_a + t_r + 3r) with t_r = 10")
+
+    # 1. the magic allocation is certified at every plotted point
+    worst = 0.0
+    for n in (1e5, 1e6, 1e7, 1e8):
+        mm = ftqc.max_m_pinnacle(n, DEFAULT)
+        pp = ftqc.pinnacle_point(mm, DEFAULT) if mm else None
+        if pp is None:
+            continue
+        allow = DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, mm)
+        worst = max(worst, 2.0 * pp["n_t"] * pp["engine_p_out"] / allow)
+    check("every plotted Pinnacle point certifies its own magic allowance",
+          worst <= 1.0,
+          f"worst 2 n_T p_out / allowance = {worst:.2f}; it was 9.5 at n = 1e8")
+
+    # 2. consumption never exceeds successful production
+    mm = ftqc.max_m_pinnacle(1e7, DEFAULT)
+    pp = ftqc.pinnacle_point(mm, DEFAULT)
+    produced = (pp["rounds"] / (max(float(pp["d"]) + 2.0, pp["engine_cycles"])
+                                / (1.0 - pp["p_reject"]))) * max(DEFAULT.pin_engines, 1)
+    check("T consumption never exceeds successful engine production",
+          produced >= pp["n_t"] * (1 - 1e-9),
+          f"schedule delivers {produced:.3e} accepted states for {pp['n_t']:.3e} needed")
+    check("and rejection is charged, not assumed away",
+          pp["p_reject"] == 0.10,
+          "10% for both p = 1e-3 engines, their own estimate")
+
+    # 3. a plotted point where the processor outruns the engine and stalls
+    m5 = ftqc.max_m_pinnacle(1e5, DEFAULT)
+    p5 = ftqc.pinnacle_point(m5, DEFAULT) if m5 else None
+    check("there is a plotted point where the processor stalls on the engine",
+          p5 is not None and p5["stalled"] and p5["d"] == 16,
+          f"d = 16 has an 18-cycle logical cycle; distillation needs "
+          f"{p5['engine_cycles']:.0f}" if p5 else "no point")
+
+    # 4. the two architectures now agree field-by-field on the shared rows
+    led = {row[0]: row for row in ftqc.ledger_comparison(64.0, DEFAULT)}
+    shared = ["T states per shot", "sequential T layers", "HWP workspace (logical)",
+              "logical qubits", "logical-failure -> bias", "magic-failure -> bias",
+              "magic allowance", "per-state target"]
+    def _num(x):
+        return isinstance(x, (int, float)) and not isinstance(x, bool)
+    diffs = [k for k in shared
+             if not (_num(led[k][1]) and _num(led[k][2])
+                     and abs(led[k][1] - led[k][2]) <= 1e-12 * abs(led[k][1]))]
+    check("surface FT and Pinnacle share every ledger row they should",
+          not diffs, f"{len(shared)} shared rows agree; architecture-specific rows "
+                     f"(magic qubits, seconds per shot) still differ, as they must")
+    check("Pinnacle refuses above the tabulated p, as the surface code does",
+          ftqc.max_m_pinnacle(1e6, DEFAULT.but(p=3e-3)) == 0.0,
+          "it reached m = 13.9 there while nothing checked its engine")
+
     # ---- one model, one record (second-pass review #3) ----------------------
     import json
     from . import record as _rec

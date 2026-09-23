@@ -316,12 +316,45 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 2 | the default Trotter calibration is used beyond its evidence | **partial** — order-2k coefficients measured (O11b); domain still exceeded (O9) |
 | 3 | Python, the explorer and the documents disagree | **fixed** — one model, one record; see below |
 | 4 | factory cleanup neglects circuit-level errors | **fixed** — published operating points replace the cubic law; selection is p-aware and plant-level |
-| 5 | Pinnacle lacks the common FT resource/error ledger | open — and now visibly so: Pinnacle survives at p = 3e-3 where the surface code refuses |
+| 5 | Pinnacle lacks the common FT resource/error ledger | **fixed** — workspace charged, engine selected and certified, stalls and rejection scheduled |
 | 6 | Hamming-weight workspace does not match the cited circuit | open |
 | 7 | the classical baseline misses the U = 0 easy limit | open |
 | 8 | the signal fit does not support per-time relative accuracy | open |
 | 9 | zero uncertainty edges disappear from the plot | open |
 | 10 | integer lattice reporting ignores initial-state constraints | open |
+
+### What #5 closed, and what it did not
+
+Pinnacle was costed more loosely than the surface code in three ways, and the
+paper supplied every missing piece.
+
+* **Workspace.** It took the Hamming-weight T-count saving without paying the
+  workspace the surface code pays. Both arms compile the same circuit; they may
+  not keep different books on it.
+* **Magic fidelity.** Nothing certified its T states. At `n = 1e8` the union
+  bound was 9.5x over allowance -- the review's arithmetic, reproduced. The
+  engine is now selected from the paper's four published specifications
+  (Eqs. 7-10, 592 to 5430 qubits, reject rates 0.2% to 10%), and `n >= 1e7`
+  forces the 5430-qubit 1e-11 engine.
+* **Schedule.** "One state per logical cycle" was an assumption. Their Eq. (11)
+  gives `t_me = max(2 d_a + 4r, t_r + 4r, d_a + t_r + 3r)` with `t_r = 10`,
+  reproducing 14 / 18 / 23 / 26, and says it lower-bounds the processing unit's
+  logical cycle. At `p = 1e-3` that is 23 cycles against the `d = 16` code's 18,
+  so the processor STALLS -- live at `n = 1e5`. A T state now costs
+  `max(dt, t_me) / (1 - p_reject)` code cycles.
+
+Above `p = 1e-3` the arm refuses, as the surface code does. It previously
+reached `m = 13.9` at `3e-3` purely because nothing was looking.
+
+Effect: 20.3 -> 11.5 at `1e5`, 48.3 -> 38.6 at `1e6`, 144 -> 126 at `1e7`,
+383 -> 350 at `1e8`. Pinnacle remains the strongest arm; it is now the strongest
+arm on the same books. `crossovers.md` carries the field-by-field comparison.
+
+**Still open from #5:** `pin_engines > 1` is charged its footprint but has no
+dependency schedule -- the paper equips each processing unit with exactly one
+engine, and more than one is our extrapolation. The GB code family also still
+tops out at d = 24 (O3), which now matters more: the stall condition pushes
+every `p = 1e-3` point onto that code.
 
 ### What #4 closed, and what it did not
 

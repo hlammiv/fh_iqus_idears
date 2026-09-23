@@ -433,6 +433,62 @@ threshold B = 1.58%, exponent (d+1)/2, reproducing every entry to within 26%
 across twelve orders of magnitude); it is labelled a refit, not an independently
 demonstrated hardware threshold.
 
+### Pinnacle on the common ledger (review #5)
+
+This arm was costed more loosely than the surface-code arm in three ways, and
+the paper itself supplies what was missing.
+
+**It took the Hamming-weight T-count saving without paying the workspace.** The
+same `hwp_workspace` the surface code is charged is now in Pinnacle's logical
+qubit count. Both arms compile the same circuit; they may not keep different
+books on it.
+
+**Nothing was certifying its magic states.** The model held a single 4410-qubit
+engine at every point and never checked its 10⁻⁹ output against the allowance.
+At `n = 10⁸` the union bound was **9.5× over** — the review's own arithmetic,
+reproduced. The engine is now *selected* from the paper's four published
+specifications (their Eqs. 7–10):
+
+| p | p_out | engine qubits | reject rate | d_a, r | t_me / t_c |
+|---|---|---:|---:|---|---:|
+| 10⁻⁴ | 10⁻⁹ | 592 | 0.2% | 1, 1 | 14 |
+| 10⁻⁴ | 10⁻¹¹ | 1807 | 2% | 5, 1 | 18 |
+| 10⁻³ | 10⁻⁹ | **4410** | 10% | 7, 2 | 23 |
+| 10⁻³ | 10⁻¹¹ | 5430 | 10% | 9, 2 | 26 |
+
+At `n ≥ 10⁷` the allowance forces the 5430-qubit 10⁻¹¹ engine. Above `p = 10⁻³`
+no engine is characterised and the arm refuses — as the surface code now does.
+Before, Pinnacle reached `m = 13.9` at `p = 3×10⁻³` purely because nothing was
+looking.
+
+**One state per logical cycle was an assumption, not a schedule.** Their Eq. (11)
+gives the distillation time `t_me = max(2d_a + 4r, t_r + 4r, d_a + t_r + 3r)`
+with a reaction time `t_r = 10`, reproducing 14, 18, 23 and 26 for the four rows
+— and states that this "places a lower bound on the logical cycle time of the
+associated processing unit". At `p = 10⁻³` that is 23 cycles, so a processor on
+the `d = 16` code, whose logical cycle is 18, **stalls**. A T state therefore
+costs `max(d_t, t_me)` code cycles, divided by the acceptance rate `1 − p_r`.
+That stall is live at `n = 10⁵`.
+
+Their own 15-to-1 engine error model, incidentally, has exactly the structure
+review #4 asked the surface-code plant for:
+
+```
+p_out ≈ 35 p_rot³ + 6 p_rot p_m²
+```
+
+— an input-suppression term *and* a circuit-fault term. The second term is what
+the cubic law alone was missing.
+
+**Effect** (`m` at each `n`): 20.3 → 11.5 at `10⁵`, 48.3 → 38.6 at `10⁶`,
+144 → 126 at `10⁷`, 383 → 350 at `10⁸`. Pinnacle is still the strongest arm on
+the figure; it is now the strongest arm on the same books.
+
+`crossovers.md` carries the field-by-field comparison at `m = 64`. The shared
+rows agree by construction. The rows that differ — 1.04M magic qubits against
+5430, and 0.56 s per shot against 6.66 s — are the actual trade: qLDPC buys
+storage and gives it back in serialised T supply.
+
 ## 5. The classical frontier
 
 **This is an estimated CAPACITY of specified methods under stated machine

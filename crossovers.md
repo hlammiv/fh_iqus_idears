@@ -1,6 +1,6 @@
 # Crossovers and sensitivity
 
-Model `9047bbc3a6d2` -- the same fingerprint the figure and `explorer.html`
+Model `2c980fb57752` -- the same fingerprint the figure and `explorer.html`
 carry. Differing ids mean differing models; do not compare across them.
 
 All entries are `m` at `n = 10^6` unless the column says otherwise, for one
@@ -40,6 +40,28 @@ Each row changes ONE input from the baseline.
 | 100 PB data centre | 24–26 | 15.6 | 22 | 26.5 | 26 | 0 | 1.0e+06 |
 | 240 ns code round | 24–26 | 15.6 | 22 | 30.6 | 29 | 7 | 2.1e+05 |
 | STAR rotation error ÷10 | 24–26 | 15.6 | 22 | 68.8 | 26 | 0 | 1.0e+06 |
+
+## Architecture ledgers, field by field, at m = 64
+
+The same compiled circuit costed on both architectures (review #5, test 4).
+The shared rows agree by construction; the rows that differ are the real
+architectural trade, not a bookkeeping difference.
+
+| field | surface FT | Pinnacle | |
+|---|---:|---:|---|
+| T states per shot | 2.305e+05 | 2.305e+05 | shared circuit |
+| sequential T layers | 2.684e+04 | 2.684e+04 | shared circuit |
+| HWP workspace (logical) | 64 | 64 | now charged on both |
+| logical qubits | 193 | 193 | same definition |
+| logical-failure -> bias | 2 | 2 | a flipped +-1 outcome |
+| magic-failure -> bias | 2 | 2 | same conversion |
+| magic allowance | 0.00032 | 0.00032 | same share of the ledger |
+| per-state target | 6.942e-10 | 6.942e-10 | allowance / (2 n_T) |
+| source output infidelity | 2.7e-12 | 1e-11 | selected, not assumed |
+| magic qubits | 1.044e+06 | 5430 | plant vs engine |
+| rejection | in published cycles | 0.1 | Litinski folds it in; Pinnacle states it |
+| physical qubits | 1.384e+06 | 2.649e+04 |  |
+| seconds per shot | 0.5637 | 6.659 |  |
 
 ## What each extrapolation buys, at n = 1e6
 

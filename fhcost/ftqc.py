@@ -438,7 +438,60 @@ def p_logical_gb(k: int, d: int, cfg: Config = DEFAULT) -> float:
     return (PIN_A / k) * (cfg.p / PIN_B) ** ((d + 1) / 2.0)
 
 
-ENGINE_QUBITS = 4410.0     # one magic engine, from their Hubbard footprint formula
+ENGINE_QUBITS = 4410.0     # the engine used in THEIR Table IV (p=1e-3, p_out=1e-9)
+
+# ---------------------------------------------------------------------------
+# MAGIC ENGINES -- the same discipline as the surface-code plant (review #4),
+# applied to Pinnacle (review #5).
+#
+# The previous model held a single 4410-qubit engine at every operating point,
+# never checked that its output infidelity met the magic allowance, and assumed
+# one successful state per logical cycle regardless of the code chosen. All
+# three are wrong, and the paper says so itself:
+#
+#   * it gives FOUR engine specifications, Eqs. (7)-(10), two physical error
+#     rates x two output targets, with footprints from 592 to 5430 qubits;
+#   * distillation is post-selected, with a reject rate they estimate at 0.2%
+#     (p = 1e-4, p_out = 1e-9) to 10% (both p = 1e-3 cases);
+#   * the distillation measurements take t_me code cycles, Eq. (11), which
+#     "places a lower bound on the logical cycle time of the associated
+#     processing unit". At p = 1e-3 that is 23 cycles; the d = 16 code has a
+#     logical cycle of only 18, so a processor on that code STALLS.
+#
+# (p_phys, p_out, n_me, p_reject, d_a, r)   [Webster et al., arXiv:2602.11457v2]
+PIN_ENGINE_TABLE = [
+    (1e-4, 1e-9,   592.0, 0.002, 1, 1),     # physical |T>, n_a = d_a = 1
+    (1e-4, 1e-11, 1807.0, 0.02,  5, 1),     # fold-transversal cultivation
+    (1e-3, 1e-9,  4410.0, 0.10,  7, 2),     # their Fermi-Hubbard engine
+    (1e-3, 1e-11, 5430.0, 0.10,  9, 2),
+]
+PIN_REACTION_CYCLES = 10.0     # t_r, Eq. (11): post-selection bases depend on
+                               # the injection outcomes, so this is reaction-limited
+
+
+def engine_cycles(d_a: int, r: int) -> float:
+    """t_me / t_c, their Eq. (11). 14, 18, 23, 26 for the four rows above."""
+    return max(2.0 * d_a + 4.0 * r,
+               PIN_REACTION_CYCLES + 4.0 * r,
+               d_a + PIN_REACTION_CYCLES + 3.0 * r)
+
+
+def select_engine(p_target: float, cfg: Config = DEFAULT):
+    """Smallest published engine whose output infidelity meets the target.
+
+    Rows characterised at a p_phys at or above the machine's p are admissible,
+    exactly as for the surface-code plant; above the largest tabulated p_phys
+    the model refuses. Before this, Pinnacle survived at p = 3e-3 where the
+    surface code did not -- not because qLDPC is more robust, but because
+    nothing was checking.
+    """
+    ok = [e for e in PIN_ENGINE_TABLE if e[0] >= cfg.p and e[1] <= p_target]
+    if not ok:
+        return None
+    best = min(ok, key=lambda e: e[2])
+    return {"p_phys": best[0], "p_out": best[1], "qubits": best[2],
+            "p_reject": best[3], "d_a": best[4], "r": best[5],
+            "cycles": engine_cycles(best[4], best[5])}
 
 
 def pinnacle_footprint(m: float, cfg: Config = DEFAULT, d: int = 24) -> float:
@@ -465,26 +518,94 @@ def pinnacle_point(m: float, cfg: Config = DEFAULT) -> dict | None:
         one per block. The previous model divided the T-count by the block count
         and was therefore ~m times too fast on a T-heavy workload.
 
+    Second-pass review #5 put this arm on the SAME ledger as surface FT:
+      * Hamming-weight phasing's workspace is charged here too. It was taking
+        the T-count saving on one architecture and paying for it on the other.
+      * magic-state infidelity is budgeted and the engine SELECTED for it. At
+        n = 1e8 the nominal 1e-9 engine misses its own allowance by more than
+        10x, so nothing was certifying the T states it consumed.
+      * a logical failure flips a +-1 outcome: factor 2, as in surface_point.
+      * the supply period is max(processing logical cycle, engine distillation
+        time) and is divided by the acceptance rate. The engine cannot deliver
+        one state per logical cycle on a code whose logical cycle is shorter
+        than its own distillation, so the processor STALLS -- their Eq. (11)
+        says this explicitly, and it bites on every code below d = 24.
+
     CONNECTIVITY CAVEAT: generalised bicycle codes need non-local qLDPC
     connectivity. The slide specifies a nearest-neighbour 2D grid, which does not
     provide it. This arm is therefore costed under a different hardware
     assumption from every other curve on the figure, and the comparison is not
     like-for-like. See OPEN_ITEMS.md O11.
     """
-    q_L = 2.0 * m + cfg.n_ancilla
+    q_L = 2.0 * m + cfg.n_ancilla + hwp_workspace(m, cfg)   # same ledger as surface
     n_t, d_t = t_counts(m, cfg)
     eps_L = cfg.frac_logical * eps_absolute(cfg, m)
+    p_target = cfg.frac_magic * eps_absolute(cfg, m) / (2.0 * max(n_t, 1.0))
+    eng = select_engine(p_target, cfg)
+    if eng is None:
+        return None                     # no published engine is clean enough
+    engines = max(cfg.pin_engines, 1)
     for (n_code, k, d, dt, n_pb) in GB_CODES:
         blocks = math.ceil(q_L / k)
-        # ONE engine (by default): T consumption is serialised across the machine
-        cycles = max(d_t, n_t / max(cfg.pin_engines, 1)) / max(cfg.lanes, 1.0)
-        if q_L * cycles * p_logical_gb(k, d, cfg) > eps_L:
+        # A T state costs max(logical cycle, distillation time) code cycles, and
+        # one in p_reject of them is thrown away.
+        per_state = max(float(dt), eng["cycles"]) / (1.0 - eng["p_reject"])
+        cyc_proc = d_t * dt                                   # sequential depth
+        cyc_magic = n_t * per_state / engines                 # T supply
+        cyc_tot = max(cyc_proc, cyc_magic) / max(cfg.lanes, 1.0)
+        l_cycles = cyc_tot / dt
+        if 2.0 * q_L * l_cycles * p_logical_gb(k, d, cfg) > eps_L:
             continue
-        phys = blocks * n_pb + cfg.pin_engines * ENGINE_QUBITS
+        phys = blocks * n_pb + engines * eng["qubits"]
         return {"m": m, "d": d, "k": k, "blocks": blocks, "n_t": n_t,
-                "cycles": cycles, "phys": phys,
-                "t_shot": cycles * dt * cfg.t_round}
+                "q_L": q_L, "d_t": d_t, "rounds": cyc_tot,
+                "cycles": l_cycles, "phys": phys,
+                "engine_qubits": engines * eng["qubits"],
+                "engine_p_out": eng["p_out"], "p_T_target": p_target,
+                "engine_cycles": eng["cycles"], "p_reject": eng["p_reject"],
+                "stalled": eng["cycles"] > dt,
+                "magic_limited": cyc_magic > cyc_proc,
+                "workspace": hwp_workspace(m, cfg),
+                "t_shot": cyc_tot * cfg.t_round}
     return None
+
+
+def ledger_comparison(m: float, cfg: Config = DEFAULT) -> list[tuple]:
+    """Field-by-field ledger for the SAME compiled circuit on both architectures.
+
+    Review #5, test 4. Before, the two arms disagreed on three rows: Pinnacle
+    charged no Hamming-weight workspace, budgeted no magic-state error at all,
+    and converted logical failure to bias with a factor of one against the
+    surface code's two. The point of this table is that those rows now match by
+    construction rather than by inspection, and that the rows which DIFFER
+    differ for a stated architectural reason.
+    """
+    sp, pp = surface_point(m, cfg), pinnacle_point(m, cfg)
+    n_t, d_t = t_counts(m, cfg)
+    eps = eps_absolute(cfg, m)
+    rows = [
+        ("T states per shot",        n_t, n_t, "shared circuit"),
+        ("sequential T layers",      d_t, d_t, "shared circuit"),
+        ("HWP workspace (logical)",  hwp_workspace(m, cfg), hwp_workspace(m, cfg),
+         "now charged on both"),
+        ("logical qubits",           sp and sp["q_L"], pp and pp["q_L"],
+         "same definition"),
+        ("logical-failure -> bias",  2.0, 2.0, "a flipped +-1 outcome"),
+        ("magic-failure -> bias",    2.0, 2.0, "same conversion"),
+        ("magic allowance",          cfg.frac_magic * eps, cfg.frac_magic * eps,
+         "same share of the ledger"),
+        ("per-state target",         sp and sp["p_T_target"], pp and pp["p_T_target"],
+         "allowance / (2 n_T)"),
+        ("source output infidelity", sp and sp["p_T"], pp and pp["engine_p_out"],
+         "selected, not assumed"),
+        ("magic qubits",             sp and sp["magic_qubits"], pp and pp["engine_qubits"],
+         "plant vs engine"),
+        ("rejection", "in published cycles", pp and pp["p_reject"],
+         "Litinski folds it in; Pinnacle states it"),
+        ("physical qubits",          sp and sp["phys"], pp and pp["phys"], ""),
+        ("seconds per shot",         sp and sp["t_shot"], pp and pp["t_shot"], ""),
+    ]
+    return [(name, a, b, why) for name, a, b, why in rows]
 
 
 def max_m_pinnacle(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:

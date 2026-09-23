@@ -68,6 +68,16 @@ VARS = [
 for cfg, lab in VARS:
     W(row(cfg, lab) + "\n")
 
+W("\n## Architecture ledgers, field by field, at m = 64\n\n")
+W("The same compiled circuit costed on both architectures (review #5, test 4).\n"
+  "The shared rows agree by construction; the rows that differ are the real\n"
+  "architectural trade, not a bookkeeping difference.\n\n")
+W("| field | surface FT | Pinnacle | |\n|---|---:|---:|---|\n")
+for _name, _a, _b, _why in ftqc.ledger_comparison(64.0, DEFAULT):
+    def _f(x):
+        return f"{x:.4g}" if isinstance(x, (int, float)) and not isinstance(x, bool) else str(x)
+    W(f"| {_name} | {_f(_a)} | {_f(_b)} | {_why} |\n")
+
 W("\n## What each extrapolation buys, at n = 1e6\n\n")
 W("| strategy | m | which extrapolation |\n|---|---|---|\n")
 lo, hi = classical.band(DEFAULT)["band"]
