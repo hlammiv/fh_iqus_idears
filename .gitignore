@@ -10,3 +10,4 @@ __pycache__/
 COMPARISON_arch_comparison.md
 SCIENTIFIC_REVIEW.md
 refs/fermionic_dynamics/
+calibration/data/_traj_merged.json

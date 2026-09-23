@@ -32,7 +32,7 @@ MULTIPRODUCT
   model was missing.
 """
 from __future__ import annotations
-import json, math, pathlib, sys, time
+import json, math, os, pathlib, sys, time
 from itertools import combinations
 import numpy as np
 from scipy import sparse
@@ -227,8 +227,15 @@ PATCHES = {
 V_B = 2.0
 TRAJECTORY = ("square2", "cross5", "rectangle2x3", "square3", "rectangle3x4",
               "rectangle2x7", "square4")
-TRAJ_STEPS = (1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)
-KRYLOV_BUDGET_GB = 1.5      # cap the Lanczos basis; substep to make up accuracy
+# Only r >= R_ASYMPTOTIC = 8 enters the W_eff median, so on a patch where every
+# step is expensive the small-r points can be dropped: FH_TRAJ_STEPS=8,12,16,24,32
+TRAJ_STEPS = tuple(int(x) for x in os.environ["FH_TRAJ_STEPS"].split(",")) \
+    if os.environ.get("FH_TRAJ_STEPS") else (1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)
+# Memory knobs. The defaults are sized for a 15 GB laptop; lenore has ~115 GB
+# free, so export FH_KRYLOV_GB / FH_MEM_CAP_GB there rather than editing these.
+# A bigger Krylov basis is not a luxury: capping it FORCES more substeps, and at
+# n = 16 the difference is hours.
+KRYLOV_BUDGET_GB = float(os.environ.get("FH_KRYLOV_GB", 1.5))
 TAUS = (0.25, 0.5, 1.0, 2.0)
 STEPS = (1, 2, 4, 8, 16, 32, 64)
 # Base step counts for the multiproduct branches. Only bases >= r_min are
@@ -238,7 +245,7 @@ STEPS = (1, 2, 4, 8, 16, 32, 64)
 # the fit see the plateau instead of averaging across a crossing (O11b).
 MPF_BASES = (1, 2, 4, 8)
 OUT_NAME = "data/trotter_cal.json"
-MEM_CAP_GB = 3.0        # this machine has ~10 GB free; n = 16 belongs on lenore
+MEM_CAP_GB = float(os.environ.get("FH_MEM_CAP_GB", 3.0))   # laptop default
 CAMPBELL_W = 9.5            # commutator norm per site at U/J = 4
 
 
@@ -387,7 +394,11 @@ def main():
                            ("rectangle3x4", "rectangle2x7"))
     if "--trajectory" in sys.argv:
         args = [a for a in sys.argv[1:] if not a.startswith("-")]
-        return trajectory(args or None)
+        # a partial run writes its OWN file; domain_check merges them, so a
+        # 30-hour n = 16 point cannot clobber the six that already landed
+        out = (f"data/trotter_traj_{'_'.join(args)}.json" if args
+               else "data/trotter_traj.json")
+        return trajectory(args or None, out=out)
     only = sys.argv[1:] or list(PATCHES)
     rows, meta = [], []
     for name in only:

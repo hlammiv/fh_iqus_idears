@@ -119,7 +119,25 @@ def main(as_json=False):
     out["worst_time_holdout"] = max(abs(x["rel_err"]) for x in t2)
     print(f"\n  worst time hold-out error: {out['worst_time_holdout']:+.0%}")
 
-    traj = HERE / "data" / "trotter_traj.json"
+    # merge every trajectory file: the base run plus any single-patch reruns
+    _tf = sorted((HERE / "data").glob("trotter_traj*.json"))
+    traj = HERE / "data" / "_traj_merged.json"
+    if _tf:
+        _R, _M, _seen = [], [], set()
+        for _f in _tf:                      # later files win on a repeated patch
+            _d = json.loads(_f.read_text())
+            for _m in _d["meta"]:
+                _seen.add(_m["patch"])
+        for _f in reversed(_tf):
+            _d = json.loads(_f.read_text())
+            for _m in _d["meta"]:
+                if _m["patch"] in _seen:
+                    _seen.discard(_m["patch"])
+                    _M.append(_m)
+                    _R += [r for r in _d["rows"] if r["patch"] == _m["patch"]]
+        _b = json.loads(_tf[0].read_text())
+        traj.write_text(json.dumps({"rows": _R, "meta": _M, "v_b": _b["v_b"],
+                                    "u_over_j": _b["u_over_j"]}, indent=1))
     if traj.exists():
         import sys as _sys
         _sys.path.insert(0, str(HERE.parent))
