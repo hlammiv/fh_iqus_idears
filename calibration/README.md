@@ -99,3 +99,34 @@ Anything larger belongs on `lenore_remote`.
    the experiment's 7×4 double-periodic lattice at flux `Φ = π`. The validation
    compares two calculations on the *same* geometry, so this does not affect the
    correctness claim, only the specific numbers.
+
+## domain_check.py — how far the calibration reaches (second-pass #2)
+
+    python3 calibration/domain_check.py --json      # seconds, no simulation
+
+Answers three of the review's five tests for finding #2 from the raw errors
+already in `data/trotter_cal.json`. Two come back badly.
+
+| test | result |
+|---|---|
+| 4. is `err ~ r^-2` at the operating `r`? | clean where it matters: median `\|slope+2\| = 0.002` for `r ≥ 8`, and the second-order arm runs at `r = 11–400`. **Not** where the multiproduct arm runs: MPF-4 starts at `r = 3.2` and the small-`r` slope ranges `−0.58` to `+0.63` at `τ = 2`. |
+| 2. hold a time out and predict it | **+124%** at `n = 9`, **+86%** at `n = 12`. Interpolation *inside* the measured range is good to about a factor of two at long time. |
+| 5. does size-independence hold where the model uses it? | it decays with time — spread across `n ≥ 6` is 1.01× at `τ = 0.25`, 1.27× at 0.5, 1.26× at 1.0, **2.91× at τ = 2**. Every plotted point is at `τ ≥ 1`. |
+
+### What it does not settle
+
+Test 3, the trajectory. Every measurement so far is a **fixed-time size sweep**,
+while the adopted convention is `t = √m / v_B` and the `m^(7/4)` exponent rests
+on that trajectory. The script prints the patch list and memory:
+
+| patch | sites | τ = √m/2 | sector dim | GB/vector | where |
+|---|---:|---:|---:|---:|---|
+| square2 | 4 | 1.00 | 36 | 0.000 | local |
+| rectangle2x3 | 6 | 1.22 | 400 | 0.000 | local |
+| square3 | 9 | 1.50 | 15,876 | 0.000 | local |
+| rectangle3x4 | 12 | 1.73 | 853,776 | 0.013 | local |
+| rectangle2x7 | 14 | 1.87 | 11,778,624 | 0.176 | local |
+| square4 | 16 | 2.00 | 165,636,900 | 2.47 | **lenore** |
+
+`n ≤ 14` fits locally under ~1 GB peak. `n = 16` needs roughly 10 GB with the
+Krylov vectors and belongs on `lenore_remote` (port 60022).

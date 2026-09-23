@@ -147,14 +147,29 @@ than smoothed, and should not be read as physics.
 Measured on **4-12 sites, tau in [0.25, 2]**. The curves use it at m up to ~2000
 and tau up to ~13.
 
-* The **m-extrapolation** is supported by locality: `W_eff` is flat across
-  n = 6, 9, 12 at fixed tau (1.461 / 1.448 / 1.453 at tau = 0.25, i.e. constant to
-  1%), which is what a two-site observable must do once the lattice exceeds its
-  cone. m = 16 is running to widen the range from 3x to 4x.
-* The **tau-extrapolation is only a clamp.** `W_eff` falls ~15x over the measured
-  range and is held fixed beyond tau = 2. That is conservative against the
-  measured trend, but a tau^3 law stretched 6.6x past its data is not defensible
-  on its own.
+* The **m-extrapolation is supported by locality only at SHORT time**, and the
+  earlier version of this item quoted the best case as if it were general. The
+  spread of `W_eff` across n >= 6, measured (`calibration/domain_check.py`):
+
+      tau = 0.25   1.01x        tau = 1.0   1.26x
+      tau = 0.5    1.27x        tau = 2.0   2.91x
+
+  Flat to 1% at tau = 0.25 is what a two-site observable must do once the lattice
+  exceeds its cone. By tau = 2 it is a factor of three, and the adopted
+  convention t = sqrt(m)/v puts EVERY plotted point at tau >= 1 with most far
+  beyond 2. The locality argument therefore does not license the extrapolation
+  where the model actually uses it.
+* The **tau-extrapolation is only a clamp**, and interpolation INSIDE the range
+  is already unreliable. Holding tau = 1 out and predicting it from tau = 0.5 and
+  2 overshoots by **+124% at n = 9 and +86% at n = 12**. `W_eff` falls ~15x over
+  the measured range and is held fixed beyond tau = 2; a tau^3 law stretched 6.6x
+  past data that cannot interpolate to better than a factor of two is not
+  defensible on its own.
+* The **r^-2 power law is clean where the second-order arm operates** (slopes
+  -2.00 to -2.11 for r >= 8, and the arm runs at r = 11-400) but **not where the
+  multiproduct arm does**: MPF-4 operates at r = 3.2 upward and below r = 8 for
+  m <= 13, and at small r with long tau the measured slope ranges from -0.58 to
+  +0.63 because the error is saturated rather than asymptotic.
 * **Every plotted operating point is outside the calibrated domain** -- worst case
   m = 383 and tau = 9.8 against m <= 12 and tau <= 2. `hubbard.calibration_status`
   reports this per point and the figure marks the calibrated m.
@@ -166,6 +181,14 @@ and tau up to ~13.
 
 Because of this every arm is now reported as a **band** between Campbell's bound
 and the calibration, rather than as a point value. Neither edge is the answer.
+
+**What would close it.** Review test 3: measure `W_eff` at the pairs
+`(m, tau = sqrt(m)/v)` instead of on a fixed-time size sweep. Everything measured
+so far is a fixed-time sweep, and the `m^(7/4)` exponent rests on the trajectory.
+`calibration/domain_check.py` prints the patch list and memory: `n <= 14` fits
+locally (`rectangle2x7`, 11.8M states, 176 MB/vector), `n = 16` needs ~10 GB and
+belongs on `lenore_remote`. Together with the O11b multiproduct rerun that is the
+whole remaining compute.
 
 ### O10. The tensor-network question is OPEN, not resolved
 *Raised by #8. This is the item most likely to reverse a headline.*

@@ -778,6 +778,45 @@ def main() -> int:
                   - DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, 64.0)) < 1e-18,
               "both carry the factor 2 for a flipped +-1 outcome")
 
+    # ---- how far the calibration actually reaches (second-pass #2) ----------
+    _dc = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "domain_check.json"
+    if _dc.exists():
+        import json as _json
+        _D = _json.loads(_dc.read_text())
+        # median |slope + 2| is 0.002 across the grid; the outliers are all at
+        # tau = 2 on the smallest patches, where the error is nearly saturated
+        _dev = sorted(abs(x["slope_large_r"] + 2.0) for x in _D["power_law"])
+        _out = [(x["n"], x["tau"]) for x in _D["power_law"]
+                if abs(x["slope_large_r"] + 2.0) > 0.15]
+        check("the r^-2 power law is clean where the 2nd-order arm operates",
+              _dev[len(_dev) // 2] < 0.01 and len(_out) <= 1,
+              f"median |slope + 2| = {_dev[len(_dev) // 2]:.3f} for r >= 8 "
+              f"(arm runs at r = {hubbard.trotter_steps(4.0, DEFAULT):.0f}-"
+              f"{hubbard.trotter_steps(400.0, DEFAULT):.0f}); the one outlier is "
+              f"n={_out[0][0]}, tau={_out[0][1]} at {max(_dev):.2f}, a small patch "
+              f"at long time where the error is nearly saturated")
+        check("but NOT where the multiproduct arm operates",
+              _D["worst_dev_small_r"] > 1.0
+              and hubbard.trotter_steps(4.0, DEFAULT.but(trotter_order_k=2)) < 8.0,
+              f"worst |slope + 2| = {_D['worst_dev_small_r']:.2f} at r = 1-4; "
+              f"MPF-4 starts at r = "
+              f"{hubbard.trotter_steps(4.0, DEFAULT.but(trotter_order_k=2)):.1f}")
+        _sp = _D["size_spread"]
+        check("size-independence is a SHORT-time statement and decays with time",
+              _sp["0.25"] < 1.1 and _sp["2.0"] > 2.0,
+              "spread across n >= 6: " + ", ".join(
+                  f"tau={k}: {v:.2f}x" for k, v in sorted(_sp.items(), key=lambda x: float(x[0]))))
+        check("and every plotted point sits where it has decayed",
+              hubbard.t_max(curves.M_FLOOR, DEFAULT) >= 1.0,
+              f"the smallest plotted lattice already runs to tau = "
+              f"{hubbard.t_max(curves.M_FLOOR, DEFAULT):.2f}; "
+              f"locality was verified at tau = 0.25")
+        check("interpolating in tau INSIDE the measured range is good to ~2x only",
+              _D["worst_time_holdout"] > 1.0,
+              f"holding tau = 1 out and predicting it overshoots by "
+              f"{_D['worst_time_holdout']:+.0%}; the clamp beyond tau = 2 cannot "
+              f"be worth more than that")
+
     # ---- the additional implementation checks (second pass) -----------------
     # every public entry point must refuse an over-allocated error budget
     _bad = DEFAULT.but(frac_stat=0.9)
