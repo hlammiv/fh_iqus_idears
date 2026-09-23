@@ -320,12 +320,35 @@ Helios is **clock-limited** at 55 ms/layer, which is a first-generation figure
 for a machine whose paper explicitly discusses clock speed as its main scaling
 challenge. Both arms should be re-run when either number moves.
 
-Also unmodelled: high-rate qLDPC codes with transversal gates, which is what both
-platforms actually propose for scale. We give them O(1) syndrome rounds but still
-charge them surface-code storage (2 d^2 per logical qubit). A high-rate code
-would cut the footprint substantially, and the Pinnacle arm shows what that looks
-like -- but on a machine with the right connectivity AND transversal gates, which
-is a combination the model cannot currently express.
+**O14 part two RESOLVED, and it changed the answer for Helios.** The model could
+already express the combination -- `max_m_pinnacle` on an all-to-all platform is
+high-rate qLDPC *with* transversal rounds -- it just was not being reported,
+because the figure computes the Pinnacle line on `sc_long_range` only.
+
+Crediting Helios with the codes it actually proposes -- and the answer is
+narrower than first stated:
+
+| n | Helios, surface | Helios, qLDPC |
+|---|---|---|
+| 1e9 | **9.9** | 6.5 |
+| 1e10 | 12.5 | **15.3** |
+| 1e12 | 53.7 | **96.7** |
+
+qLDPC does NOT rescue an arm that did not exist -- transversal rounds already
+gave Helios a surface arm from `n ~ 1e8`. It overtakes only above `n ~ 1e10`,
+and is worth ~1.8x by `1e12`. Below the crossover the surface code is better,
+because Pinnacle's single 4410-qubit magic engine serialises T supply while the
+surface plant parallelises: the storage saving (101 physical per logical against
+2500 for a d = 25 patch, 25x) does not pay until the lattice is large enough for
+storage to dominate.
+
+A first draft of this item asserted "0 at every n" for the surface arm and had to
+be corrected against the model; the arm is on the platform figure now with the
+crossover visible.
+
+Neutral atoms still get nothing, and for the same reason as their surface arm:
+no magic engine is characterised at their measured 5e-3, since the engine table
+stops at 1e-3. Fidelity, not code choice and not clock.
 
 ### O11. Connectivity was a caveat, not a constraint -- **CLOSED**
 `ftqc.pinnacle_point` and `METHODS.md` both pointed at an O11 that was never

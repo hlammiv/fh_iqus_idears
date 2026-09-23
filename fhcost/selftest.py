@@ -892,6 +892,37 @@ def main() -> int:
           f"observable needs {ftqc.n_shots_total(_at_opt, 12.0):.1e} shots and the "
           f"clock is paid once per shot -- Shor is one deep circuit, this is not")
 
+    # 7. O14: credit the mobile platforms with the codes they actually propose
+    _h = DEFAULT.but(platform="helios", use_platform_clock=True, encoding="jw",
+                     p=plat.HELIOS.p_2q)
+    check("high-rate qLDPC storage is ~25x better than the surface code",
+          ftqc.GB_CODES[-1][4] / ftqc.GB_CODES[-1][1]
+          < 0.05 * ftqc.storage_per_logical(25, DEFAULT),
+          f"[[510,16,24]] is {ftqc.GB_CODES[-1][4] / ftqc.GB_CODES[-1][1]:.0f} "
+          f"physical per logical against "
+          f"{ftqc.storage_per_logical(25, DEFAULT):.0f} for a d = 25 surface patch")
+    # NOT "qLDPC is what gives Helios an arm at all" -- that was wrong, and the
+    # truth is narrower. Transversal rounds already gave it a surface arm from
+    # n ~ 1e8; qLDPC only overtakes above ~1e10, because the single 4410-qubit
+    # engine and its serialised T supply dominate at small m while the surface
+    # plant parallelises.
+    _hs = {e: ftqc.max_m_surface(10.0 ** e, _h) for e in (9, 10, 12)}
+    _hq = {e: ftqc.max_m_pinnacle(10.0 ** e, _h) for e in (9, 10, 12)}
+    check("qLDPC overtakes the surface code on Helios, but only above n ~ 1e10",
+          _hq[9] < _hs[9] and _hq[12] > 1.5 * _hs[12],
+          f"surface {_hs[9]:.1f}/{_hs[10]:.1f}/{_hs[12]:.0f} against qLDPC "
+          f"{_hq[9]:.1f}/{_hq[10]:.1f}/{_hq[12]:.0f} at n = 1e9/1e10/1e12 -- the "
+          f"single engine's serialised T supply costs more than the storage saves "
+          f"until the lattice is large")
+    _a = DEFAULT.but(platform="neutral_atom", use_platform_clock=True,
+                     encoding="jw", p=plat.NEUTRAL_ATOM.p_2q)
+    check("atoms get no qLDPC arm either, and for the SAME reason as before",
+          ftqc.max_m_pinnacle(1e12, _a) == 0.0
+          and ftqc.select_engine(1e-9, _a) is None,
+          f"no magic engine is characterised at their measured "
+          f"{plat.NEUTRAL_ATOM.p_2q:.0e}; the engine table stops at 1e-3. "
+          f"Fidelity, not code choice and not clock")
+
     check("the hypothetical chip is marked as one",
           plat.SC_LONG_RANGE.n_demonstrated == 0
           and plat.HELIOS.n_demonstrated > 0,
