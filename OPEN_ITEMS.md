@@ -566,12 +566,27 @@ model's agreement with `m ~ s^(2/9)` was a **floor artefact**: the s = 0.03 poin
 was clipped by the floor at the fitted residual, flattening the slope to 0.275;
 unclipped it is 0.379.
 
-**Still open from #8:**
-* `s_data_rel_unc = 0.20` is an assumption. The source quotes no per-point error
-  bar, and this number now sets every tolerance in the model.
-* `s_abs_floor = 0.02` is a specification with no derivation. It is the single
-  most leveraged number in the ledger and deserves an argument from what the
-  experiment can actually resolve.
+**#8 remainder CLOSED, and one of its claims was wrong.**
+
+* `s_data_rel_unc` is now **measured, not assumed**: the RMS relative scatter of
+  the published points about the fitted envelope, at the small-signal times where
+  the bound binds, is **30%** -- the model had assumed 20%. For a LOWER bound on
+  the signal, assuming less uncertainty than is observed is the wrong direction,
+  so the default moves to 0.30. Effect at n = 1e6: surface FT 12.5 -> 9.5,
+  NISQ 13.1 -> 12.4. The measure overstates their error (it contains our
+  envelope's model error, and seven points cannot separate the two), which is
+  again the conservative direction.
+* `s_abs_floor` **was NOT "the single most leveraged number in the ledger"**.
+  That claim, written in the #8 writeup, is false: the floor is INERT below
+  ~0.038, because the data-based bound is 0.0383 at the binding time and wins the
+  max(). Every value in the measured bracket -- 0.013 (envelope scatter) through
+  0.020 (the model's) to 0.030 (smallest reported) -- gives identical answers.
+  The concern is closed by showing it does not matter, and `s_data_rel_unc` is
+  the number that does.
+
+`hubbard.signal_uncertainty_anchors()` returns all four anchors with provenance:
+raw shot noise 0.079 (160 shots, bounded +-1 estimator), envelope scatter 0.0126
+absolute, 30% relative at small signal, smallest reported value 0.0295.
 * Seven data points per U, two U values. The interpolation in U between 0 and 4
   is a two-point line, and beyond t = 2 there is no data at all -- the model
   falls back to the envelope with a 0.65 factor, which the held-out test says is

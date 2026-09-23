@@ -284,12 +284,23 @@ class Config:
     # times s_extrap_factor, which is the weaker of the two because a
     # leave-one-out refit misses the tail by -52% to +55%.
     signal_bound: str = "lower"   # "lower" (data-based bound) | "envelope" (old)
-    s_data_rel_unc: float = 0.20  # ASSUMED uncertainty on the published points;
-                                  # the source quotes no per-point error bar
+    # MEASURED, not assumed: the RMS relative scatter of the published points
+    # about the fitted envelope, at the small-signal times where the bound binds,
+    # is 30%. The source quotes no per-point error bar, so this is the best
+    # available handle. It overstates their error -- it contains our envelope's
+    # model error too -- and for a LOWER BOUND on the signal that is the
+    # conservative direction. See hubbard.signal_uncertainty_anchors.
+    s_data_rel_unc: float = 0.30
     s_extrap_factor: float = 0.65 # beyond t = 2, from the held-out tail error
     # An absolute error SCALE, not an inferred residual. Below this the target
-    # stops being relative. It is a specification and the single most leveraged
-    # number in the ledger; s_res_min is a fit result and must not serve here.
+    # stops being relative.
+    #
+    # NOT the most leveraged number in the ledger, which an earlier version of
+    # this comment claimed. It is INERT below ~0.038, because the data-based
+    # lower bound is larger than that at the binding time and wins the max().
+    # The whole measured bracket -- 0.013 (envelope scatter) to 0.030 (smallest
+    # reported value) -- gives identical answers. s_data_rel_unc above is the
+    # one that actually moves things.
     s_abs_floor: float = 0.02
 
     def but(self, **kw) -> "Config":

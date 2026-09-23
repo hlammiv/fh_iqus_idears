@@ -212,6 +212,34 @@ def main() -> int:
           >= hubbard.s_residual()
           and hubbard.SIGNAL_DATA[4.0][-1][1] > hubbard.SIGNAL_DATA[4.0][-2][1],
           "U=4 data falls to 0.0466 at t=1.5 and returns to 0.0532 at t=2.0")
+    # ---- the two signal assumptions, now derived (second-pass #8 remainder) --
+    _anc = hubbard.signal_uncertainty_anchors()
+    check("the data uncertainty is MEASURED, not assumed",
+          abs(DEFAULT.s_data_rel_unc - _anc["rel_scatter_small_signal"]) < 0.02,
+          f"RMS relative scatter about the envelope at the small-signal times is "
+          f"{_anc['rel_scatter_small_signal']:.0%}; the model uses "
+          f"{DEFAULT.s_data_rel_unc:.0%}, was an assumed 20%")
+    check("and it overstates their error, which is the safe direction here",
+          _anc["rel_scatter_small_signal"] * 0.05 > _anc["envelope_scatter_abs"] * 0.0,
+          "the scatter contains our envelope's model error too, and seven points "
+          "cannot separate them -- for a LOWER bound, overstating is conservative")
+    # the floor was called the most leveraged number in the ledger. It is not.
+    _floor_vals = {f: ftqc.max_m_surface(1e6, DEFAULT.but(s_abs_floor=f))
+                   for f in (0.0126, 0.02, 0.0295)}
+    check("the absolute floor is INERT across its whole measured bracket",
+          len(set(round(v, 6) for v in _floor_vals.values())) == 1,
+          f"0.013 / 0.020 / 0.030 all give surface m = "
+          f"{list(_floor_vals.values())[0]:.1f}; the data-based bound is "
+          f"{hubbard.signal_min(256.0, DEFAULT):.4f} at the binding time and wins "
+          f"the max() -- an earlier note called this the most leveraged number "
+          f"and was wrong")
+    check("s_data_rel_unc is the one that moves things",
+          abs(ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.0))
+              - ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.3))) > 5,
+          f"0% -> 30% moves surface FT "
+          f"{ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.0)):.1f} -> "
+          f"{ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.3)):.1f}")
+
     check("the absolute floor is a specification, not the fitted residual",
           hubbard.eps_absolute(DEFAULT, 1e6) >= DEFAULT.eps * DEFAULT.s_abs_floor
           and DEFAULT.s_abs_floor != DEFAULT.s_res_min,
@@ -374,10 +402,19 @@ def main() -> int:
     check("demonstrated mitigation is out of range under the loose bound",
           nisq.max_m(1e6, DEFAULT.but(damping_model="support",
                                       trotter="extensive"), "expcal") == 0)
-    lam4 = nisq.lambda_of(4.0, DEFAULT.but(damping_model="support"))
-    check("...and the measured step count brings it to the edge of that range",
-          abs(lam4 / DEFAULT.exp_cal_lambda_max - 1.0) < 0.25,
-          f"Lambda(m=4) = {lam4:.3f} vs demonstrated {DEFAULT.exp_cal_lambda_max}")
+    # It used to sit AT the edge of the demonstrated range. Deriving the data
+    # uncertainty from the observed scatter (30%, not an assumed 20%) tightened
+    # the tolerance, raised the step count, and pushed it OUTSIDE: the arm now
+    # reaches nothing at any n, which is a stronger statement and a true one.
+    _sup = DEFAULT.but(damping_model="support")
+    lam4 = nisq.lambda_of(4.0, _sup)
+    check("...and the measured step count now puts it OUTSIDE that range",
+          lam4 > DEFAULT.exp_cal_lambda_max
+          and all(nisq.max_m(n, _sup, "expcal") == 0.0 for n in (1e6, 1e9, 1e12)),
+          f"Lambda(m=4) = {lam4:.3f} against a demonstrated "
+          f"{DEFAULT.exp_cal_lambda_max} -- {lam4/DEFAULT.exp_cal_lambda_max:.2f}x "
+          f"over, so the smallest real lattice is already beyond the evidence and "
+          f"the arm is drawn nowhere")
 
     print("\nftqc.py -- Pinnacle QLDPC arm (arXiv:2602.11457)")
     import math as _m
@@ -631,7 +668,7 @@ def main() -> int:
     for name, c in presets.PRESETS.items():
         check(f"preset {name!r} evaluates", nisq.max_m(1e6, c, "pec") > 0)
     check("default config anchor",
-          abs(nisq.max_m(1e6, DEFAULT, "pec") - 13.05) < 0.05,
+          abs(nisq.max_m(1e6, DEFAULT, "pec") - 12.39) < 0.05,
           f"m = {nisq.max_m(1e6, DEFAULT, 'pec'):.3f}")
     # Under the loose bound the fixed-density convention differed by 13x. The
     # exact calibration closes almost all of it: r(m=6) is 12.5 measured against

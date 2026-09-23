@@ -362,6 +362,40 @@ def signal_data(t: float, u: float = 4.0) -> float:
     raise AssertionError
 
 
+def signal_uncertainty_anchors() -> dict:
+    """What the published data itself says about its own resolution.
+
+    s_data_rel_unc and s_abs_floor were both introduced as stated assumptions
+    (review #8) because the source quotes no per-point error bar. Neither has to
+    stay an assumption: the scatter of the data about a smooth envelope is a
+    measurable upper bound on their resolution, and the shot count gives a lower
+    one. The bracket is wide, but it is measured.
+
+    Both anchors overstate the experiment's error, because the scatter contains
+    OUR envelope's model error too and seven points cannot separate the two.
+    For a quantity used as a LOWER BOUND on the signal, overstating is the
+    conservative direction, which is why the default takes the measured value
+    rather than something tighter.
+    """
+    import statistics as _st
+    res_abs, res_rel = [], []
+    for u, rows in SIGNAL_DATA.items():
+        c = DEFAULT.but(U_over_J=u)
+        for t, v in rows:
+            d = signal(t, c) - v
+            res_abs.append(d)
+            if v <= 0.15:                     # where the bound actually binds
+                res_rel.append(abs(d) / v)
+    rms = lambda x: math.sqrt(sum(y * y for y in x) / len(x))
+    return {
+        "shot_noise": 1.0 / math.sqrt(160.0),     # 160 shots, bounded +-1 estimator
+        "envelope_scatter_abs": rms(res_abs),
+        "rel_scatter_small_signal": rms(res_rel),
+        "smallest_reported": min(v for rows in SIGNAL_DATA.values() for _, v in rows),
+        "n_shots_per_point": 160, "source": "Zenodo 17799843 / arXiv:2510.26300",
+    }
+
+
 def signal_lower(t: float, cfg: Config = DEFAULT) -> float:
     """A lower bound on |C^zz(t)| that a tolerance may be built on.
 
