@@ -54,12 +54,21 @@ ARMS = [
     ("SC grid, NISQ+PEC", DEFAULT.but(platform="superconducting",
                                       use_platform_clock=True),
      "nisq", curves.COLORS["nisq_pec"], "-"),
+    ("atoms, STAR", DEFAULT.but(platform="neutral_atom", use_platform_clock=True,
+                                encoding="jw", p=5e-3),
+     "star", curves.COLORS["star"], "-"),
+    ("atoms, surface code", DEFAULT.but(platform="neutral_atom",
+                                        use_platform_clock=True,
+                                        encoding="jw", p=5e-3),
+     "surface", curves.COLORS["star"], (0, (3, 1.5))),
 ]
 
 
 def reach(cfg, arm, n):
     if arm == "surface":
         return ftqc.max_m_surface(n, cfg.but(pl_model="fowler"))
+    if arm == "star":
+        return ftqc.max_m_star(n, cfg)
     if arm == "pinnacle":
         return ftqc.max_m_pinnacle(n, cfg)
     return nisq.max_m(n, cfg, "pec")
@@ -70,6 +79,11 @@ def binding(cfg, arm, n):
     m = reach(cfg, arm, n)
     if m <= 0:
         return 0
+    if arm == "star":
+        pt = ftqc.star_point(m, cfg)
+        cp = math.floor(n / pt["phys"])
+        frac = ftqc.n_shots_total(cfg, m) * pt["t_shot"] / max(cp, 1) / cfg.budget_s
+        return 2 if frac > 0.5 else 1
     if arm == "surface":
         pt = ftqc.surface_point(m, cfg.but(pl_model="fowler"))
         cp = math.floor(n / pt["phys"])
@@ -84,7 +98,7 @@ def binding(cfg, arm, n):
     return 2 if frac > 0.5 else 1
 
 
-fig = plt.figure(figsize=(7.0, 2.9))
+fig = plt.figure(figsize=(7.0, 3.2))
 gs = fig.add_gridspec(1, 2, width_ratios=[1.30, 0.92], wspace=0.06)
 axA, axB = (fig.add_subplot(g) for g in gs)
 
@@ -114,8 +128,8 @@ ax.text(0.97, 0.94, "(a)", transform=ax.transAxes, ha="right", va="top", fontsiz
 # arms that never appear, and why
 missing = [(lb, cf, a) for lb, cf, a, _c, _s in ARMS
            if not any(reach(cf, a, n) > 0 for n in n_grid)]
-notes = ["Helios / atoms: no FT arm at any $n$ —",
-         "a 55 ms layer against a 10 ns gate"]
+notes = ["slow clocks get transversal FT: $\\Theta(1)$ syndrome",
+         "rounds, not $\\Theta(d)$ — worth ${\\sim}19{\\times}$ here, not enough"]
 ax.text(1.2e3, 2.75, "\n".join(notes), fontsize=4.9, color=F.DARKGREY,
         va="bottom", ha="left", linespacing=1.3,
         bbox=dict(facecolor="white", alpha=0.75, edgecolor="none", pad=0.9))

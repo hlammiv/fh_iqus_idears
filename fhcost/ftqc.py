@@ -44,7 +44,7 @@ from .hubbard import (counts, step_depth, eps_absolute, eps_statistical,
                       multiproduct_l1, trotter_steps, multiproduct_branches,
                       t_max, signal_at, conf_z)
 from .nisq import M_MIN
-from .platform import admits as platform_admits
+from .platform import admits as platform_admits, se_rounds
 
 ROSS_SELINGER = 3.0        # T gates per Rz = 3 log2(1/eps) (Ross & Selinger 2016)
 
@@ -380,7 +380,10 @@ def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
         # `rounds`), so dividing again would count the same parallelism twice.
         # `lanes` applies only where supply is genuinely serialised -- Pinnacle's
         # single engine.
-        rounds = d_t * d
+        # O(d) rounds under lattice surgery, O(1) with transversal gates
+        # (Zhou et al., arXiv:2406.17653). Charging a mobile-qubit machine O(d)
+        # at its slow clock is costing it at something nobody proposes.
+        rounds = d_t * se_rounds(d, cfg.platform)
         if 2.0 * q_L * rounds * p_logical(d, cfg) > eps_L:  # failure -> bias is x2
             continue
         fac = select_factory(p_target, cfg, n_t=n_t, rounds=rounds)
@@ -439,7 +442,7 @@ def star_point(m: float, cfg: Config = DEFAULT) -> dict | None:
     n_rot = max(c["n_rot"], 1.0)
     eps_L = cfg.frac_logical * eps_absolute(cfg, m)
     for d in range(3, cfg.d_max, 2):
-        rounds = c["steps"] * cfg.star_rounds_per_step * d
+        rounds = c["steps"] * cfg.star_rounds_per_step * se_rounds(d, cfg.platform)
         if q_L * rounds * p_logical(d, cfg) > eps_L:
             continue
         return {"m": m, "d": d, "q_L": q_L, "n_rot": n_rot,
@@ -643,7 +646,10 @@ def pinnacle_point(m: float, cfg: Config = DEFAULT) -> dict | None:
         blocks = math.ceil(q_L / k)
         # A T state costs max(logical cycle, distillation time) code cycles, and
         # one in p_reject of them is thrown away.
-        per_state = max(float(dt), eng["cycles"]) / (1.0 - eng["p_reject"])
+        # dt = d + 2 code cycles per logical cycle is their lattice-surgery
+        # figure; a transversal machine needs O(1) of them
+        dt_eff = dt if not se_rounds(d, cfg.platform) == 1.0 else max(dt / max(d, 1), 1.0)
+        per_state = max(float(dt_eff), eng["cycles"]) / (1.0 - eng["p_reject"])
         cyc_proc = d_t * dt                                   # sequential depth
         cyc_magic = n_t * per_state / engines                 # T supply
         cyc_tot = max(cyc_proc, cyc_magic) / max(cfg.lanes, 1.0)

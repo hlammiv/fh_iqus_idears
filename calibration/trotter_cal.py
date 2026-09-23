@@ -305,7 +305,64 @@ def trajectory(only=None, out="data/trotter_traj.json"):
     return rows, meta
 
 
+CLAMP_TAUS = (2.5, 3.0, 4.0)
+
+
+def clamp_probe(patches=("rectangle3x4", "rectangle2x7"), out="data/clamp_probe.json"):
+    """W_eff BEYOND the calibrated range, on two lattice sizes (review #2).
+
+    alpha = 1.75 comes from CLAMPING W at its tau = 2 value, and every plotted
+    point sits in the clamped region -- so the clamp, not the measured
+    tau-dependence, is what sets the exponent. This is the only affordable test
+    of it.
+
+    Two sizes, because a small lattice cannot honestly be asked about long times:
+    at tau = 4 the cone spans 2 v tau = 16 sites, wider than a 12-site patch, so
+    the answer wraps. If n = 12 and n = 14 AGREE the tau-trend is real and the
+    clamp is conservative; if they DIVERGE, small lattices cannot test it at all
+    and the clamp stands for want of evidence. Either outcome is decisive.
+    """
+    rows, meta = [], []
+    for name in patches:
+        P = Patch(PATCHES[name])
+        gb = P.dim * 16 / 2 ** 30
+        if gb * 8 > MEM_CAP_GB:
+            print(f"SKIP {name}: {gb:.2f} GB/vector -- lenore", flush=True)
+            continue
+        i, j = P.dimers[0]
+        for tau in CLAMP_TAUS:
+            t0 = time.monotonic()
+            ex = P.exact(tau)
+            conv = float(np.linalg.norm(ex - P.exact(tau, sub=None if False else
+                                                     int(np.ceil(6.0 * tau * P._hnorm() / 8)))))
+            cz = P.czz(ex, i, j)
+            best = []
+            for r in (8, 12, 16, 24, 32, 48, 64):
+                err = abs(P.czz(P.trotter(tau, r), i, j) - cz)
+                if err > 0:
+                    best.append(err * r ** 2 / tau ** 3)
+                rows.append({"patch": name, "n": P.n, "tau": tau, "steps": r,
+                             "czz_exact": cz, "abs_err": err,
+                             "W_eff": err * r ** 2 / tau ** 3 if err > 0 else None})
+            W = float(np.median(best)) if best else float("nan")
+            meta.append({"patch": name, "n": P.n, "tau": tau, "W_eff": W,
+                         "czz_exact": cz, "substep_convergence": conv,
+                         "seconds": time.monotonic() - t0})
+            print(f"[{name}] n={P.n} tau={tau:.2f}  C^zz={cz:+.8f}  "
+                  f"W_eff={W:.5f}  conv={conv:.1e}  "
+                  f"({time.monotonic()-t0:.0f}s)", flush=True)
+    path = pathlib.Path(__file__).parent / out
+    path.write_text(json.dumps({"rows": rows, "meta": meta,
+                                "clamp_taus": list(CLAMP_TAUS)}, indent=1))
+    print(f"\nwrote {path}")
+    return meta
+
+
 def main():
+    if "--clamp" in sys.argv:
+        args = [a for a in sys.argv[1:] if not a.startswith("-")]
+        return clamp_probe(tuple(args) if args else
+                           ("rectangle3x4", "rectangle2x7"))
     if "--trajectory" in sys.argv:
         args = [a for a in sys.argv[1:] if not a.startswith("-")]
         return trajectory(args or None)

@@ -1,6 +1,6 @@
 # Crossovers and sensitivity
 
-Model `5f032fcd3a4f` -- the same fingerprint the figure and `explorer.html`
+Model `1206aa66c52e` -- the same fingerprint the figure and `explorer.html`
 carry. Differing ids mean differing models; do not compare across them.
 
 All entries are `m` at `n = 10^6` unless the column says otherwise, for one
@@ -58,8 +58,8 @@ Pinnacle is unavailable -- not small -- on the slide's machine.
 |---|---|---:|---:|---:|---:|---:|---|
 | superconducting grid | nn grid | 10 ns gate | 13.1 | 21.7 | 12.5 | 0.0 | clock (NISQ) |
 | superconducting, two coupler layers | thickness 2 | 10 ns gate | 13.1 | 21.7 | 12.5 | 24.8 | clock (NISQ) |
-| Quantinuum Helios | all to all | 55 ms | 6.9 | 0.0 | 0.0 | 0.0 | clock (NISQ) |
-| neutral atom (reconfigurable) | all to all | 275 ns gate | 10.8 | 7.0 | 0.0 | 0.0 | clock (NISQ) |
+| Quantinuum Helios | all to all | 55 ms | 6.9 | 5.5 | 0.0 | 0.0 | clock (NISQ) |
+| neutral atom (reconfigurable) | all to all | 275 ns gate | 10.8 | 12.8 | 0.0 | 0.0 | clock (NISQ) |
 
 ## Architecture ledgers, field by field, at m = 64
 

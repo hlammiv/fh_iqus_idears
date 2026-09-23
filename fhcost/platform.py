@@ -43,6 +43,10 @@ class Platform:
     t_layer: float | None    # MEASURED seconds per circuit layer, if published
     p_2q: float              # two-qubit infidelity
     n_demonstrated: int      # largest physical qubit count actually built
+    # Can this connectivity run TRANSVERSAL logical gates? If so the machine
+    # needs O(1) syndrome-extraction rounds per logical layer instead of O(d),
+    # which is the whole reason a slow-clock machine is not simply hopeless.
+    transversal: bool
     source: str
 
     def layer_seconds(self, gates_in_layer: float = 1.0) -> float:
@@ -69,7 +73,8 @@ SUPERCONDUCTING = Platform(
     n_parallel_2q=math.inf,  # a planar grid gates every disjoint pair at once
     t_layer=None,
     p_2q=1e-3,               # the slide's own spec
-    n_demonstrated=105,      # Willow
+    n_demonstrated=105,     # Willow
+    transversal=False,      # planar grid: lattice surgery, O(d) rounds
     source="slide spec for the clock; Google Quantum AI, arXiv:2408.13687 "
            "(1.1 us cycle, 105 qubits) for the syndrome round",
 )
@@ -84,6 +89,7 @@ HELIOS = Platform(
     t_layer=55e-3,           # MEASURED "average of 55 ms per layer" (depth-1 time)
     p_2q=7.9e-4,             # 7.9(2)e-4, better than the slide's 1e-3
     n_demonstrated=98,
+    transversal=True,       # transversal gates demonstrated on trapped ions
     source="Helios: A 98-qubit trapped-ion quantum computer, arXiv:2511.05465; "
            "55 ms/layer is their own 'depth-1 time' figure of merit",
 )
@@ -102,6 +108,8 @@ NEUTRAL_ATOM = Platform(
     t_layer=None,
     p_2q=5e-3,               # 99.5%
     n_demonstrated=60,
+    transversal=True,       # Zhou et al. arXiv:2406.17653; atom arrays are
+                            # the platform that motivated the scheme
     source="Evered et al., arXiv:2304.05420 (275 ns gate, 99.5%, 60 in parallel)",
 )
 
@@ -114,7 +122,9 @@ SC_LONG_RANGE = Platform(
     n_parallel_2q=math.inf,
     t_layer=None,
     p_2q=1e-3,
-    n_demonstrated=0,        # NOT BUILT. A hypothetical, and labelled as one.
+    n_demonstrated=0,       # NOT BUILT. A hypothetical, and labelled as one.
+    transversal=False,      # two coupler layers is still not the flexible
+                            # connectivity transversal gates need
     source="Bravyi et al., arXiv:2308.07915: BB-code Tanner graphs have vertex "
            "degree six and decompose into TWO edge-disjoint planar subgraphs, so "
            "two coupler layers suffice -- this is far weaker than all-to-all. "
@@ -151,6 +161,33 @@ def get(name: str) -> Platform:
 def admits(code: str, platform_name: str) -> bool:
     """Can this platform's connectivity host this code family?"""
     return code in ADMITS[get(platform_name).connectivity]
+
+
+# Syndrome-extraction rounds per logical layer.
+#
+#   LATTICE SURGERY needs O(d) rounds, because a measurement error has to be
+#   caught by repetition. That is the cost model every arm in this repository
+#   used, and it is the right one for a planar grid.
+#
+#   TRANSVERSAL gates need O(1). Zhou et al. (arXiv:2406.17653, Nature 2025)
+#   prove that with transversal operations and correlated decoding the deviation
+#   from the ideal logical measurement distribution is exponentially small in d
+#   with only a CONSTANT number of rounds -- "transversal algorithmic fault
+#   tolerance". It requires the flexible connectivity that mobile-qubit machines
+#   have and a planar grid does not.
+#
+# This matters enormously here. Charging a trapped-ion or atom machine O(d)
+# rounds at its slow clock is the calculation that gives "several years" for
+# RSA-2048 in the literature; the transversal architecture gives 5.6 days for
+# the same problem at the same 1 ms cycle (Chen et al., arXiv:2505.15907),
+# "close to 50x speed-up ... with no increase in space footprint". Costing these
+# platforms with lattice surgery is costing them at something nobody proposes.
+SE_ROUNDS_TRANSVERSAL = 1.0      # Theta(1); they insert one round after the gate
+
+
+def se_rounds(d: int, platform_name: str) -> float:
+    """Syndrome-extraction rounds per logical layer on this machine."""
+    return SE_ROUNDS_TRANSVERSAL if get(platform_name).transversal else float(d)
 
 
 def swap_network_free(platform_name: str) -> bool:

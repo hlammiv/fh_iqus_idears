@@ -834,6 +834,49 @@ def main() -> int:
           > 1e5 * hubbard.counts(64.0, DEFAULT)["t_circuit"],
           f"{hubbard.counts(64.0, _h)['t_circuit']:.2e} s per shot against "
           f"{hubbard.counts(64.0, DEFAULT)['t_circuit']:.2e} s")
+    # 6. transversal algorithmic fault tolerance -- the reason a slow-clock
+    #    machine is not simply hopeless, and the reason it still loses HERE
+    check("mobile-qubit machines get O(1) syndrome rounds, not O(d)",
+          plat.se_rounds(21, "helios") == 1.0
+          and plat.se_rounds(21, "neutral_atom") == 1.0
+          and plat.se_rounds(21, "superconducting") == 21.0,
+          "Zhou et al. arXiv:2406.17653: transversal gates + correlated decoding")
+    # at the atoms' MEASURED gate error, not an optimistic one
+    _at = DEFAULT.but(platform="neutral_atom", use_platform_clock=True,
+                      encoding="jw", p=plat.NEUTRAL_ATOM.p_2q)
+    _at_opt = _at.but(p=1e-3)
+    check("and it is worth a factor of d, not a rounding",
+          ftqc.surface_point(12.0, _at_opt)["rounds"]
+          < ftqc.surface_point(12.0, DEFAULT)["rounds"] / 15,
+          f"{ftqc.surface_point(12.0, _at_opt)['rounds']:.2e} rounds against "
+          f"{ftqc.surface_point(12.0, DEFAULT)['rounds']:.2e} under lattice surgery")
+    check("so a slow clock alone no longer kills the FT arm",
+          ftqc.max_m_surface(1e7, _at_opt) > 0 and ftqc.max_m_star(1e7, _at) > 0,
+          f"at p = 1e-3 neutral atoms reach surface m = "
+          f"{ftqc.max_m_surface(1e7, _at_opt):.1f} and STAR m = "
+          f"{ftqc.max_m_star(1e7, _at):.1f}; an earlier version of this model said "
+          f"0 at every n, which was lattice surgery applied to a machine nobody "
+          f"runs that way")
+    # ...but each platform then fails for a DIFFERENT reason, which is the point
+    check("atoms' surface arm is fidelity-limited, not clock-limited",
+          ftqc.max_m_surface(1e9, _at) == 0 and ftqc.max_m_surface(1e7, _at_opt) > 0,
+          f"their measured 5e-3 is half the p_th = {DEFAULT.p_th} threshold, so "
+          f"p_L(d=41) is {ftqc.p_logical(41, DEFAULT.but(p=5e-3)):.1e} against "
+          f"{ftqc.p_logical(41, DEFAULT.but(p=1e-3)):.1e} at 1e-3; the arm "
+          f"appears at p <~ 2e-3, which is a falsifiable prediction")
+    check("Helios is the opposite: a good gate on a slow clock",
+          plat.HELIOS.p_2q < DEFAULT.p and plat.HELIOS.t_layer > 1e-3,
+          f"7.9e-4 against the slide's 1e-3, at 55 ms per layer -- the two "
+          f"platforms fail for different reasons, not one shared one")
+    # the distinction that decides it: depth overhead vs shot count
+    _tot = (ftqc.n_shots_total(_at_opt, 12.0)
+            * ftqc.surface_point(12.0, _at_opt)["t_shot"] / _at_opt.budget_s)
+    check("but transversal FT fixes DEPTH overhead, not the shot count",
+          _tot > 50,
+          f"at m = 12 the week is still overrun {_tot:.0f}x, because this "
+          f"observable needs {ftqc.n_shots_total(_at_opt, 12.0):.1e} shots and the "
+          f"clock is paid once per shot -- Shor is one deep circuit, this is not")
+
     check("the hypothetical chip is marked as one",
           plat.SC_LONG_RANGE.n_demonstrated == 0
           and plat.HELIOS.n_demonstrated > 0,

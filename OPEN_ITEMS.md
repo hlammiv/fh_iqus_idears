@@ -284,6 +284,23 @@ Until at least one purpose-built, leadership-scale classical attack is run, the
 honest headline is "clears the **exact-diagonalisation** frontier", not "clears
 classical".
 
+### O14. Platform arms depend on numbers that are moving fast
+The neutral-atom surface arm is **fidelity-limited**: at the measured 5e-3 it
+does not exist, and at p <~ 2e-3 it does. That is a falsifiable prediction
+against a number that has been improving steadily, and it should be rechecked
+against the current best atom two-qubit fidelity rather than Evered et al. 2023.
+
+Helios is **clock-limited** at 55 ms/layer, which is a first-generation figure
+for a machine whose paper explicitly discusses clock speed as its main scaling
+challenge. Both arms should be re-run when either number moves.
+
+Also unmodelled: high-rate qLDPC codes with transversal gates, which is what both
+platforms actually propose for scale. We give them O(1) syndrome rounds but still
+charge them surface-code storage (2 d^2 per logical qubit). A high-rate code
+would cut the footprint substantially, and the Pinnacle arm shows what that looks
+like -- but on a machine with the right connectivity AND transversal gates, which
+is a combination the model cannot currently express.
+
 ### O11. Connectivity was a caveat, not a constraint -- **CLOSED**
 `ftqc.pinnacle_point` and `METHODS.md` both pointed at an O11 that was never
 written. It said generalised bicycle codes need connectivity the slide's grid

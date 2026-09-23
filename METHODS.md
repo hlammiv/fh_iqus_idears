@@ -667,6 +667,56 @@ the grid. It is computed on the two-coupler-layer chip it requires and labelled
 with it, and `curves.summary` reports both — 26.9 on that chip at n = 10⁶, and
 **0 on the slide's grid**.
 
+### They do have a plan, and it is not lattice surgery
+
+An earlier version of this section reported "no FT arm at any n" for Helios and
+neutral atoms. That was **the lattice-surgery cost model applied to machines
+nobody proposes running that way**, and it is worth being precise about what is
+wrong with it.
+
+Lattice surgery needs **O(d)** syndrome-extraction rounds per logical layer,
+because a measurement error has to be caught by repetition. Zhou *et al.*
+(arXiv:2406.17653, *Nature* 2025) show that transversal gates with correlated
+decoding need only **Θ(1)** — the deviation from the ideal logical measurement
+distribution is exponentially small in `d` with a *constant* number of rounds.
+This requires exactly the flexible connectivity that mobile-qubit machines have
+and a planar grid does not, and it has been demonstrated on both neutral atoms
+and trapped ions.
+
+The literature is blunt about how much this matters. Existing estimates put
+RSA-2048 at 20M qubits / 8 hours on superconducting with a 1 µs cycle, and
+**several years** on ions or atoms with a 1 ms cycle — that "several years" is
+the same calculation as our "0". With the transversal architecture, Chen *et al.*
+(arXiv:2505.15907) get **19M qubits in 5.6 days at the same 1 ms cycle**, "close
+to 50× speed-up … with no increase in space footprint".
+
+`platform.se_rounds` now returns 1 on a transversal-capable machine and `d`
+otherwise. At `d = 21` that is a **19× reduction** in rounds, and it changes the
+answer: neutral atoms get a STAR arm at `n = 10⁶` (m = 12.8, up from 7.0) and a
+surface arm from `n ≈ 10⁷`.
+
+### So why do they still lose here? Three different reasons
+
+Not one shared reason, which is the useful part:
+
+| platform | what actually stops it |
+|---|---|
+| **Helios** | the clock. A good gate — 7.9×10⁻⁴, *better* than the slide's 10⁻³ — on a 55 ms layer. |
+| **neutral atoms** | **fidelity**, not clock. Their measured 5×10⁻³ is half the surface-code threshold, so `p_L(d=41)` is 4.8×10⁻⁸ against 1.0×10⁻²² at 10⁻³ and the footprint explodes. The arm appears at `p ≲ 2×10⁻³` — a falsifiable prediction, and atom fidelities have been improving. |
+| **superconducting grid** | connectivity: no qLDPC codes, and it pays the swap network. |
+
+### And the deeper reason transversal FT does not rescue this workload
+
+**It fixes depth overhead, not shot count.** Shor's algorithm is *one* deep
+circuit run once, so removing a factor of `d` from the logical cycle removes it
+from the whole runtime. This observable needs **9.1×10⁶ shots**, and the clock is
+paid once per shot. At `m = 12` on atoms the week is still overrun 157× even at
+an optimistic 10⁻³ gate.
+
+That is the honest statement of the trade, and it is more specific than "ions are
+slow": a shot-dominated workload punishes per-shot latency linearly, and no
+fault-tolerance scheme addresses per-shot latency.
+
 ### Is the trade worth taking? No, and not close
 
 All-to-all deletes the swap network and Helios has a *better* gate than the slide
@@ -679,12 +729,13 @@ assumes. Against that, at m = 64 one shot costs 1.2×10⁻⁵ s on the grid and
 | SC ×2 layers, QLDPC | **24.8** |
 | Helios, NISQ+PEC | 7.6 |
 | neutral atom, NISQ+PEC | 4.8 |
-| Helios / atoms, any FT arm | **0 at every n** |
+| atoms, STAR (transversal) | 12.8 |
+| Helios, STAR (transversal) | 5.5 |
 
-The mobile-qubit machines cannot host a fault-tolerant arm at any qubit count in
-range: a 55 ms syndrome round against a week of wall clock leaves no shots. The
-connectivity is real and the gate is good; the clock is five orders of magnitude
-out, and this workload is shot-heavy. `figures/fh_platforms.pdf` panel (b) shows
+Transversal fault tolerance is what puts the last two rows above zero. The
+connectivity is real, Helios's gate is better than the slide's, and the FT scheme
+is the right one — the shortfall is per-shot latency against a shot-dominated
+workload. `figures/fh_platforms.pdf` panel (b) shows
 which constraint binds for each, because that is what decides whether gate speed
 matters at all.
 
