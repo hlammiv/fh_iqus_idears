@@ -77,3 +77,42 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def mpf_table():
+    """Higher-order multiproduct coefficients W_2k from err = W_2k t^(2k+1)/r^(2k).
+
+    Only r >= 4 is used: r = 1, 2 are not yet asymptotic. Only tau <= 0.5 is
+    reported, because at tau >= 1 the observable error passes through zero
+    crossings and the extracted coefficient swings by 3-13x. See README.
+    """
+    data = load()
+    out = {}
+    for order in (4, 6, 8):
+        out[order] = {}
+        for tau in (0.25, 0.5):
+            vals = []
+            for u, rows in data.items():
+                if u != 4.0:
+                    continue
+                for r in rows:
+                    pass
+            mp = [r for r in json.load(open(HERE / "data" / "trotter_cal.json"))["rows"]
+                  if r["steps"] < 0 and r.get("mp_order") == order
+                  and r["tau"] == tau and r["n"] >= N_MIN and -r["steps"] >= 4
+                  and r["abs_err"] > 0]
+            for r in mp:
+                b = -r["steps"]
+                vals.append(r["abs_err"] * b ** order / tau ** (order + 1))
+            if vals:
+                out[order][tau] = st.median(vals)
+    return out
+
+
+if "--mpf" in sys.argv:
+    t = mpf_table()
+    print("\nW_MPF = {   # order: {tau: W_2k}, r >= 4, n >= 9, U/J = 4, tau <= 0.5 only")
+    for o in sorted(t):
+        body = ", ".join(f"{k}: {v:.5f}" for k, v in sorted(t[o].items()))
+        print(f"    {o}: {{{body}}},")
+    print("}")

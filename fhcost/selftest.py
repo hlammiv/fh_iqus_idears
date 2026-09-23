@@ -454,9 +454,18 @@ def main() -> int:
     check("multiproduct still helps, but modestly once branches are charged",
           1.2 < mpf[2] / mpf[1] < 1.8, f"m: {mpf[1]:.1f} -> {mpf[2]:.1f} at order 4")
     mpf4 = {k: nisq.max_m(1e6, DEFAULT.but(trotter_order_k=k), "pec") for k in (2, 3, 4)}
-    check("and the optimum is order 4-6, not ever-higher",
-          mpf4[4] < mpf4[2],
+    check("there is an interior optimum in multiproduct order",
+          mpf4[3] >= mpf4[2] and mpf4[4] <= mpf4[3],
           " ".join(f"order{2*k}:{v:.0f}" for k, v in mpf4.items()))
+    # the order-2k coefficient is measured, not the second-order one reused
+    check("higher orders use their OWN measured coefficient",
+          hubbard.w_mpf(4, 0.5) is not None
+          and abs(hubbard.w_mpf(4, 0.5) / hubbard.w_measured(0.5, 4.0) - 1) > 0.5,
+          f"W_4 = {hubbard.w_mpf(4, 0.5):.4f} vs W_2 = {hubbard.w_measured(0.5, 4.0):.4f}")
+    check("but only tau <= 0.5 is calibrated for those orders",
+          hubbard.W_MPF_TAU_MAX == 0.5
+          and hubbard.w_mpf(4, 5.0) == hubbard.w_mpf(4, 0.5),
+          "every MPF point on the figure is beyond even this reduced domain")
     # the deepest branch dominates: compare the per-branch cost against what an
     # ||c||_1^2 charge on a single branch would have given, at the same lg2
     c3 = DEFAULT.but(trotter_order_k=3)

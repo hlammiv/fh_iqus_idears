@@ -56,6 +56,29 @@ W_U_MIN, W_U_MAX = W_DOMAIN["u_over_j"]
 # ones -- which is exactly where the curves extrapolate hardest.
 W_HOLDOUT_SHIFT = {0.25: 0.11, 0.5: 0.10, 1.0: 0.25, 2.0: 0.82}
 
+# Higher-order multiproduct coefficients, err = W_2k t^(2k+1) / r^(2k). The model
+# previously reused the SECOND-order coefficient at every order, which validating
+# the convergence ORDER does not justify. Extracted with r >= 4 (r = 1, 2 are not
+# yet asymptotic) at U/J = 4.
+#
+# ONLY tau <= 0.5 IS CALIBRATED. At tau >= 1 the observable error passes through
+# zero crossings and the extracted coefficient swings by 3-13x, so those points
+# are not usable. Every MPF point on the figure therefore sits beyond even this
+# reduced domain -- a stronger caveat than the second-order calibration carries.
+W_MPF = {4: {0.25: 0.11811, 0.5: 0.16075},
+         6: {0.25: 0.03058, 0.5: 0.01680},
+         8: {0.25: 0.00723, 0.5: 0.00400}}
+W_MPF_TAU_MAX = 0.5
+
+
+def w_mpf(order: int, t: float) -> float | None:
+    """Measured W_2k, clamped to its domain. None if the order is uncalibrated."""
+    tab = W_MPF.get(order)
+    if tab is None:
+        return None
+    ts = sorted(tab)
+    return _loginterp(min(max(t, ts[0]), ts[-1]), ts, [tab[x] for x in ts])
+
 
 def calibration_status(m: float, cfg: Config = DEFAULT) -> dict:
     """Is this operating point inside the calibrated domain? Usually not."""
@@ -287,10 +310,16 @@ def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None
         return max(1.0, math.ceil(cfg.steps_per_tau * t))
     if cfg.trotter == "measured":
         # W_eff is a property of the OBSERVABLE, not the lattice, so no factor of m
-        W2 = w_measured(t, cfg.U_over_J)
         k = max(1, int(cfg.trotter_order_k))
-        r = (t ** 1.5 * math.sqrt(W2 / eps_trot) if k == 1
-             else t ** (1.0 + 1.0 / (2 * k)) * (W2 / eps_trot) ** (1.0 / (2 * k)))
+        if k == 1:
+            W2 = w_measured(t, cfg.U_over_J)
+            return max(1.0, t ** 1.5 * math.sqrt(W2 / eps_trot))
+        # order 2k: use the ORDER-2k coefficient, not the second-order one.
+        # err = W_2k t^(2k+1) / r^(2k)  =>  r = (W_2k t^(2k+1) / eps)^(1/2k)
+        Wk = w_mpf(2 * k, t)
+        if Wk is None:                     # uncalibrated order: fall back, flagged
+            Wk = w_measured(t, cfg.U_over_J)
+        r = (Wk * t ** (2 * k + 1) / eps_trot) ** (1.0 / (2 * k))
         return max(1.0, r)
     W2 = w_commutator(cfg) * (cone_sites(m, t, cfg) if cfg.trotter == "lightcone" else m)
     k = max(1, int(cfg.trotter_order_k))
