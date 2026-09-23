@@ -231,6 +231,7 @@ TRAJ_STEPS = (1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)
 KRYLOV_BUDGET_GB = 1.5      # cap the Lanczos basis; substep to make up accuracy
 TAUS = (0.25, 0.5, 1.0, 2.0)
 STEPS = (1, 2, 4, 8, 16, 32, 64)
+OUT_NAME = "data/trotter_cal.json"
 MEM_CAP_GB = 3.0        # this machine has ~10 GB free; n = 16 belongs on lenore
 CAMPBELL_W = 9.5            # commutator norm per site at U/J = 4
 
@@ -359,6 +360,20 @@ def clamp_probe(patches=("rectangle3x4", "rectangle2x7"), out="data/clamp_probe.
 
 
 def main():
+    if "--fine" in sys.argv:
+        # O11b: the multiproduct coefficients are only calibrated to tau <= 0.5
+        # because at tau >= 1 the observable error passes through zero crossings
+        # and the extracted W_2k swings 3-13x across r. Two fixes, both here:
+        # sample r finely enough to step over the crossings and locate the
+        # asymptotic plateau, and add tau values so the table interpolates
+        # instead of clamping. State infidelity is already recorded per row and
+        # is monotone with no crossings, so it pins the coefficient where the
+        # observable cannot.
+        global TAUS, STEPS, OUT_NAME
+        TAUS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
+        STEPS = (1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 64, 96, 128)
+        OUT_NAME = "data/trotter_cal_fine.json"
+        sys.argv = [a for a in sys.argv if a != "--fine"]
     if "--clamp" in sys.argv:
         args = [a for a in sys.argv[1:] if not a.startswith("-")]
         return clamp_probe(tuple(args) if args else
@@ -409,11 +424,18 @@ def main():
                                  "czz_exact": cz_ex, "czz_trotter": est,
                                  "abs_err": abs(est - cz_ex),
                                  "deepest_branch_steps": max(ks)})
-            print(f"   tau={tau}: exact {cz_ex:+.6f}  err(r=8) {abs(vals[8]-cz_ex):.3e}"
-                  f"  err(r=64) {abs(vals[64]-cz_ex):.3e}  [{time.monotonic()-te:.1f}s]", flush=True)
-        json.dump({"rows": rows, "meta": meta, "campbell_w": CAMPBELL_W,
-                   "u_over_j": U_OVER_J}, open("trotter_cal.json", "w"), indent=1)
-    print("wrote trotter_cal.json", flush=True)
+            _lo, _hi = min(STEPS), max(STEPS)
+            print(f"   tau={tau}: exact {cz_ex:+.6f}  "
+                  f"err(r={_lo}) {abs(vals[_lo]-cz_ex):.3e}  "
+                  f"err(r={_hi}) {abs(vals[_hi]-cz_ex):.3e}  "
+                  f"[{time.monotonic()-te:.1f}s]", flush=True)
+        _out = pathlib.Path(__file__).parent / OUT_NAME
+        _out.parent.mkdir(exist_ok=True)
+        _out.write_text(json.dumps({"rows": rows, "meta": meta,
+                                    "campbell_w": CAMPBELL_W,
+                                    "u_over_j": U_OVER_J, "taus": list(TAUS),
+                                    "steps": list(STEPS)}, indent=1))
+    print(f"wrote {OUT_NAME}", flush=True)
 
 
 if __name__ == "__main__":

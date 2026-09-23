@@ -167,6 +167,49 @@ def main(as_json=False):
             print(f"  at m = 400 the measured and table exponents differ by "
                   f"{400.0 ** (alpha - (1.75 + gam_t / 2.0)):.2f}x in gate count")
 
+    clamp = HERE / "data" / "clamp_probe.json"
+    if clamp.exists():
+        import sys as _s2
+        _s2.path.insert(0, str(HERE.parent))
+        from fhcost import hubbard as _H2
+        C = json.loads(clamp.read_text())
+        print("\nTHE CLAMP  W_eff BEYOND tau = 2, where alpha = 1.75 comes from\n")
+        print("  The model clamps W at its tau = 2 value and every plotted point")
+        print("  sits in the clamped region, so the clamp -- not the measured")
+        print("  tau-dependence -- is what sets the exponent.\n")
+        print(f"  {'tau':>5} " + "".join(f"{'n=' + str(n):>11}"
+                                         for n in sorted({m['n'] for m in C['meta']}))
+              + f"{'clamp':>10} {'agree':>7}")
+        ns = sorted({m["n"] for m in C["meta"]})
+        rows_out, agree_all = [], True
+        for tau in C["clamp_taus"]:
+            got = {m["n"]: m["W_eff"] for m in C["meta"] if m["tau"] == tau}
+            vals = [got[n] for n in ns if n in got]
+            clamped = _H2.w_measured(tau, 4.0)     # the model's clamped value
+            ag = (max(vals) / min(vals)) if len(vals) > 1 else float("nan")
+            agree_all &= (ag < 1.5) if len(vals) > 1 else True
+            rows_out.append({"tau": tau, "W": got, "clamped": clamped, "spread": ag})
+            print(f"  {tau:>5} " + "".join(f"{got.get(n, float('nan')):>11.5f}"
+                                           for n in ns)
+                  + f"{clamped:>10.5f} {ag:>7.2f}x")
+        out["clamp"] = rows_out
+        big = [r for r in rows_out if len(r["W"]) > 1]
+        if big:
+            if agree_all:
+                ratio = np.mean([min(r["W"].values()) / r["clamped"] for r in big])
+                print(f"\n  The two sizes AGREE (spread < 1.5x at every tau), so the")
+                print(f"  tau-trend past 2 is real and not a finite-size artefact.")
+                print(f"  Measured W is {ratio:.2f}x the clamped value, so the clamp is")
+                print(f"  {'CONSERVATIVE' if ratio < 1 else 'OPTIMISTIC'} and alpha = 1.75 is "
+                      f"{'an upper bound' if ratio < 1 else 'too low'}.")
+                # r ~ sqrt(W) so the step count moves as sqrt of this
+                print(f"  Step count moves by {math.sqrt(ratio):.2f}x at fixed tau.")
+            else:
+                print(f"\n  The two sizes DISAGREE, so a lattice this small cannot be")
+                print(f"  asked about tau > 2: at tau = 4 the cone spans 2 v tau = 16")
+                print(f"  sites, wider than either patch. The clamp stands for want of")
+                print(f"  evidence, not because it was tested.")
+
     print("\n" + "=" * 70)
     print("STILL NEEDED to close finding #2 (review test 3)\n")
     print("  Measure W_eff along the ADOPTED trajectory tau = sqrt(m)/v, not on a")

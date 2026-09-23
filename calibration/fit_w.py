@@ -79,33 +79,31 @@ if __name__ == "__main__":
     main()
 
 
-def mpf_table():
+def mpf_table(src="data/trotter_cal.json", taus=(0.25, 0.5), r_min=4,
+              report_spread=False):
     """Higher-order multiproduct coefficients W_2k from err = W_2k t^(2k+1)/r^(2k).
 
-    Only r >= 4 is used: r = 1, 2 are not yet asymptotic. Only tau <= 0.5 is
-    reported, because at tau >= 1 the observable error passes through zero
-    crossings and the extracted coefficient swings by 3-13x. See README.
+    Only r >= r_min is used: r = 1, 2 are not yet asymptotic. The default taus
+    stop at 0.5 because at tau >= 1 the observable error passes through zero
+    crossings and the extracted coefficient swings by 3-13x -- which is O11b,
+    and why `src` exists: the finely-sampled rerun steps over the crossings.
+
+    report_spread returns max/min across base step counts as well as the median,
+    so a swinging coefficient is visible instead of being hidden by the median.
     """
-    data = load()
+    rows = json.loads((HERE / src).read_text())["rows"]
     out = {}
     for order in (4, 6, 8):
         out[order] = {}
-        for tau in (0.25, 0.5):
-            vals = []
-            for u, rows in data.items():
-                if u != 4.0:
-                    continue
-                for r in rows:
-                    pass
-            mp = [r for r in json.load(open(HERE / "data" / "trotter_cal.json"))["rows"]
-                  if r["steps"] < 0 and r.get("mp_order") == order
-                  and r["tau"] == tau and r["n"] >= N_MIN and -r["steps"] >= 4
-                  and r["abs_err"] > 0]
-            for r in mp:
-                b = -r["steps"]
-                vals.append(r["abs_err"] * b ** order / tau ** (order + 1))
+        for tau in taus:
+            vals = [r["abs_err"] * (-r["steps"]) ** order / tau ** (order + 1)
+                    for r in rows
+                    if r["steps"] < 0 and r.get("mp_order") == order
+                    and r["tau"] == tau and r["n"] >= N_MIN
+                    and -r["steps"] >= r_min and r["abs_err"] > 0]
             if vals:
-                out[order][tau] = st.median(vals)
+                out[order][tau] = ((st.median(vals), max(vals) / min(vals), len(vals))
+                                   if report_spread else st.median(vals))
     return out
 
 
