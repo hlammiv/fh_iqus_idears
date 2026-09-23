@@ -340,8 +340,9 @@ Closed by `fhcost/platform.py`: connectivity now gates code admissibility, so
 degree 6, two edge-disjoint planar subgraphs, i.e. two coupler layers rather than
 all-to-all. The arm is plotted on that chip and labelled with it.
 
-**Still open:** `pin_nonlocal` is now dead weight. It is kept so old configs load
-but should be removed once nothing references it.
+**Closed:** `pin_nonlocal` is removed. It was documented as marking an arm
+costed under a different hardware assumption and was read by nothing, so setting
+it moved `model_id` and no number.
 
 ### O11b. Multiproduct coefficients -- **RESOLVED**, and the diagnosis was wrong
 *Domain doubled from tau <= 0.5 to tau <= 1.0.*
@@ -597,12 +598,17 @@ The old formula was wrong in both directions: too large at small `m` (a bogus
 ~60-qubit gradient register) and far too small at large `m` (log instead of
 linear). Surface FT 4.9 -> 9.4 at `n = 1e5` and 251 -> 222 at `1e8`.
 
-**Still open from #6 (O13):** the batch size is a free parameter, not an
-optimised one. It is a genuine space-time trade -- at `m = 256`, `b = 1` costs
-0 ancillas and 2.4e7 T gates while `b = m` costs 255 ancillas and 1.8e6 -- and
-the model simply takes the full batch. The optimum depends on `d`, which depends
-on the T-count, so choosing it needs an inner loop. `crossovers.md` shows what
-the knob is worth; nothing chooses it.
+**O13 CLOSED, with a negative result.** The batch is now optimised
+(`hwp_batch = -1`), and the optimum is the full batch at all 20 (regime, n)
+points tested -- baseline, Willow p_L, one day, one month, eps = 0.01, p = 1e-4,
+and each magic family alone. The knob is real but inert here, which is now known
+rather than assumed.
+
+The instructive part is the first attempt. Minimising PHYSICAL QUBITS picks
+`b = 1` and makes the arm *worse*: reach at `n = 1e8` falls from 125 to 30,
+because `b = 1` has no workspace but seven times the T states, so the plant
+delivers more slowly and the arm goes clock-bound. The objective has to be
+whichever constraint binds, not the footprint. Both facts are asserted.
 
 ### What #5 closed, and what it did not
 

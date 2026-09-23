@@ -127,11 +127,13 @@ class Config:
     # A FLOOR on the magic plant, not its size: the unit count is set by the T
     # rate the circuit demands (select_factory). The old default of 8 was
     # arbitrary and never binds at any plotted point.
-    # Hamming-weight phasing batch size: 0 = phase a whole group of m
-    # identical-angle rotations at once (minimum T-count, maximum workspace).
+    # Hamming-weight phasing batch size.
+    #   -1  OPTIMISE: pick the batch minimising physical qubits (O13)
+    #    0  the whole group of m identical-angle rotations at once
+    #   >0  that batch, fixed
     # A smaller batch trades T gates for ancillas; both sides come from
-    # Campbell Thm 2, so the trade is consistent. Not optimised -- see O13.
-    hwp_batch: int = 0
+    # Campbell Thm 2, so the trade is consistent and can be optimised.
+    hwp_batch: int = -1
     n_factories: int = 1
     d_max: int = 101
 
@@ -149,11 +151,9 @@ class Config:
     # Honour the platform's clock instead of the slide's spec. Default False so
     # every existing number is unchanged; the platform arms set it True.
     use_platform_clock: bool = False
-    pin_nonlocal: bool = True     # SUPERSEDED by platform connectivity; kept so
-                                  # old configs load. Pinnacle needs qLDPC
-                                  # nearest-neighbour 2D grid does NOT provide. Keeping
-                                  # this True means the arm is costed under a DIFFERENT
-                                  # hardware assumption from every other curve.
+    # pin_nonlocal REMOVED: it was documented as marking an arm costed under a
+    # different hardware assumption and was read by nothing, so setting it moved
+    # model_id and no number. platform.ADMITS enforces it for real (O11).
     star_rounds_per_step: float = 20.0   # sequential logical layers per Trotter step, in
                                   # units of d. STAR's largest tax: a us*d code cycle
                                   # instead of a 10 ns gate clock. Least-pinned STAR input.

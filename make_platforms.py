@@ -35,7 +35,7 @@ from fhcost.record import model_id
 
 F.setup()
 BAND_LO, BAND_HI = classical.band(DEFAULT)["band"]
-n_grid = np.logspace(3, np.log10(3e8), 90)
+n_grid = np.logspace(3, 12, 110)   # out to 1e12: the qLDPC arms need it
 
 # (label, config, colour, style). Each arm on the hardware it actually needs.
 # (label, cfg, arm, colour, linestyle, label position along the curve)
@@ -62,6 +62,11 @@ ARMS = [
                                         use_platform_clock=True,
                                         encoding="jw", p=5e-3),
      "surface", curves.COLORS["star"], (0, (3, 1.5)), 0.5),
+    # O14: the mobile-qubit platforms propose HIGH-RATE qLDPC codes, not the
+    # surface code. Crediting them with it is what gives Helios an FT arm at all.
+    ("Helios, QLDPC", DEFAULT.but(platform="helios", use_platform_clock=True,
+                                  encoding="jw", p=7.9e-4),
+     "pinnacle", curves.COLORS["nisq_none"], (0, (5, 2)), 0.72),
 ]
 
 
@@ -121,7 +126,7 @@ for label, cfg, arm, col, ls, frac in ARMS:
                 textcoords="offset points", fontsize=5.2, color=col,
                 ha="center", va="bottom")
 ax.set_xscale("log"); ax.set_yscale("log")
-ax.set_xlim(1e3, 3e8); ax.set_ylim(2.5, 6e2)
+ax.set_xlim(1e3, 1e12); ax.set_ylim(2.5, 3e3)
 ax.set_xlabel(r"$n$ (physical qubits)")
 ax.set_ylabel(r"$m$ (resolvable lattice sites)")
 ax.text(0.97, 0.94, "(a)", transform=ax.transAxes, ha="right", va="top", fontsize=7)
@@ -145,7 +150,7 @@ for i, (label, cfg, arm, col) in enumerate(rows):
         if mask.any():
             ax.fill_between(n_grid, i - 0.34, i + 0.34, where=mask, color=col,
                             alpha=alpha, lw=0, hatch=hatch, edgecolor=col)
-ax.set_xscale("log"); ax.set_xlim(1e3, 3e8)
+ax.set_xscale("log"); ax.set_xlim(1e3, 1e12)
 ax.set_yticks(range(len(rows)))
 ax.yaxis.tick_right()
 ax.set_yticklabels([r[0] for r in rows], fontsize=5.2)
@@ -166,11 +171,11 @@ for ext in ("pdf", "png"):
     fig.savefig(out / f"fh_platforms.{ext}", dpi=300)
 print(f"wrote {out}/fh_platforms.pdf and .png\n")
 
-print(f"{'arm':<24}" + "".join(f"{f'1e{e}':>9}" for e in (4, 5, 6, 7, 8)))
+print(f"{'arm':<24}" + "".join(f"{f'1e{e}':>9}" for e in (6, 8, 10, 12)))
 for label, cfg, arm, _c, _s, _f in ARMS:
     print(f"{label:<24}" + "".join(f"{reach(cfg, arm, 10.0**e):>9.1f}"
-                                   for e in (4, 5, 6, 7, 8)))
+                                   for e in (6, 8, 10, 12)))
 print(f"\n{'arm':<24}binding constraint by n (1=qubits 2=clock 0=infeasible)")
 for label, cfg, arm, _c, _s, _f in ARMS:
     print(f"{label:<24}" + "".join(f"{binding(cfg, arm, 10.0**e):>9d}"
-                                   for e in (4, 5, 6, 7, 8)))
+                                   for e in (6, 8, 10, 12)))

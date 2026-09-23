@@ -345,7 +345,67 @@ def t_counts(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
     return max(n_t, 1.0), max(d_t, 1.0)
 
 
-def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
+def hwp_candidates(m: float, cfg: Config) -> list[int]:
+    """Batch sizes to try when cfg.hwp_batch = -1 (optimise).
+
+    Powers of two up to the group size, plus the full group. The trade is real
+    and the optimum is interior: a small batch needs few ancillas but many more
+    T gates, a full batch the reverse, and which wins depends on whether the
+    machine is storage-bound or magic-bound at that point (O13).
+    """
+    if cfg.hwp_batch >= 0:
+        return [cfg.hwp_batch]
+    lim = max(int(math.floor(m)), 1)
+    out, b = [], 1
+    while b < lim:
+        out.append(b)
+        b *= 2
+    out.append(lim)
+    return out
+
+
+def surface_point(m: float, cfg: Config = DEFAULT, n: float | None = None):
+    """Optimises the HWP batch when asked, otherwise one pass.
+
+    THE OBJECTIVE IS NOT FOOTPRINT. A first attempt minimised physical qubits
+    and made the arm WORSE: b = 1 has no workspace but 7x the T states, so the
+    plant delivers more slowly and the arm goes clock-limited. Reach at n = 1e8
+    fell from 125 to 30 while the footprint "improved" 3x.
+
+    What binds is qubits OR the one-week clock, so the batch is chosen against
+    whichever is larger. With no n in hand there is nothing to trade against and
+    the full batch is used -- the minimum-T choice, which is what the model
+    assumed before this existed.
+    """
+    if cfg.hwp_batch >= 0:
+        pt = _surface_point_at(m, cfg)
+        if pt is not None:
+            pt["hwp_batch"] = hwp_batch_size(m, cfg)
+        return pt
+    if n is None:
+        pt = _surface_point_at(m, cfg.but(hwp_batch=0))
+        if pt is not None:
+            pt["hwp_batch"] = hwp_batch_size(m, cfg.but(hwp_batch=0))
+        return pt
+    best, best_cost = None, math.inf
+    for b in hwp_candidates(m, cfg):
+        c = cfg.but(hwp_batch=b)
+        pt = _surface_point_at(m, c)
+        if pt is None or pt["phys"] > n:
+            continue
+        copies = math.floor(n / pt["phys"])
+        if copies < 1:
+            continue
+        clock = n_shots_total(c, m) * pt["t_shot"] / copies / c.budget_s
+        cost = max(pt["phys"] / n, clock)      # whichever constraint binds
+        if cost < best_cost:
+            best, best_cost = pt, cost
+            pt["hwp_batch"], pt["binding"] = b, ("clock" if clock > pt["phys"] / n
+                                                 else "qubits")
+    return best
+
+
+def _surface_point_at(m: float, cfg: Config = DEFAULT) -> dict | None:
     """Footprint and per-shot runtime for lattice size m under full FT.
 
     Review #7 added three things that were missing:
@@ -403,8 +463,10 @@ def surface_point(m: float, cfg: Config = DEFAULT) -> dict | None:
 
 def max_m_surface(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
     def ok(m):
-        n_tot = n_shots_total(cfg, m)
-        pt = surface_point(m, cfg)
+        pt = surface_point(m, cfg, n=n)
+        if pt is None:
+            return False
+        n_tot = n_shots_total(cfg.but(hwp_batch=pt["hwp_batch"]), m)
         if pt is None or pt["phys"] > n:
             return False
         copies = math.floor(n / pt["phys"])

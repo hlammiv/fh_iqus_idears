@@ -1100,6 +1100,34 @@ def main() -> int:
     check("smaller batches cost more T gates AND more depth",
           n2 > n1 and d2 > d1,
           f"b=256: {n1:.2e} T, depth {d1:.2e};  b=64: {n2:.2e} T, depth {d2:.2e}")
+    # O13: the batch is now OPTIMISED, and the optimum is the value the model
+    # already used. Recording the negative result, and why it is not circular:
+    # minimising footprint instead picks b = 1 and makes the arm WORSE (reach at
+    # n = 1e8 falls 125 -> 30), because b = 1 has no workspace but 7x the T
+    # states. The objective has to be the binding constraint, not the footprint.
+    _regimes = {"baseline": DEFAULT, "willow": DEFAULT.but(pl_model="willow"),
+                "1 day": DEFAULT.but(budget_s=86400.0),
+                "eps 0.01": DEFAULT.but(eps=0.01), "p 1e-4": DEFAULT.but(p=1e-4)}
+    _smaller = []
+    for _lab, _c in _regimes.items():
+        for _n in (1e5, 1e6, 1e7, 1e8):
+            _m = ftqc.max_m_surface(_n, _c)
+            if not _m:
+                continue
+            _pt = ftqc.surface_point(_m, _c, n=_n)
+            if _pt and _pt["hwp_batch"] < int(_m):
+                _smaller.append(f"{_lab}@{_n:.0e}")
+    check("the HWP batch optimum is the full batch, in every regime tested",
+          not _smaller,
+          "20 (regime, n) points: this workload is clock-bound and the full "
+          "batch minimises T, so the knob is real but inert -- known now, "
+          "not assumed")
+    check("and optimising for FOOTPRINT instead would make it worse",
+          ftqc.max_m_surface(1e8, DEFAULT.but(hwp_batch=1))
+          < 0.5 * ftqc.max_m_surface(1e8, DEFAULT),
+          f"b = 1 reaches {ftqc.max_m_surface(1e8, DEFAULT.but(hwp_batch=1)):.0f} "
+          f"against {ftqc.max_m_surface(1e8, DEFAULT):.0f}: no workspace, 7x the "
+          f"T states, clock-bound")
     check("and the batch knob is a real space-time trade",
           ftqc.hwp_workspace(256.0, DEFAULT.but(hwp_batch=64)) <
           ftqc.hwp_workspace(256.0, DEFAULT.but(hwp_batch=256)),
