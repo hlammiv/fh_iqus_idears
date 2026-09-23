@@ -38,29 +38,30 @@ BAND_LO, BAND_HI = classical.band(DEFAULT)["band"]
 n_grid = np.logspace(3, np.log10(3e8), 90)
 
 # (label, config, colour, style). Each arm on the hardware it actually needs.
+# (label, cfg, arm, colour, linestyle, label position along the curve)
 ARMS = [
     ("SC grid, surface code", DEFAULT.but(platform="superconducting",
                                           use_platform_clock=True),
-     "surface", curves.COLORS["surface"], "-"),
+     "surface", curves.COLORS["surface"], "-", 0.72),
     ("SC x2 layers, QLDPC", DEFAULT.but(platform="sc_long_range",
                                         use_platform_clock=True),
-     "pinnacle", curves.COLORS["pinnacle"], "-"),
+     "pinnacle", curves.COLORS["pinnacle"], "-", 0.55),
     ("Helios, NISQ+PEC", DEFAULT.but(platform="helios", use_platform_clock=True,
                                      encoding="jw", p=7.9e-4),
-     "nisq", curves.COLORS["nisq_none"], (0, (4, 2))),
-    ("atoms, NISQ+PEC", DEFAULT.but(platform="neutral_atom",
+     "nisq", curves.COLORS["nisq_none"], (0, (4, 2)), 0.45),
+    ("atoms, NISQ+PEC ($p{=}5{\\times}10^{-3}$)", DEFAULT.but(platform="neutral_atom",
                                     use_platform_clock=True, encoding="jw", p=5e-3),
-     "nisq", curves.COLORS["star"], (0, (1.5, 1.5))),
+     "nisq", curves.COLORS["star"], (0, (1.5, 1.5)), 0.80),
     ("SC grid, NISQ+PEC", DEFAULT.but(platform="superconducting",
                                       use_platform_clock=True),
-     "nisq", curves.COLORS["nisq_pec"], "-"),
+     "nisq", curves.COLORS["nisq_pec"], "-", 0.30),
     ("atoms, STAR", DEFAULT.but(platform="neutral_atom", use_platform_clock=True,
                                 encoding="jw", p=5e-3),
-     "star", curves.COLORS["star"], "-"),
+     "star", curves.COLORS["star"], "-", 0.55),
     ("atoms, surface code", DEFAULT.but(platform="neutral_atom",
                                         use_platform_clock=True,
                                         encoding="jw", p=5e-3),
-     "surface", curves.COLORS["star"], (0, (3, 1.5))),
+     "surface", curves.COLORS["star"], (0, (3, 1.5)), 0.5),
 ]
 
 
@@ -107,7 +108,7 @@ ax = axA
 ax.axhspan(BAND_LO, BAND_HI, color=F.PALEGREY, alpha=0.55, lw=0, zorder=0)
 ax.text(1.2e3, BAND_HI * 1.25, f"estimated ED capacity ($m\\leq{BAND_HI:.0f}$)",
         fontsize=5.6, color=F.DARKGREY, va="bottom", ha="left")
-for label, cfg, arm, col, ls in ARMS:
+for label, cfg, arm, col, ls, frac in ARMS:
     y = np.array([reach(cfg, arm, n) for n in n_grid], float)
     if not (y > 0).any():
         continue
@@ -115,7 +116,7 @@ for label, cfg, arm, col, ls in ARMS:
     # label at ~62% along the curve's own visible range, inside the axes, so
     # nothing collides with panel (b)'s row labels on the right
     live = np.flatnonzero(y > 0)
-    k = live[int(0.62 * (len(live) - 1))]
+    k = live[int(frac * (len(live) - 1))]
     ax.annotate(label, xy=(n_grid[k], y[k]), xytext=(0, 4),
                 textcoords="offset points", fontsize=5.2, color=col,
                 ha="center", va="bottom")
@@ -126,17 +127,17 @@ ax.set_ylabel(r"$m$ (resolvable lattice sites)")
 ax.text(0.97, 0.94, "(a)", transform=ax.transAxes, ha="right", va="top", fontsize=7)
 
 # arms that never appear, and why
-missing = [(lb, cf, a) for lb, cf, a, _c, _s in ARMS
+missing = [(lb, cf, a) for lb, cf, a, _c, _s, _f in ARMS
            if not any(reach(cf, a, n) > 0 for n in n_grid)]
-notes = ["slow clocks get transversal FT: $\\Theta(1)$ syndrome",
-         "rounds, not $\\Theta(d)$ — worth ${\\sim}19{\\times}$ here, not enough"]
+notes = ["transversal FT gives slow clocks $\\Theta(1)$ syndrome rounds,",
+         "not $\\Theta(d)$: ${\\sim}19{\\times}$ here — enough for STAR, not the surface code"]
 ax.text(1.2e3, 2.75, "\n".join(notes), fontsize=4.9, color=F.DARKGREY,
         va="bottom", ha="left", linespacing=1.3,
         bbox=dict(facecolor="white", alpha=0.75, edgecolor="none", pad=0.9))
 
 # ------------------------------------------------- (b) which constraint binds
 ax = axB
-rows = [(lb, cf, a, col) for lb, cf, a, col, _ in ARMS]
+rows = [(lb, cf, a, col) for lb, cf, a, col, _s, _f in ARMS]
 for i, (label, cfg, arm, col) in enumerate(rows):
     b = np.array([binding(cfg, arm, n) for n in n_grid])
     for val, hatch, alpha in ((1, "", 0.30), (2, "///", 0.75)):
@@ -166,10 +167,10 @@ for ext in ("pdf", "png"):
 print(f"wrote {out}/fh_platforms.pdf and .png\n")
 
 print(f"{'arm':<24}" + "".join(f"{f'1e{e}':>9}" for e in (4, 5, 6, 7, 8)))
-for label, cfg, arm, _c, _s in ARMS:
+for label, cfg, arm, _c, _s, _f in ARMS:
     print(f"{label:<24}" + "".join(f"{reach(cfg, arm, 10.0**e):>9.1f}"
                                    for e in (4, 5, 6, 7, 8)))
 print(f"\n{'arm':<24}binding constraint by n (1=qubits 2=clock 0=infeasible)")
-for label, cfg, arm, _c, _s in ARMS:
+for label, cfg, arm, _c, _s, _f in ARMS:
     print(f"{label:<24}" + "".join(f"{binding(cfg, arm, 10.0**e):>9d}"
                                    for e in (4, 5, 6, 7, 8)))
