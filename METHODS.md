@@ -598,7 +598,13 @@ the cubic law alone was missing.
 
 **Effect** (`m` at each `n`): 20.3 → 11.5 at `10⁵`, 48.3 → 38.6 at `10⁶`,
 144 → 126 at `10⁷`, 383 → 350 at `10⁸`. Pinnacle is still the strongest arm on
-the figure; it is now the strongest arm on the same books.
+the figure, and on the same *error* ledger as the surface code.
+
+**But not on the same hardware** — see §4c. Generalised bicycle codes are not
+embeddable in the slide's nearest-neighbour grid, and once that is enforced the
+arm is **0** there. It is plotted on a chip with two coupler layers, which is
+what its codes require and what nobody has built. "Strongest arm" is therefore a
+statement about a machine that does not exist.
 
 `crossovers.md` carries the field-by-field comparison at `m = 64`. The shared
 rows agree by construction. The rows that differ — 1.04M magic qubits against

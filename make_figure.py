@@ -147,7 +147,9 @@ if xc:
             mec=C["pinnacle"], mew=1.2, zorder=7)
     _xf = curves.summary()["n_ft_clears_classical_hi"]
     if _xf:
-        ax.annotate(f"QLDPC clears it\n{_xf / xc:.0f}$\\times$ earlier",
+        # ...on hardware the slide does not specify. Say so on the figure.
+        ax.annotate(f"QLDPC clears it {_xf / xc:.0f}$\\times$ earlier\n"
+                    f"(needs 2 coupler layers)",
                     xy=(xc, BAND_HI), xytext=(1.4e2, 420), fontsize=6.2,
                     color=C["pinnacle"], ha="left",
                     arrowprops=dict(arrowstyle="->", color=C["pinnacle"], lw=0.8,

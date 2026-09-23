@@ -565,8 +565,10 @@ Above `p = 1e-3` the arm refuses, as the surface code does. It previously
 reached `m = 13.9` at `3e-3` purely because nothing was looking.
 
 Effect: 20.3 -> 11.5 at `1e5`, 48.3 -> 38.6 at `1e6`, 144 -> 126 at `1e7`,
-383 -> 350 at `1e8`. Pinnacle remains the strongest arm; it is now the strongest
-arm on the same books. `crossovers.md` carries the field-by-field comparison.
+383 -> 350 at `1e8`. Pinnacle remains the strongest arm on the same ERROR ledger
+-- but not on the same hardware: once connectivity is enforced (O11) the arm is 0
+on the slide's grid, and the figure plots it on a two-coupler-layer chip nobody
+has built. `crossovers.md` carries the field-by-field comparison.
 
 **Still open from #5:** `pin_engines > 1` is charged its footprint but has no
 dependency schedule -- the paper equips each processing unit with exactly one
