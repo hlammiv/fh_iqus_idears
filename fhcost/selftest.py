@@ -509,13 +509,17 @@ def main() -> int:
     check("PEC-NISQ does NOT clear the ED frontier",
           s["n_pec_clears_classical_hi"] is None,
           f"m = {s['pec_at_1e6']:.1f} at n=1e6 against a frontier of {hi:.0f}")
-    # It used to, at n ~ 4e6. Charging the tolerance per time (review #8) took
-    # it back below: 21.6 -> 19.7 at n = 1e6, against an ED frontier of 26.
-    check("and multiproduct no longer gets it there either",
-          s["n_pec_mpf_clears_classical_hi"] is None
-          and s["pec_mpf_at_1e6"] < hi,
-          f"MPF reaches {s['pec_mpf_at_1e6']:.1f} at n=1e6, frontier {hi:.0f}; "
-          f"{curves.fmt_crossing(s['n_pec_mpf_clears_classical_hi'])}")
+    # This has moved twice and both moves were real. Charging the tolerance per
+    # time (review #8) took MPF below the frontier; refitting the order-2k
+    # coefficients over a domain twice as wide (O11b) put it back above, at a
+    # much larger n than the original 4e6.
+    check("multiproduct clears the ED frontier again, but far later",
+          s["n_pec_mpf_clears_classical_hi"] is not None
+          and s["n_pec_mpf_clears_classical_hi"] > 1e7,
+          f"MPF reaches {s['pec_mpf_at_1e6']:.1f} at n=1e6 against a frontier of "
+          f"{hi:.0f}, and clears at "
+          f"{curves.fmt_crossing(s['n_pec_mpf_clears_classical_hi'])} -- against "
+          f"4e6 before the per-time tolerance and never after it")
     check("STAR, surface FT and Pinnacle all clear it",
           all(s[k] is not None for k in ("n_star_clears_classical_hi",
                                          "n_ft_clears_classical_hi",
@@ -533,18 +537,29 @@ def main() -> int:
     check("multiproduct still helps, but modestly once branches are charged",
           1.2 < mpf[2] / mpf[1] < 1.8, f"m: {mpf[1]:.1f} -> {mpf[2]:.1f} at order 4")
     mpf4 = {k: nisq.max_m(1e6, DEFAULT.but(trotter_order_k=k), "pec") for k in (2, 3, 4)}
-    check("there is an interior optimum in multiproduct order",
-          mpf4[3] >= mpf4[2] and mpf4[4] <= mpf4[3],
-          " ".join(f"order{2*k}:{v:.0f}" for k, v in mpf4.items()))
+    # The optimum is ARM-DEPENDENT, and saying "there is an interior optimum"
+    # without saying whose was hiding that. NISQ is shot-limited, so extra
+    # branches keep paying up to order 8; FT is magic-limited, so they stop
+    # paying after order 4.
+    _ftk = {k: ftqc.max_m_surface(1e6, DEFAULT.but(trotter_order_k=k,
+                                                   pl_model="fowler"))
+            for k in (1, 2, 3, 4)}
+    check("the multiproduct optimum is arm-dependent, not universal",
+          mpf4[4] >= mpf4[3] >= mpf4[2] and _ftk[2] > _ftk[3] > _ftk[4],
+          "NISQ " + " ".join(f"o{2*k}:{v:.0f}" for k, v in mpf4.items())
+          + " (monotone to order 8);  FT "
+          + " ".join(f"o{2*k}:{v:.0f}" for k, v in _ftk.items())
+          + " (peaks at order 4)")
     # the order-2k coefficient is measured, not the second-order one reused
     check("higher orders use their OWN measured coefficient",
           hubbard.w_mpf(4, 0.5) is not None
           and abs(hubbard.w_mpf(4, 0.5) / hubbard.w_measured(0.5, 4.0) - 1) > 0.5,
           f"W_4 = {hubbard.w_mpf(4, 0.5):.4f} vs W_2 = {hubbard.w_measured(0.5, 4.0):.4f}")
-    check("but only tau <= 0.5 is calibrated for those orders",
-          hubbard.W_MPF_TAU_MAX == 0.5
-          and hubbard.w_mpf(4, 5.0) == hubbard.w_mpf(4, 0.5),
-          "every MPF point on the figure is beyond even this reduced domain")
+    check("the MPF domain doubled to tau <= 1.0 and is still clamped beyond it",
+          hubbard.W_MPF_TAU_MAX == 1.0
+          and hubbard.w_mpf(4, 5.0) == hubbard.w_mpf(4, 1.0),
+          "refitting the exponent as well as the coefficient (O11b) extended the "
+          "usable domain from tau <= 0.5; every plotted MPF point is still beyond it")
     # the deepest branch dominates: compare the per-branch cost against what an
     # ||c||_1^2 charge on a single branch would have given, at the same lg2
     c3 = DEFAULT.but(trotter_order_k=3)

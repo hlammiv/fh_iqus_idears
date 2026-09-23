@@ -3,7 +3,7 @@
 Produced by `make_record.py` from `RESULTS.json`. Do not hand-edit; do not
 quote figures elsewhere without regenerating.
 
-- Model `1206aa66c52e`. Every number below is read out of `RESULTS.json`; regenerate with `python3 make_record.py`.
+- Model `b5c92f637815`. Every number below is read out of `RESULTS.json`; regenerate with `python3 make_record.py`.
 - Classical (ED) frontier: **m = 24-26**, an estimated capacity of specified methods, not an impossibility boundary. The tensor-network arm is unbounded by available data (`OPEN_ITEMS.md` O10).
 - Mitigated NISQ saturates: m = 10.1 at n = 10^3 to 14.9 at n = 10^8 -- **5 decades of qubits buy 1.47x in m.**
 - At n = 10^6: NISQ+PEC 13, STAR 22, surface FT 13, Pinnacle 27 -- but Pinnacle is costed on a chip with TWO COUPLER LAYERS, which its generalised bicycle codes require and the slide's nearest-neighbour grid does not provide. On that grid it is 0: not small, unavailable.

@@ -317,7 +317,44 @@ all-to-all. The arm is plotted on that chip and labelled with it.
 **Still open:** `pin_nonlocal` is now dead weight. It is kept so old configs load
 but should be removed once nothing references it.
 
-### O11b. Multiproduct coefficients are calibrated only to tau <= 0.5
+### O11b. Multiproduct coefficients -- **RESOLVED**, and the diagnosis was wrong
+*Domain doubled from tau <= 0.5 to tau <= 1.0.*
+
+The earlier note said the coefficient "swings 3-13x at tau >= 1 because the
+observable error passes through zero crossings". The finely-sampled rerun on
+lenore -- 8 multiproduct bases, 18 step counts, 6 taus -- shows that was wrong on
+every count:
+
+* **There are no zero crossings.** The extrapolated error falls smoothly over
+  four decades in every case that is not at the precision floor.
+* **Order 8 at small tau was measuring the double-precision floor.** The exact
+  reference is good to ~1e-15, so a median across bases there averaged numerical
+  noise and produced a 9291x "spread".
+* **The observed convergence order drifts above nominal at tau >= 1** (4.3-4.6
+  for the order-4 formula), so extracting W with a FIXED r^-2k law makes the
+  answer drift with base by construction.
+* **Lattice size and base were pooled**, so genuine finite-size dependence
+  appeared as base-to-base scatter.
+
+Adding bases made the reported spread WORSE (order 4 at tau = 1: 8.7x with two
+bases, 15.2x with five), which is what forced looking at the raw error curves
+instead of the summary statistic.
+
+`fit_w.mpf_fit` now fits the exponent AND the coefficient, at fixed n, above the
+precision floor. Fitted orders: **3.98-4.64, 6.01-6.45, 7.66-9.08** -- nominal,
+within the drift subleading terms explain. Order 8 has no tau = 0.25 entry
+because every point there is noise, and saying so is the correct output.
+
+Consequences: MPF clears the ED frontier again, at n = 1.4e8 rather than the
+original 4e6; and the optimum is **arm-dependent** -- NISQ is shot-limited so
+extra branches pay to order 8, FT is magic-limited so they stop paying after
+order 4. The old test asserted a universal interior optimum and was hiding that.
+
+**Still open:** tau > 1 entries exist but carry finite-size spread of 2.9-9.1x
+between n = 9 and n = 12, so they are excluded. Widening needs n = 16, which is
+the trajectory run's endpoint.
+
+### O11b-old. Multiproduct coefficients are calibrated only to tau <= 0.5
 *Tier-1 done; tier-2 rerun queued. (Second-pass finding #2.)*
 
 The model reused the SECOND-order coefficient at every multiproduct order.

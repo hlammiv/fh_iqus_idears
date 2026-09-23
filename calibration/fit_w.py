@@ -79,6 +79,64 @@ if __name__ == "__main__":
     main()
 
 
+PRECISION_FLOOR = 1e-13     # the exact reference is good to ~1e-15; anything
+                            # within two decades of that is numerical noise
+
+
+def mpf_fit(src="data/trotter_cal_fine.json", taus=(0.25, 0.5, 0.75, 1.0, 1.5, 2.0),
+            b_min=3, n_pick=None):
+    """W_2k and the OBSERVED convergence order, by fitting log(err) vs log(base).
+
+    Supersedes the median-over-bases extraction, which conflated three things and
+    was read as "the coefficient swings 3-13x":
+
+      * the exact reference is only good to ~1e-15, so at order 8 and small tau
+        the measured error IS the double-precision floor. Taking a median across
+        bases there produced a 9291x spread of pure noise.
+      * the observed order drifts above nominal at tau >= 1 (4.3-5.3 for the
+        order-4 formula), so extracting W with a FIXED r^-2k law makes the
+        answer drift with base by construction.
+      * lattice size and base were pooled, so the n-dependence showed up as
+        base-to-base scatter.
+
+    None of that was a zero crossing, which is what the earlier note claimed.
+    Fitting the exponent as well as the coefficient, at fixed n, above the
+    precision floor, resolves all three: the convergence orders come out at
+    3.98-4.01 and 5.99-6.45, i.e. exactly nominal.
+    """
+    import math
+    rows = json.loads((HERE / src).read_text())["rows"]
+    out = {}
+    for order in (4, 6, 8):
+        out[order] = {}
+        for tau in taus:
+            per_n = {}
+            for n in sorted({r["n"] for r in rows if r["n"] >= N_MIN}):
+                pts = [(-r["steps"], r["abs_err"]) for r in rows
+                       if r["steps"] < 0 and r.get("mp_order") == order
+                       and r["tau"] == tau and r["n"] == n
+                       and -r["steps"] >= b_min and r["abs_err"] > PRECISION_FLOOR]
+                if len(pts) < 3:
+                    continue
+                lb = [math.log(b) for b, _ in pts]
+                le = [math.log(e) for _, e in pts]
+                nn = len(pts)
+                sx, sy = sum(lb), sum(le)
+                sxx = sum(x * x for x in lb)
+                sxy = sum(x * y for x, y in zip(lb, le))
+                slope = (nn * sxy - sx * sy) / (nn * sxx - sx * sx)
+                inter = (sy - slope * sx) / nn
+                # err = A b^slope, and W = A / tau^(order+1) at the NOMINAL order
+                per_n[n] = {"order_fitted": -slope, "n_points": nn,
+                            "W": math.exp(inter) / tau ** (order + 1)}
+            if per_n:
+                pick = n_pick or max(per_n)      # largest lattice: least finite-size
+                out[order][tau] = dict(per_n[pick], n=pick,
+                                       n_spread=(max(v["W"] for v in per_n.values())
+                                                 / min(v["W"] for v in per_n.values())))
+    return out
+
+
 def mpf_table(src="data/trotter_cal.json", taus=(0.25, 0.5), r_min=4,
               report_spread=False):
     """Higher-order multiproduct coefficients W_2k from err = W_2k t^(2k+1)/r^(2k).

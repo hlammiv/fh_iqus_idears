@@ -65,10 +65,34 @@ W_HOLDOUT_SHIFT = {0.25: 0.11, 0.5: 0.10, 1.0: 0.25, 2.0: 0.82}
 # zero crossings and the extracted coefficient swings by 3-13x, so those points
 # are not usable. Every MPF point on the figure therefore sits beyond even this
 # reduced domain -- a stronger caveat than the second-order calibration carries.
-W_MPF = {4: {0.25: 0.11811, 0.5: 0.16075},
-         6: {0.25: 0.03058, 0.5: 0.01680},
-         8: {0.25: 0.00723, 0.5: 0.00400}}
-W_MPF_TAU_MAX = 0.5
+# MEASURED order-2k coefficients, refitted (O11b). The earlier extraction took a
+# median of W = err * b^2k over base step counts, which was read as "the
+# coefficient swings 3-13x at tau >= 1 because the observable error passes
+# through zero crossings". That diagnosis was wrong on every count, and the
+# finely-sampled rerun (8 bases, 18 r values, 6 taus) shows why:
+#
+#   * there are no zero crossings here. The extrapolated error falls smoothly
+#     over four decades in every case that is not at the precision floor.
+#   * at order 8 and small tau the measured "error" IS the double-precision
+#     floor -- the exact reference is good to ~1e-15 -- so a median across bases
+#     there was averaging numerical noise, and produced a 9291x spread.
+#   * the observed convergence order drifts ABOVE nominal at tau >= 1 (4.3-4.6
+#     for the order-4 formula), so extracting W with a fixed r^-2k law makes the
+#     answer drift with base by construction.
+#   * lattice size and base were pooled, so genuine finite-size dependence
+#     appeared as base-to-base scatter.
+#
+# fit_w.mpf_fit fits the exponent AND the coefficient, at fixed n, above the
+# precision floor. The fitted orders come out 3.98-4.64, 6.01-6.45 and
+# 7.66-9.08: nominal, within the drift subleading terms explain. Entries below
+# are the largest lattice (n = 12) wherever the finite-size spread is under
+# 1.5x; order 8 has no tau = 0.25 entry because every point there is noise.
+W_MPF = {
+    4: {0.25: 0.11468, 0.5: 0.14476, 0.75: 0.07151, 1.0: 0.06709},
+    6: {0.25: 0.02834, 0.5: 0.01837, 1.0: 0.02489},
+    8: {0.5: 0.00437, 0.75: 0.00110, 1.0: 0.00268},
+}
+W_MPF_TAU_MAX = 1.0
 
 
 def w_mpf(order: int, t: float) -> float | None:
