@@ -1,5 +1,6 @@
 # Third-party papers: do not redistribute from a public repo. Fetch from arXiv.
 refs/*.pdf
+refs/*.txt
 # Source deck (not ours to publish)
 Q1_Fermi_Hubbard-1.pdf
 __pycache__/

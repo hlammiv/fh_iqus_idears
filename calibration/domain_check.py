@@ -119,6 +119,54 @@ def main(as_json=False):
     out["worst_time_holdout"] = max(abs(x["rel_err"]) for x in t2)
     print(f"\n  worst time hold-out error: {out['worst_time_holdout']:+.0%}")
 
+    traj = HERE / "data" / "trotter_traj.json"
+    if traj.exists():
+        import sys as _sys
+        _sys.path.insert(0, str(HERE.parent))
+        from fhcost import hubbard as _H
+        T = json.loads(traj.read_text())
+        print("\nTEST 3  W_eff AT the operating points, tau = sqrt(m)/v_B\n")
+        print("  The model does not assume W_eff is CONSTANT along the trajectory")
+        print("  -- it assumes W depends on tau alone, and reads the fixed-time")
+        print("  table at tau = sqrt(m)/v. That is the assumption under test.\n")
+        print(f"  {'n':>3} {'tau':>6} {'measured':>9} {'table':>9} {'ratio':>7}"
+              f"  substep conv")
+        pts = []
+        for mm in sorted(T["meta"], key=lambda x: x["n"]):
+            rs = [r for r in T["rows"] if r["patch"] == mm["patch"]
+                  and r["steps"] >= R_ASYMPTOTIC and r["W_eff"]]
+            if not rs:
+                continue
+            w = float(np.median([r["W_eff"] for r in rs]))
+            tab = _H.w_measured(mm["tau"], 4.0)
+            pts.append({"n": mm["n"], "tau": mm["tau"], "W_measured": w,
+                        "W_table": tab, "ratio": w / tab,
+                        "substep_convergence": mm["substep_convergence"]})
+            print(f"  {mm['n']:>3} {mm['tau']:>6.3f} {w:>9.5f} {tab:>9.5f} "
+                  f"{w / tab:>7.2f}  {mm['substep_convergence']:.1e}")
+        out["trajectory"] = pts
+        big = [x for x in pts if x["n"] >= 6]
+        if len(big) >= 3:
+            rr = [x["ratio"] for x in big]
+            out["traj_ratio_range"] = [min(rr), max(rr)]
+            print(f"\n  the fixed-time table predicts the trajectory to within "
+                  f"{min(rr):.2f}-{max(rr):.2f}x (n >= 6)")
+            # implied exponent: r = t^1.5 sqrt(W/eps), t = sqrt(m)/v, so
+            # G = c_g m r ~ m^1.75 * sqrt(W(m)); fit W against m directly
+            ns = np.array([x["n"] for x in big], float)
+            ws = np.array([x["W_measured"] for x in big])
+            gam = float(np.polyfit(np.log(ns), np.log(ws), 1)[0])
+            alpha = 1.75 + gam / 2.0
+            tabs = np.array([x["W_table"] for x in big])
+            gam_t = float(np.polyfit(np.log(ns), np.log(tabs), 1)[0])
+            out["alpha_measured"], out["alpha_table"] = alpha, 1.75 + gam_t / 2.0
+            print(f"  W ~ m^{gam:+.3f} measured, m^{gam_t:+.3f} from the table")
+            print(f"  implied alpha in G ~ m^alpha: {alpha:.3f} measured, "
+                  f"{1.75 + gam_t / 2.0:.3f} from the table "
+                  f"(Campbell's bound gives 2.25)")
+            print(f"  at m = 400 the measured and table exponents differ by "
+                  f"{400.0 ** (alpha - (1.75 + gam_t / 2.0)):.2f}x in gate count")
+
     print("\n" + "=" * 70)
     print("STILL NEEDED to close finding #2 (review test 3)\n")
     print("  Measure W_eff along the ADOPTED trajectory tau = sqrt(m)/v, not on a")

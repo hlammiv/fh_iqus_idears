@@ -32,7 +32,7 @@ MULTIPRODUCT
   model was missing.
 """
 from __future__ import annotations
-import json, math, sys, time
+import json, math, pathlib, sys, time
 from itertools import combinations
 import numpy as np
 from scipy import sparse
@@ -139,9 +139,18 @@ class Patch:
             out = out + hu @ P + P @ hd.T
         return out
 
-    def exact(self, tau, krylov=40, sub=None):
-        """Lanczos/Arnoldi exponential, substepped. Validated against scipy below."""
-        sub = sub or max(1, int(np.ceil(tau * 4)))
+    def exact(self, tau, krylov=None, sub=None):
+        """Lanczos/Arnoldi exponential, substepped. Validated against scipy below.
+
+        The Krylov basis holds `krylov` full state vectors. At 14 sites that is
+        188 MB each, so a fixed 40 would want 7.7 GB. The basis is capped by
+        KRYLOV_BUDGET_GB and the substep count raised to compensate -- accuracy
+        comes from substepping, memory from the cap.
+        """
+        vec_gb = self.dim * 16 / 2 ** 30
+        if krylov is None:
+            krylov = int(max(8, min(40, KRYLOV_BUDGET_GB / max(vec_gb, 1e-9))))
+        sub = sub or max(1, int(np.ceil(tau * 4)), int(np.ceil(tau * 40 / krylov)))
         P = self.psi0.copy()
         for _ in range(sub):
             P = self._expv(P, tau / sub, krylov)
@@ -190,11 +199,22 @@ PATCHES = {
     "rectangle2x3": rectangle(2, 3),      # 6  -- theirs
     "square3":      rectangle(3, 3),      # 9  -- theirs
     "rectangle3x4": rectangle(3, 4),      # 12
-    "square4":      rectangle(4, 4),      # 16
+    "rectangle2x7": rectangle(2, 7),      # 14 -- fits locally, 176 MB/vector
+    "square4":      rectangle(4, 4),      # 16 -- 2.5 GB/vector, lenore only
 }
+
+# The ADOPTED trajectory: the model evolves to t = sqrt(m)/v_B, so the
+# calibration has to be measured there too. Everything else in this file is a
+# fixed-time size sweep, which is a different -- and weaker -- statement
+# (second-pass review #2, test 3).
+V_B = 2.0
+TRAJECTORY = ("square2", "cross5", "rectangle2x3", "square3", "rectangle3x4",
+              "rectangle2x7", "square4")
+TRAJ_STEPS = (1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64)
+KRYLOV_BUDGET_GB = 1.5      # cap the Lanczos basis; substep to make up accuracy
 TAUS = (0.25, 0.5, 1.0, 2.0)
 STEPS = (1, 2, 4, 8, 16, 32, 64)
-MEM_CAP_GB = 60.0
+MEM_CAP_GB = 3.0        # this machine has ~10 GB free; n = 16 belongs on lenore
 CAMPBELL_W = 9.5            # commutator norm per site at U/J = 4
 
 
@@ -210,7 +230,68 @@ def mp_weights(k):
     return out
 
 
+def trajectory(only=None, out="data/trotter_traj.json"):
+    """Measure W_eff AT the operating points, tau = sqrt(m)/v_B (review #2, test 3).
+
+    The whole m^(7/4) exponent rests on W_eff being flat along this trajectory.
+    Every other measurement in this file is a fixed-time size sweep, which shows
+    something weaker: locality at SHORT time, decaying to a 2.9x spread by
+    tau = 2 (calibration/domain_check.py).
+
+    Each patch is also checked for convergence of the exact reference by halving
+    the substep, because a Krylov basis capped for memory is only as good as the
+    substepping that compensates for it.
+    """
+    names = only or list(TRAJECTORY)
+    rows, meta = [], []
+    for name in names:
+        sites = PATCHES[name]
+        P = Patch(sites)
+        gb = P.dim * 16 / 2 ** 30
+        if gb * 8 > MEM_CAP_GB:
+            print(f"SKIP {name}: {gb:.2f} GB/vector x 8 Krylov exceeds the "
+                  f"{MEM_CAP_GB} GB cap -- run this one on lenore", flush=True)
+            continue
+        tau = math.sqrt(P.n) / V_B
+        i, j = P.dimers[0]
+        t0 = time.monotonic()
+        ex = P.exact(tau)
+        ex2 = P.exact(tau, sub=max(2, int(np.ceil(tau * 8))))
+        conv = float(np.linalg.norm(ex - ex2))
+        cz_ex = P.czz(ex, i, j)
+        print(f"[{name}] n={P.n} tau={tau:.3f} dim={P.dim:,} "
+              f"({gb * 1024:.1f} MB/vec)  C^zz_exact = {cz_ex:+.8f}  "
+              f"substep convergence {conv:.2e}", flush=True)
+        vals = {}
+        for r in TRAJ_STEPS:
+            ap = P.trotter(tau, r)
+            vals[r] = P.czz(ap, i, j)
+            err = abs(vals[r] - cz_ex)
+            rows.append({"patch": name, "n": P.n, "tau": tau, "steps": r,
+                         "czz_exact": cz_ex, "czz_trotter": vals[r],
+                         "abs_err": err,
+                         "W_eff": err * r ** 2 / tau ** 3 if err > 0 else None,
+                         "infidelity": float(max(0.0, 1 - abs(np.vdot(ex, ap)) ** 2))})
+        meta.append({"patch": name, "n": P.n, "tau": tau, "dim": P.dim,
+                     "gb_per_vec": gb, "czz_exact": cz_ex,
+                     "substep_convergence": conv,
+                     "seconds": time.monotonic() - t0})
+        good = [x["W_eff"] for x in rows
+                if x["patch"] == name and x["steps"] >= 8 and x["W_eff"]]
+        if good:
+            print(f"   W_eff(r>=8) = {float(np.median(good)):.5f}", flush=True)
+    path = pathlib.Path(__file__).parent / out
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(json.dumps({"rows": rows, "meta": meta, "v_b": V_B,
+                                "u_over_j": U_OVER_J}, indent=1))
+    print(f"\nwrote {path}")
+    return rows, meta
+
+
 def main():
+    if "--trajectory" in sys.argv:
+        args = [a for a in sys.argv[1:] if not a.startswith("-")]
+        return trajectory(args or None)
     only = sys.argv[1:] or list(PATCHES)
     rows, meta = [], []
     for name in only:
