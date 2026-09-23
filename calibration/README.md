@@ -52,3 +52,50 @@ fixed tau); the tau-extrapolation is a clamp and has no such argument.
 5. **The multiproduct remainder is not calibrated.** The model reuses the
    second-order coefficient at higher orders. The convergence ORDER is validated
    (3.5-4.1 measured for order 4, 5.7-6.5 for order 6) but the coefficient is not.
+
+## free_fermion.py — the U = 0 easy limit (second-pass review #7)
+
+`C^zz` on the triplet-covering state at `U = 0`, in polynomial time, checked
+against exact many-body evolution.
+
+    python3 calibration/free_fermion.py      # ~4 minutes, < 1 GB
+
+**What it computes.** At `U = 0` the Hamiltonian is quadratic but the initial
+state is not Gaussian: a triplet covering expands into `2^{m/2}` Fock branches.
+`C^zz` is weight-4, and a four-fermion operator connects branches differing in
+at most one triplet, so the branch sum collapses into a diagonal part (fixed by
+the one- and two-mode occupation statistics) plus a coherent part local to one
+triplet. Ordering each triplet's four modes contiguously makes the outside
+Jordan–Wigner strings cancel, which is what keeps the coherent part local; the
+4-mode matrix elements are evaluated on a 16-dimensional Fock space rather than
+by hand, because that is where sign errors live.
+
+**Result.** Worst `|C_poly − C_exact| = 1.7e-15` over `m = 4, 6, 8, 9` and
+`t = 0, 0.25, 0.5, 1, 2`. The `O(m)` form (sparse Krylov propagator,
+block-collapsed sums) reproduces the `O(M²)` form to 1e-16 and measures a
+log–log exponent of 0.979 out to `m = 16384`.
+
+### Memory
+
+Two guards, both added after hitting them:
+
+* `hopping()` refuses a dense `2m × 2m` above 8192 modes — it is 128 GiB at
+  `m = 65536`. Use `hopping_sparse()`.
+* `occupations()` refuses a dense `M × M` `nu2` above 8192 modes — 8.6 GB at
+  `m = 16384`. The `O(m)` path uses `nu_only()`.
+
+The exact reference builds a fixed-particle-number Fock sector and uses
+`expm_multiply`, so `m = 9` (3×3, 18 modes) costs ~2 s and a few hundred MB.
+Anything larger belongs on `lenore_remote`.
+
+### Known weaknesses
+
+1. The measured wall time is single-core unoptimised CPython. It is used as a
+   *conservative* frontier precisely because it needs no extrapolation, but it
+   is 2–3 orders of magnitude off what a vectorised implementation would do.
+2. Exact at `U = 0` only. No accuracy claim is made at small non-zero `U`; a
+   controlled expansion in `Ut` is the obvious next step and is not done.
+3. The geometry is a plain `Lx × Ly` torus with a dimer covering along x, not
+   the experiment's 7×4 double-periodic lattice at flux `Φ = π`. The validation
+   compares two calculations on the *same* geometry, so this does not affect the
+   correctness claim, only the specific numbers.

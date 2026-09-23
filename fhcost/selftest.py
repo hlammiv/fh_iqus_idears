@@ -647,6 +647,37 @@ def main() -> int:
                   - DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, 64.0)) < 1e-18,
               "both carry the factor 2 for a flipped +-1 outcome")
 
+    # ---- the U = 0 easy limit (second-pass review #7) -----------------------
+    ff = classical.FREE_FERMION
+    check("the U = 0 estimator is validated against exact evolution, not asserted",
+          ff["worst_abs_err"] < 1e-12,
+          f"worst |C_poly - C_exact| = {ff['worst_abs_err']:.1e} at m = "
+          f"{ff['validated_m']}, t = {ff['validated_t']} "
+          f"(calibration/free_fermion.py)")
+    secs = ff["seconds"]
+    per = [secs[m] / m for m in sorted(secs)]
+    check("and its measured cost is LINEAR in m, not exponential",
+          max(per) / min(per) < 1.5,
+          "s/site = " + ", ".join(f"{x * 1e3:.2f} ms" for x in per))
+    c0 = DEFAULT.but(U_over_J=0.0)
+    ffm = classical.free_fermion_frontier(c0)
+    check("so at U = 0 the classical capacity is not the ED memory threshold",
+          ffm > 1e6 and classical.band(c0)["band"][1] == ffm,
+          f"{ffm:.2g} sites on ONE core in a week, against "
+          f"{classical.ed_frontier(c0)} for ED -- six orders of magnitude")
+    check("no quantum arm on the figure comes near it",
+          max(ftqc.max_m_surface(1e8, c0), ftqc.max_m_pinnacle(1e8, c0),
+              nisq.max_m(1e8, c0, "pec")) < ffm / 1e4,
+          "the U = 0 point is not a quantum-advantage candidate for this observable")
+    check("the claim is confined to U = 0; nothing is extrapolated in U",
+          not classical.free_fermion_applicable(DEFAULT.but(U_over_J=0.1))
+          and classical.band(DEFAULT)["method"] == "ED",
+          "exact at U = 0, no accuracy claim at small non-zero U")
+    check("the TDVP arithmetic is labelled peak-FLOP, not a measured wall time",
+          "peak-FLOP" in classical.TDVP_LEADERSHIP["caveat"]
+          and classical.TDVP_LEADERSHIP["assumed_fraction_of_peak"] == 1.0,
+          "no memory, communication, SVD/MPO or parallel-efficiency accounting")
+
     # ---- Hamming-weight phasing, one construction (second-pass review #6) ---
     # 1. peak live ancillas at several batch sizes, against Campbell Thm 2
     for b, want in ((8, 7), (16, 15), (64, 63), (256, 255), (432, 428)):

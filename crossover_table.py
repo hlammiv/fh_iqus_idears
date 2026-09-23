@@ -24,13 +24,14 @@ def row(cfg: Config, label: str) -> str:
     ft6 = ftqc.max_m_surface(1e6, fow)
     xc = curves.crossing(lambda n: ftqc.max_m_surface(n, fow), hi)
     pec6 = nisq.max_m(1e6, cfg, "pec")
-    return (f"| {label} | {lo:.0f}–{hi:.0f} | {pec6:.1f} | "
+    cap = f"{lo:.2g}" if lo == hi else f"{lo:.0f}–{hi:.0f}"
+    return (f"| {label} | {cap} | {pec6:.1f} | "
             f"{nisq.max_m(1e6, mpf, 'pec'):.0f} | {ftqc.max_m_star(1e6, cfg):.1f} | "
             f"{ft6:.0f} | {ftqc.max_m_surface(1e6, wil):.0f} | "
             f"{'never' if xc is None else f'{xc:.1e}'} |")
 
 
-HDR = ("| variation | classical band | NISQ+PEC | +MPF-4 | STAR | FT (Fowler) | "
+HDR = ("| variation | ED capacity | NISQ+PEC | +MPF-4 | STAR | FT (Fowler) | "
        "FT (Willow) | n: FT clears classical |\n|---|---|---|---|---|---|---|---|\n")
 
 W("# Crossovers and sensitivity\n\n")
@@ -55,6 +56,7 @@ VARS = [
     (DEFAULT.but(tmax_mode="const", tmax_const=1.0), "t_max = 1 (fixed)"),
     (DEFAULT.but(tmax_mode="inv_m"), "t_max = 1/m (slide 1, literal)"),
     (DEFAULT.but(U_over_J=8.0), "U/J = 8"),
+    (DEFAULT.but(U_over_J=0.0), "U/J = 0 (free fermions)"),
     (DEFAULT.but(trotter="empirical"), "empirical Trotter (÷5 steps)"),
     (DEFAULT.but(c_g=30.0), "c_g = 30 (pessimistic gates)"),
     (DEFAULT.but(encoding="jw"), "Jordan-Wigner everywhere"),
@@ -95,7 +97,10 @@ W(f"- Classical band: **m = {lo:.0f}–{hi:.0f}** (ED floor {classical.ed_fronti
 W(f"- Mitigated NISQ saturates: m = {nisq.max_m(1e2, DEFAULT, 'pec'):.1f} at n = 1e2 -> "
   f"{nisq.max_m(1e12, DEFAULT, 'pec'):.1f} at n = 1e12. "
   f"**Ten decades of qubits buy {nisq.max_m(1e12, DEFAULT, 'pec')/nisq.max_m(1e2, DEFAULT, 'pec'):.2f}x in m.**\n")
-W(f"- Neither NISQ+PEC nor STAR ever clears the classical band at any n.\n")
+W(f"- Neither NISQ+PEC nor STAR ever clears the estimated ED capacity at any n.\n")
+W(f"- At U/J = 0 the capacity column is NOT exact diagonalisation: the observable is\n"
+  f"  polynomial there, and the entry is a measured single-core free-fermion frontier\n"
+  f"  ({classical.free_fermion_frontier(DEFAULT.but(U_over_J=0.0)):.2g} sites). No quantum arm comes within six orders of magnitude.\n")
 W(f"- Surface-code FT clears it at n ~ {s['n_ft_clears_classical_hi']:.1e} (idealised p_L) "
   f"or n ~ {s['n_ft_willow_clears_hi']:.1e} (measured p_L).\n")
 W(f"- Trotter-step extrapolation is the largest single lever: NISQ+PEC "

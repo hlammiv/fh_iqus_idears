@@ -318,10 +318,38 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 4 | factory cleanup neglects circuit-level errors | **fixed** — published operating points replace the cubic law; selection is p-aware and plant-level |
 | 5 | Pinnacle lacks the common FT resource/error ledger | **fixed** — workspace charged, engine selected and certified, stalls and rejection scheduled |
 | 6 | Hamming-weight workspace does not match the cited circuit | **fixed** — Campbell Thm 2; workspace, T-count, depth and synthesis all from one construction |
-| 7 | the classical baseline misses the U = 0 easy limit | open |
+| 7 | the classical baseline misses the U = 0 easy limit | **fixed** — free-fermion estimator implemented and validated to 1.7e-15; band relabelled |
 | 8 | the signal fit does not support per-time relative accuracy | open |
 | 9 | zero uncertainty edges disappear from the plot | open |
 | 10 | integer lattice reporting ignores initial-state constraints | open |
+
+### What #7 closed, and what it did not
+
+At `U = 0` this observable is polynomial and the ED band was simply the wrong
+baseline. `calibration/free_fermion.py` implements the collapse of the
+non-Gaussian branch sum (diagonal part from occupation statistics, coherent part
+local to one triplet once its modes are ordered contiguously) and **validates it
+against exact many-body evolution to 1.7e-15** at `m = 4, 6, 8, 9`. An `O(m)`
+form reproduces it to 1e-16 and measures a log-log exponent of 0.979 out to
+`m = 16384`.
+
+Measured frontier: `m ~ 4e7` on ONE core of unoptimised CPython in a week,
+against 26 for ED. No quantum arm is within six orders of magnitude at that
+point. The band is relabelled "estimated ED capacity" everywhere, and the
+explorer's U slider now reaches 0 and says so.
+
+The TDVP peak-FLOP arithmetic is labelled as such, with an explicit
+`assumed_fraction_of_peak = 1.0`.
+
+**Still open from #7:** the review's third test -- vary the TDVP time step AND
+bond dimension against an exact small reference, to identify what causes the
+chi-independent plateau -- is not done. It needs a correct fermionic 2D TDVP on
+a doubly periodic torus, which is O10, not something to hand-roll. Until then
+the U > 0 band stays an ED capacity with the tensor-network question open.
+
+Nothing here touches `U > 0`. The free-fermion claim is confined to `U = 0`
+exactly; no accuracy claim is made at small non-zero U, where the natural next
+step would be a controlled expansion in `Ut`.
 
 ### What #6 closed, and what it did not
 

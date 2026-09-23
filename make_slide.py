@@ -56,14 +56,14 @@ for key, x, txt, col, dy in lab:
     ax.text(x, at(key, x) * dy, txt, color=col, fontsize=11, fontweight="bold",
             ha="center", va="center")
 
-ax.text(1.4, BAND_HI * 1.25, f"classically easy   (ED {BAND_LO:.0f} – tensor net {BAND_HI:.0f})",
+ax.text(1.4, BAND_HI * 1.25, f"estimated ED capacity   ({BAND_LO:.0f} – {BAND_HI:.0f} sites)",
         color=H.GREY, fontsize=10, va="bottom", ha="left")
 ax.text(1.4, 2.6, "unmitigated p = 10$^{-3}$ never reaches m = 4",
         color=H.GREY, fontsize=9.5, va="bottom", ha="left")
 
 xc = curves.summary()["n_ft_clears_classical_hi"]
 ax.plot([xc], [BAND_HI], marker="o", ms=11, mfc="none", mec=C["surface"], mew=2.2, zorder=6)
-ax.annotate("only fault tolerance\nclears the classical band",
+ax.annotate("only fault tolerance clears\nthe estimated ED capacity",
             xy=(xc, BAND_HI), xytext=(3.0, 260), fontsize=11, color=C["surface"],
             fontweight="bold", ha="left",
             arrowprops=dict(arrowstyle="->", color=C["surface"], lw=1.8,

@@ -44,6 +44,7 @@ VARIANTS = {
     "mpf_k3":       {"trotter_order_k": 3},
     "trotter_bound": {"trotter": "extensive"},
     "u8":           {"U_over_J": 8.0},
+    "u0":           {"U_over_J": 0.0},
     "willow":       {"pl_model": "willow"},
     "sig_fixed":    {"signal_regime": "fixed"},
     "budget_day":   {"budget_s": 86400.0},

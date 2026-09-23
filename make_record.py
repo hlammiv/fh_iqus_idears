@@ -20,7 +20,7 @@ leaving a stale number in a document.
 from __future__ import annotations
 import json, math, pathlib, sys
 from dataclasses import fields
-from fhcost import record, hubbard, ftqc, curves
+from fhcost import record, hubbard, ftqc, curves, classical
 from fhcost.budget import DEFAULT
 from fhcost.presets import PRESETS
 
@@ -33,7 +33,7 @@ MD_END   = "<!-- END GENERATED -->"
 # keeps the page responsive; keeping it MORE than one variant is what makes the
 # check meaningful, since a single operating point is easy to match by accident.
 JS_VARIANTS = ("default", "p_1e-4", "eps_0.01", "tmax_const", "mpf_k3",
-               "trotter_bound", "u8", "arch_comparison")
+               "trotter_bound", "u8", "u0", "arch_comparison")
 
 
 def js(x) -> str:
@@ -89,6 +89,10 @@ def generated_block(rec: dict) -> str:
          "// [p_phys, p_out, qubits, reject rate, d_a, r]",
          f"const PIN_ENGINE_TABLE = {js([list(x) for x in ftqc.PIN_ENGINE_TABLE])};",
          f"const PIN_REACTION_CYCLES = {js(ftqc.PIN_REACTION_CYCLES)};",
+         "// U = 0 free-fermion estimator: MEASURED single-core cost, validated",
+         "// to 1.7e-15 against exact many-body evolution",
+         f"const FF_SECONDS_PER_SITE = {js(classical.FF_SECONDS_PER_SITE)};",
+         f"const FF_BYTES_PER_SITE = {js(classical.FF_BYTES_PER_SITE)};",
          "// published magic-state operating points, NOT a formula:",
          "// [name, p_phys, p_out, qubits, cycles per accepted state, family]",
          f"const MAGIC_SOURCES = {js([list(x) for x in ftqc.MAGIC_SOURCES])};",

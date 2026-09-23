@@ -1,12 +1,25 @@
-"""How big an m the classical data center resolves -- the band the quantum curves must clear.
+"""How big an m the classical data center resolves.
+
+WHAT THE BAND IS AND IS NOT
+  It is the ESTIMATED CAPACITY of specified methods on a stated machine, not a
+  classical impossibility boundary. Sitting below it does not make a point easy
+  in practice; clearing it does not establish that every competitive classical
+  method fails. The figure says "estimated ED capacity" for that reason.
+
+  It is also observable-specific and parameter-specific. At U = 0 the
+  Hamiltonian is quadratic and this weight-4 correlator is POLYNOMIAL despite
+  the non-Gaussian initial state -- see free_fermion_frontier below -- so the
+  ED band is simply the wrong baseline there. Estimating a low-weight
+  observable is a different task from preparing the full state or sampling
+  from it, and only the first is what this figure asks about.
 
 WHY THIS IS A HORIZONTAL BAND AND NOT A CURVE
   The x axis of the figure is physical QUBITS. Classical compute does not live
   on that axis, so the classical frontier is drawn as a horizontal band: the
   largest m a one-week run on a 1-100 PB data center resolves, independent of n.
-  Everything below the band is classically easy and cannot be an advantage.
+  Everything below the band is reachable by the methods costed here.
 
-WHY EVERY CLASSICAL METHOD IS EXPONENTIAL IN m HERE
+WHY EVERY METHOD COSTED HERE IS EXPONENTIAL IN m AT U > 0
   At t_max = sqrt(m)/v the light cone has crossed the lattice, and that kills
   every structural shortcut at once:
     * Krylov / state vector:  dim = C(m, m/2)^2 ~ 4^m / m. Memory-bound.
@@ -222,9 +235,20 @@ TDVP_FLOOR = {"t": 0.1, "exact": 0.9418,
               "err": {256: 7.93e-3, 512: 7.38e-3, 1024: 7.36e-3, 2048: 7.35e-3},
               "verdict": "chi-independent floor; not truncation-limited"}
 
+# PEAK-FLOP ARITHMETIC, NOT A DEMONSTRATED WALL TIME (review #7). Dividing a
+# chi^3 operation count by a machine's peak rate assumes perfect strong scaling
+# and ignores memory traffic, communication, the SVD/QR and MPO applications
+# that dominate a real TDVP sweep, and the achievable fraction of peak. Leading
+# tensor-network codes report single-digit to low-tens percent of peak on
+# leadership machines, and strong scaling in chi is not free. The affordable chi
+# below should be read as an optimistic upper bound on what the arithmetic
+# permits, not as a run anyone has done.
 TDVP_LEADERSHIP = {"published_chi": 2048, "published_flops": 4.8e14,
                    "week_exascale_flops": 1.0e24, "chi_affordable_week": 3e6,
-                   "err_at_affordable_chi_on_measured_slope": 0.032}
+                   "err_at_affordable_chi_on_measured_slope": 0.032,
+                   "caveat": "peak-FLOP arithmetic; no memory, communication, "
+                             "SVD/MPO or parallel-efficiency accounting",
+                   "assumed_fraction_of_peak": 1.0}
 
 
 def tdvp_chi_for(tol: float) -> float:
@@ -233,13 +257,72 @@ def tdvp_chi_for(tol: float) -> float:
     return 2048.0 * (e0 / max(tol, 1e-12)) ** (1.0 / abs(TDVP_SLOPE))
 
 
+# ---------------------------------------------------------------------------
+# U = 0: this observable is POLYNOMIAL, and the ED band is the wrong baseline
+#
+# Second-pass review #7. At U = 0 the Hamiltonian is quadratic, so evolution is
+# a 2m x 2m single-particle matrix exponential. The initial state is NOT
+# Gaussian -- a triplet covering cannot be made by a FLO unitary, and expanding
+# it gives 2^{m/2} Fock branches -- but C^zz is a WEIGHT-4 observable, and a
+# four-fermion operator can connect branches differing in at most one triplet.
+# That collapses the branch sum to a diagonal part fixed by the one- and
+# two-mode occupation statistics plus a local coherent part, neither of which
+# needs the branches. The argument is the experimental paper's Appendix E
+# (arXiv:2510.26300); calibration/free_fermion.py is an independent
+# implementation of it.
+#
+# VALIDATED, not asserted: against exact many-body evolution at m = 4, 6, 8, 9
+# and t = 0, 0.25, 0.5, 1, 2, the worst disagreement is 1.7e-15 -- machine
+# precision. An O(m) form (sparse Krylov propagator, block-collapsed sums)
+# reproduces the O(M^2) form exactly and was timed out to m = 1024.
+#
+# The frontier below is a MEASURED single-core wall time for unoptimised
+# CPython, deliberately: it needs no extrapolation, and it already exceeds the
+# ED band by six orders of magnitude.
+FREE_FERMION = {
+    "valid_at": "U/J = 0 exactly",
+    "worst_abs_err": 1.7e-15,
+    "validated_m": (4, 6, 8, 9),
+    "validated_t": (0.0, 0.25, 0.5, 1.0, 2.0),
+    # one core, unoptimised CPython; log-log exponent 0.979 -- linear
+    "seconds": {16: 0.015, 64: 0.050, 256: 0.177, 1024: 0.687,
+                4096: 2.908, 16384: 11.616},
+    "source": "calibration/free_fermion.py -> data/free_fermion.json",
+}
+FF_SECONDS_PER_SITE = 7.0e-4      # fitted slope; flat to 6% over m = 1024..16384
+FF_BYTES_PER_SITE = 64.0          # four complex rows of length 2m
+
+
+def free_fermion_applicable(cfg: Config = DEFAULT) -> bool:
+    """Exact only at U = 0. No claim is made about small but non-zero U."""
+    return cfg.U_over_J == 0.0
+
+
+def free_fermion_frontier(cfg: Config = DEFAULT) -> float:
+    """Largest m in the week budget, from MEASURED single-core wall time.
+
+    Conservative on purpose: one core, unoptimised CPython, no extrapolation of
+    the implementation. A vectorised or parallel version would go further, and
+    the memory (O(m)) is nowhere near binding.
+    """
+    if not free_fermion_applicable(cfg):
+        return 0.0
+    by_time = cfg.budget_s / (cfg.n_times * FF_SECONDS_PER_SITE)
+    by_mem = cfg.ram_bytes / FF_BYTES_PER_SITE
+    return min(by_time, by_mem)
+
+
 def band(cfg: Config = DEFAULT) -> dict:
     """ESTIMATED CAPACITY of specified classical methods under stated machine
     assumptions. **Not** a classical impossibility boundary -- exceeding it does
     not establish that every competitive classical method fails, and sitting
     below it does not establish that a point is easy in practice.
 
-    The band is set by exact diagonalisation. The tensor-network edge is reported
+    At U = 0 the band is set by the free-fermion estimator instead, which is
+    polynomial for this observable and validated to machine precision; exact
+    diagonalisation is simply the wrong method there.
+
+    At U > 0 the band is set by exact diagonalisation. The tensor-network edge is reported
     but NOT used to widen it, because the only published attempt on this problem
     (TDVP, chi up to 2048) does not converge on this observable: its error is flat
     in chi and larger than the signal at late times. An entropy-derived chi is
@@ -247,6 +330,7 @@ def band(cfg: Config = DEFAULT) -> dict:
     """
     ed_lo = ed_frontier(cfg.but(ram_bytes=1e15))
     ed_hi = ed_frontier(cfg.but(ram_bytes=100e15))
+    ff = free_fermion_frontier(cfg)
     mps_lo = mps_max_m(cfg.but(ent_rate=ENT_RANGE[1]))
     mps_hi = mps_max_m(cfg.but(ent_rate=ENT_RANGE[0]))
     # A classical attacker picks the BEST method available, so each edge is a
@@ -255,7 +339,11 @@ def band(cfg: Config = DEFAULT) -> dict:
     # ED sets the band. The entropy-derived MPS reach is carried alongside as a
     # diagnostic, not folded in -- see the docstring and TDVP_MEASURED.
     lo, hi = ed_lo, ed_hi
-    return {"ed_lo_1PB": ed_lo, "ed_mid": ed_frontier(cfg), "ed_hi_100PB": ed_hi,
+    if ff > 0.0:
+        # at U = 0 exact diagonalisation is simply not the applicable method
+        lo = hi = ff
+    return {"free_fermion": ff, "method": "free fermion" if ff else "ED",
+            "ed_lo_1PB": ed_lo, "ed_mid": ed_frontier(cfg), "ed_hi_100PB": ed_hi,
             # `band` is a FIXED 1-100 PB uncertainty envelope and deliberately
             # ignores cfg.ram_bytes. `ed_at_cfg_ram` is the single-machine
             # sensitivity; sweeping RAM should move that, not the band.

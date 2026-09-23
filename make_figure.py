@@ -41,7 +41,7 @@ axA, axB, axC = (fig.add_subplot(g) for g in gs)
 ax = axA
 ax.axhspan(BAND_LO, BAND_HI, color=F.PALEGREY, alpha=0.55, lw=0, zorder=0)
 ax.axhline(BAND_HI, color=F.DARKGREY, lw=0.9, ls=(0, (4, 2)), zorder=3)
-ax.text(1.3e2, 12.0, f"classically easy  ($m\\leq{BAND_HI:.0f}$)",
+ax.text(1.3e2, 12.0, f"estimated ED capacity  ($m\\leq{BAND_HI:.0f}$)",
         fontsize=6.0, color=F.DARKGREY, va="center", ha="left")
 # the Trotter calibration covers m <= 12 only; everything above is extrapolated
 from fhcost.hubbard import W_DOMAIN as _WD
@@ -183,7 +183,7 @@ if unb.any():
 ax.set_xscale("log"); ax.set_yscale("log")
 ax.set_xlim(ts[0], ts[-1]); ax.set_ylim(1, 1e4)
 ax.set_xlabel(r"$t_{\max}$  $[\hbar/J]$")
-ax.set_ylabel(r"largest classically easy $m$")
+ax.set_ylabel(r"largest $m$ at the estimated classical capacity")
 ax.tick_params(which="both", direction="in", top=True, right=True, length=2.6)
 ax.text(0.05, 0.955, "(c)", transform=ax.transAxes, fontsize=7.5, va="top")
 

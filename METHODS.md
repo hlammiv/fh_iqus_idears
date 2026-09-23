@@ -557,6 +557,57 @@ not establish that a point is easy in practice.
 **Band: m = 24-26**, set by exact diagonalisation alone (dim = C(m,m/2)^2 at half
 filling, 16 B/amplitude, 4 Krylov vectors, 1-100 PB).
 
+### U = 0: this observable is polynomial, and ED is the wrong baseline (review #7)
+
+The classical reference was exact diagonalisation at every parameter point. At
+`U = 0` that is simply the wrong method. The Hamiltonian is quadratic, so
+evolution is a `2m × 2m` single-particle matrix exponential — and although the
+triplet-covering initial state is **not** Gaussian (expanding it gives `2^{m/2}`
+Fock branches, which is why the experimental paper calls it a magic state),
+`C^zz` is a **weight-4** observable, and a four-fermion operator can connect
+branches differing in at most one triplet. The branch sum therefore collapses to
+
+* a **diagonal** part, fixed by the one- and two-mode occupation statistics of
+  the branches — Wick's theorem applies branch by branch, and the sum becomes an
+  average over an independent per-triplet coin flip;
+* a **coherent** part from pairs differing in exactly one triplet. Ordering each
+  triplet's four modes contiguously makes the Jordan–Wigner strings from the rest
+  of the lattice cancel, so this is a local 4-mode object.
+
+Neither piece needs the branches. The argument is the experimental paper's
+Appendix E (arXiv:2510.26300); `calibration/free_fermion.py` is an independent
+implementation of it.
+
+**Validated, not asserted.** Against exact many-body evolution at `m = 4, 6, 8, 9`
+and `t = 0, 0.25, 0.5, 1, 2`, the worst disagreement is **1.7 × 10⁻¹⁵** — machine
+precision. An `O(m)` form (sparse Krylov propagator, block-collapsed sums)
+reproduces the `O(M²)` form to 10⁻¹⁶ and was timed out to `m = 16384`, giving a
+log–log exponent of **0.979**: linear, as claimed.
+
+**The frontier.** At 0.70 ms per site per correlator on **one core** of
+unoptimised CPython, twenty time points fit `m ≈ 4 × 10⁷` into a week. Against
+the ED band's 26. That is a measured number with no extrapolation of the
+implementation — a vectorised or parallel version would go further, and memory
+(`O(m)`) is nowhere near binding.
+
+So at `U = 0` no quantum arm on this figure is within six orders of magnitude of
+the classical capacity for this observable, and the ED band should never have
+been drawn there. The claim is confined to `U = 0` exactly; the model makes no
+accuracy claim at small non-zero `U`.
+
+**Two labelling consequences.** The figure now says *estimated ED capacity*
+rather than *classically easy*, because the band is a capacity of specified
+methods at a specified parameter point, not an impossibility boundary. And
+estimating a low-weight observable is a different task from preparing the full
+state or sampling from it — only the first is what this figure asks about.
+
+**The TDVP arithmetic is labelled.** Dividing a `χ³` operation count by a
+machine's peak rate assumes perfect strong scaling and ignores memory traffic,
+communication, and the SVD/QR and MPO applications that dominate a real sweep.
+`TDVP_LEADERSHIP` now carries that caveat and an explicit
+`assumed_fraction_of_peak = 1.0`; the affordable `χ` is an upper bound on what
+the arithmetic permits, not a run anyone has done.
+
 ### Why the tensor-network arm was removed rather than widened
 
 The old upper edge of 62 came from an entropy argument: assume an entanglement
