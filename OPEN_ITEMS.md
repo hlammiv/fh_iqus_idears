@@ -491,7 +491,7 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 4 | factory cleanup neglects circuit-level errors | **fixed** — published operating points replace the cubic law; selection is p-aware and plant-level |
 | 5 | Pinnacle lacks the common FT resource/error ledger | **fixed** — workspace charged, engine selected and certified, stalls and rejection scheduled |
 | 6 | Hamming-weight workspace does not match the cited circuit | **fixed** — Campbell Thm 2; workspace, T-count, depth and synthesis all from one construction |
-| 7 | the classical baseline misses the U = 0 easy limit | **fixed** — free-fermion estimator implemented and validated to 1.7e-15; band relabelled |
+| 7 | the classical baseline misses the U = 0 easy limit | **fixed** — free-fermion estimator implemented, validated internally to 7.8e-16 and against the published exact data to 2.9e-10 (which caught a wrong dimer state and a missing pi flux); band relabelled |
 | 8 | the signal fit does not support per-time relative accuracy | **fixed** — envelope separated from bound, per-time tolerances, floor independent of the fit |
 | 9 | zero uncertainty edges disappear from the plot | **fixed** — clipped and hatched, scenario span labelled, rendered check added |
 | 10 | integer lattice reporting ignores initial-state constraints | **fixed** — admissibility from the state spec; rectangles with an aspect cap |
@@ -638,9 +638,32 @@ At `U = 0` this observable is polynomial and the ED band was simply the wrong
 baseline. `calibration/free_fermion.py` implements the collapse of the
 non-Gaussian branch sum (diagonal part from occupation statistics, coherent part
 local to one triplet once its modes are ordered contiguously) and **validates it
-against exact many-body evolution to 1.7e-15** at `m = 4, 6, 8, 9`. An `O(m)`
+against exact many-body evolution to 7.8e-16** at `m = 4, 6, 8, 9`. An `O(m)`
 form reproduces it to 1e-16 and measures a log-log exponent of 0.979 out to
 `m = 16384`.
+
+**And then against someone else's answer, which is what caught the physics.**
+`--deposit` compares the estimator to the *published* exact `C^zz` on the same
+7x4 instance. It did not agree, and chasing that down found two errors that an
+internal check structurally cannot see, because it evolves our own state under
+our own Hamiltonian:
+
+| | was | is | difference it makes |
+|---|---|---|---|
+| dimer state | singlet, `(A - B)/sqrt2` | **S^z = 0 triplet**, `(A + B)/sqrt2` | up to **0.20** by t = 0.5 |
+| Hamiltonian | no flux | **pi flux through the short cycle**, Peierls `pi/4` per y-bond | up to **0.13** |
+
+Both give `C^zz = -1` at `t = 0`, which is exactly why neither showed up.
+With both corrected the estimator reproduces the deposit to **2.9e-10**.
+
+Neither error touches the cost -- same operation count, same memory, complex
+arithmetic included -- so the frontier below and the classical band are
+unchanged. The claim that moved is the one about fidelity to the experiment.
+
+A third thing fell out: the deposit's own `Exact` and `FLO` rows **disagree**, by
+up to 2.9e-2 at t = 2, which is the size of the TDVP errors O10 measures. Our
+independent implementation reproduces `Exact` to 3e-10 and `FLO` only to 2.9e-2,
+so `Exact` is the reference and `calibration/tdvp_check.py` now uses it.
 
 Measured frontier: `m ~ 4e7` on ONE core of unoptimised CPython in a week,
 against 26 for ED. No quantum arm is within six orders of magnitude at that

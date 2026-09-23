@@ -48,7 +48,16 @@ CHIS = (256, 512, 1024, 2048)
 REPORT_T = (0.1, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0)
 
 
-def load(u="U_0"):
+def load(u="U_0", ref="Exact"):
+    """The reference is `Exact`, NOT `FLO`.
+
+    The deposit ships three rows under `exact`: `Exact`, `FLO` and
+    `Majorana Propagation`. The first two disagree with each other by up to
+    2.9e-2 at t = 2 -- the same size as the TDVP errors being measured -- so
+    which one is used is not a detail. `calibration/free_fermion.py --deposit`
+    settles it independently: our polynomial estimator reproduces `Exact` to
+    3e-10 and `FLO` only to 2.9e-2, so `Exact` is the exact one.
+    """
     import pandas as pd
     p = DATA / u / "exp_vals.h5"
     if not p.exists():
@@ -56,7 +65,7 @@ def load(u="U_0"):
                          f"download Zenodo 17799843 and extract {u}/ there")
     t = pd.read_hdf(p, "TDVP")
     e = pd.read_hdf(p, "exact")
-    return t[t.obs_type == OBS], e[(e.obs_type == OBS) & (e.method == "FLO")]
+    return t[t.obs_type == OBS], e[(e.obs_type == OBS) & (e.method == ref)]
 
 
 def dimer_links(exact):
@@ -90,11 +99,14 @@ def errors(tdvp, exact, links=None):
 def main(as_json=False):
     tdvp, exact = load("U_0")
     links = dimer_links(exact)
-    print(f"U = 0, observable {OBS}, {len(links)} dimer links of "
-          f"{len(exact[exact.ev_time == 0.0])} neighbour pairs\n")
+    print(f"U = 0, observable {OBS}, reference method 'Exact', {len(links)} "
+          f"dimer links of {len(exact[exact.ev_time == 0.0])} ordered pairs\n")
     out = {}
+    # despite the name, `spin_correlator_neighbours` carries all 28*27 ORDERED
+    # site pairs, not only neighbours -- 756 rows, of which 26 are the dimers
     for label, sel in (("DIMER LINKS (what the model stores)", links),
-                       ("ALL NEIGHBOUR PAIRS", None)):
+                       ("ALL 756 ORDERED SITE PAIRS (the name is misleading)",
+                        None)):
         err = errors(tdvp, exact, sel)
         out["dimer" if sel else "all"] = err
         print(label)

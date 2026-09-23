@@ -8,10 +8,27 @@ is NOT Gaussian. The experimental paper develops the argument in its Appendix E
 (arXiv:2510.26300); this is an independent implementation, validated against
 exact many-body evolution.
 
-THE STATE.  |psi> = prod_T (|A_T> - |B_T>)/sqrt(2) x (lonely sites), where each
-triplet T spans two sites (i, j) with A_T = {i up, j down} and B_T = {i down,
+THE STATE.  |psi> = prod_T (|A_T> + s |B_T>)/sqrt(2) x (lonely sites), where each
+dimer T spans two sites (i, j) with A_T = {i up, j down} and B_T = {i down,
 j up}. Expanding gives 2^{N_T} Fock branches -- exponentially many, which is why
 the paper calls it non-Gaussian.
+
+s = +1 is the Sz = 0 TRIPLET and is the default, because that is the experiment's
+state: "Each link corresponds to the Sz_total = 0 triplet state" (arXiv:2510.26300
+Fig. 1). An earlier version of this file hard-coded s = -1, the singlet, which
+has the same C^zz = -1 at t = 0 and so passed every internal check while
+simulating a different state. `--deposit` is the check that catches it.
+
+THE HAMILTONIAN.  The experiment threads a PI FLUX through the short direction:
+"a pi phase flux in the long direction -- i.e. the Peierls phase in the short
+direction ... Around each highlighted plaquette phi_ij = pi/4". So every y-bond
+carries -J exp(i pi/4) and a loop around the short cycle picks up exp(i pi) = -1.
+The earlier version had no flux. With 7 x 4 doubly periodic that is not a gauge
+choice -- the x cycle has odd length, so the lattice is not bipartite.
+
+Both corrections were found by comparing against the published exact data rather
+than against ourselves, and with both in place this file reproduces it to 3e-10
+(`python3 calibration/free_fermion.py --deposit`).
 
 WHY IT COLLAPSES.  Under free evolution n_i(t) = sum_ab R*_ia R_ib c†_a c_b with
 R = exp(-i h t), so <n_i n_j>(t) is a sum of FOUR-fermion expectations in the
@@ -45,6 +62,34 @@ from scipy.linalg import expm
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import expm_multiply
 
+# +1 is the Sz = 0 triplet, -1 the singlet. They share every diagonal weight and
+# differ only in the sign of the coherent branch pair, which is why C^zz(0) = -1
+# for both and why using the wrong one is invisible to an internal check.
+DIMER_SIGN = {"triplet": +1.0, "singlet": -1.0}
+
+# The published instance, arXiv:2510.26300 / Zenodo 17799843. The covering, the
+# doublon and the holon are READ OFF the deposit, not copied from the figure:
+# the 13 dimers are the site pairs whose C^zz is exactly -1 at t = 0, and the
+# doublon and holon are the single nonzero entries of the `Doublon` and `Holon`
+# observables. Site index s = x + Lx * y with (Lx, Ly) = (7, 4).
+DEPOSIT_LATTICE = (7, 4)
+DEPOSIT_FLUX_Y = math.pi / 4          # pi through the short cycle of four
+DEPOSIT_DIMERS = [(7, 14), (21, 22), (1, 2), (8, 15), (9, 16), (23, 24),
+                  (3, 10), (4, 11), (18, 25), (5, 12), (19, 26), (6, 13),
+                  (20, 27)]
+DEPOSIT_DOUBLON = 17                  # (3, 2)
+DEPOSIT_HOLON = 0                     # (0, 0)
+DEPOSIT_COVER = (DEPOSIT_DIMERS, DEPOSIT_DOUBLON, DEPOSIT_HOLON, [])
+
+
+def deposit_setup():
+    """(order, idx, dimers, doublon, holon, spare, h) for the published instance."""
+    Lx, Ly = DEPOSIT_LATTICE
+    o, idx, dm, D, H, sp = mode_order(Lx, Ly, DEPOSIT_COVER)
+    h = hopping(Lx, Ly, idx, periodic=True, flux_y=DEPOSIT_FLUX_Y)
+    return o, idx, dm, D, H, sp, h
+
+
 # --------------------------------------------------------------------------
 # geometry: an Lx x Ly lattice, dimer covering along x, two lonely sites
 
@@ -73,14 +118,14 @@ def covering(Lx: int, Ly: int) -> tuple[list[tuple[int, int]], int, int]:
     return dimers, doublon, holon, spare
 
 
-def mode_order(Lx, Ly):
+def mode_order(Lx, Ly, cover=None):
     """Modes ordered so each triplet's four modes are CONTIGUOUS.
 
     This is the whole reason the coherent term is local: with the four modes of
     a triplet adjacent in the ordering, an even-parity operator supported on
     them carries no Jordan-Wigner string from the rest of the lattice.
     """
-    dimers, doublon, holon, spare = covering(Lx, Ly)
+    dimers, doublon, holon, spare = cover if cover else covering(Lx, Ly)
     order = []
     for (a, b) in dimers:
         order += [(a, 0), (a, 1), (b, 0), (b, 1)]     # 0 = up, 1 = down
@@ -90,23 +135,58 @@ def mode_order(Lx, Ly):
     return order, idx, dimers, doublon, holon, list(spare)
 
 
-def hopping_sparse(Lx, Ly, idx, J: float = 1.0, periodic: bool = True):
-    """Always build this one. A dense 2m x 2m is 128 GiB at m = 65536."""
+def directed_bonds(Lx, Ly, periodic: bool = True):
+    """[(a, b, axis)] with b = a + x_hat (axis 0) or a + y_hat (axis 1).
+
+    A Peierls phase is a property of a DIRECTED bond, so the undirected list
+    above cannot carry one.
+    """
+    out = []
+    for y in range(Ly):
+        for x in range(Lx):
+            a = x + Lx * y
+            if periodic or x + 1 < Lx:
+                b = (x + 1) % Lx + Lx * y
+                if b != a:
+                    out.append((a, b, 0))
+            if periodic or y + 1 < Ly:
+                b = x + Lx * ((y + 1) % Ly)
+                if b != a:
+                    out.append((a, b, 1))
+    # a 2-wide periodic direction doubles the bond; keep it once
+    seen, uniq = set(), []
+    for (a, b, ax) in out:
+        k = (min(a, b), max(a, b))
+        if k not in seen:
+            seen.add(k); uniq.append((a, b, ax))
+    return uniq
+
+
+def hopping_sparse(Lx, Ly, idx, J: float = 1.0, periodic: bool = True,
+                   flux_y: float = 0.0):
+    """Always build this one. A dense 2m x 2m is 128 GiB at m = 65536.
+
+    `flux_y` is the Peierls phase on each +y bond: the experiment uses pi/4, so
+    the short cycle of four carries a pi flux.
+    """
     M = 2 * Lx * Ly
     r, c, v = [], [], []
-    for (a, b) in lattice(Lx, Ly, periodic):
+    for (a, b, ax) in directed_bonds(Lx, Ly, periodic):
+        w = -J * (np.exp(1j * flux_y) if ax == 1 and flux_y else 1.0)
         for s in (0, 1):
             i, j = idx[(a, s)], idx[(b, s)]
-            r += [i, j]; c += [j, i]; v += [-J, -J]
-    return csr_matrix((v, (r, c)), shape=(M, M))
+            r += [j, i]; c += [i, j]; v += [w, np.conj(w)]
+    return csr_matrix((v, (r, c)), shape=(M, M),
+                      dtype=complex if flux_y else float)
 
 
-def hopping(Lx, Ly, idx, J: float = 1.0, periodic: bool = True) -> np.ndarray:
+def hopping(Lx, Ly, idx, J: float = 1.0, periodic: bool = True,
+            flux_y: float = 0.0) -> np.ndarray:
     """Dense form, for the small exact reference only."""
     M = 2 * Lx * Ly
     if M > 8192:
         raise MemoryError(f"refusing a dense {M}x{M}; use hopping_sparse")
-    return hopping_sparse(Lx, Ly, idx, J, periodic).toarray()
+    return hopping_sparse(Lx, Ly, idx, J, periodic, flux_y).toarray()
 
 
 # --------------------------------------------------------------------------
@@ -210,8 +290,14 @@ def four_mode_element(bra: int, ket: int, ops) -> complex:
 # the polynomial estimator
 
 
-def czz_free(t: float, h: np.ndarray, nu, nu2, idx, dimers, site_i, site_j):
-    """C^zz_{ij}(t) = <(n_iu - n_id)(n_ju - n_jd)> - <n_iu - n_id><n_ju - n_jd>."""
+def czz_free(t: float, h: np.ndarray, nu, nu2, idx, dimers, site_i, site_j,
+             state: str = "triplet"):
+    """C^zz_{ij}(t) = <(n_iu - n_id)(n_ju - n_jd)> - <n_iu - n_id><n_ju - n_jd>.
+
+    `state` picks the sign of the coherent branch pair, which is the ONLY place
+    the singlet and the triplet differ: their diagonal weights are both 1/2.
+    """
+    dsign = DIMER_SIGN[state]
     R = expm(-1j * h * t)
     iu, idn = idx[(site_i, 0)], idx[(site_i, 1)]
     ju, jdn = idx[(site_j, 0)], idx[(site_j, 1)]
@@ -247,7 +333,7 @@ def czz_free(t: float, h: np.ndarray, nu, nu2, idx, dimers, site_i, site_j):
                 el = (four_mode_element(mA, mB, (a, b, c_, e))
                       + four_mode_element(mB, mA, (a, b, c_, e)))
                 if el:
-                    x -= 0.5 * K * el          # the (-1)^{|b|+|b'|} = -1 sign
+                    x += dsign * 0.5 * K * el
         return float(np.real(d1 + d2 + x))
 
     sz_i = n1(iu) - n1(idn)
@@ -281,7 +367,8 @@ def blocks_of(idx, dimers, doublon, holon, spare=(), nu=None):
     return out
 
 
-def czz_free_sparse(t, hsp, nu, blocks, idx, dimers, site_i, site_j):
+def czz_free_sparse(t, hsp, nu, blocks, idx, dimers, site_i, site_j,
+                    state: str = "triplet"):
     """Same estimator in O(m) time and memory -- what a frontier claim needs.
 
     Two changes from czz_free. The four rows of R = exp(-i h t) come from a
@@ -294,6 +381,7 @@ def czz_free_sparse(t, hsp, nu, blocks, idx, dimers, site_i, site_j):
     with C the correction returned by blocks_of. Both pieces are O(M), so the
     whole correlator is linear in the lattice size.
     """
+    dsign = DIMER_SIGN[state]
     M = hsp.shape[0]
     rows = {}
     for p_ in (idx[(site_i, 0)], idx[(site_i, 1)],
@@ -333,7 +421,7 @@ def czz_free_sparse(t, hsp, nu, blocks, idx, dimers, site_i, site_j):
                 el = (four_mode_element(mA, mB, (a, b, c_, e))
                       + four_mode_element(mB, mA, (a, b, c_, e)))
                 if el:
-                    x -= 0.5 * K * el
+                    x += dsign * 0.5 * K * el
         return float(np.real(d1 + d2 + x))
 
     iu, idn = idx[(site_i, 0)], idx[(site_i, 1)]
@@ -370,8 +458,10 @@ def many_body_H(h: np.ndarray, states, index):
                       dtype=complex)
 
 
-def czz_exact(t, h, idx, dimers, doublon, site_i, site_j):
+def czz_exact(t, h, idx, dimers, doublon, site_i, site_j,
+              state: str = "triplet"):
     M = h.shape[0]
+    dsign = DIMER_SIGN[state]
     occ = []
     for (x, y) in dimers:
         occ.append(((idx[(x, 0)], idx[(y, 1)]), (idx[(x, 1)], idx[(y, 0)])))
@@ -385,7 +475,7 @@ def czz_exact(t, h, idx, dimers, doublon, site_i, site_j):
             for m in occ[gi][ci]:
                 mask |= 1 << m
             if len(occ[gi]) == 2:
-                amp *= (1.0 if ci == 0 else -1.0) / math.sqrt(2.0)
+                amp *= (1.0 if ci == 0 else dsign) / math.sqrt(2.0)
         # canonical ordering: build the sign by creating in increasing index
         st, s = 0, 1
         for m in sorted(p for p in range(M) if (mask >> p) & 1):
@@ -409,19 +499,19 @@ def czz_exact(t, h, idx, dimers, doublon, site_i, site_j):
 # --------------------------------------------------------------------------
 
 
-def validate(sizes, times, periodic=True):
+def validate(sizes, times, periodic=True, state="triplet", flux_y=0.0):
     out = []
     for (Lx, Ly) in sizes:
         order, idx, dimers, doublon, holon, spare = mode_order(Lx, Ly)
-        h = hopping(Lx, Ly, idx, periodic=periodic)
+        h = hopping(Lx, Ly, idx, periodic=periodic, flux_y=flux_y)
         nu, nu2 = occupations(idx, dimers, doublon, holon, spare)
         si, sj = dimers[0]
         for t in times:
             t0 = time.time()
-            a = czz_free(t, h, nu, nu2, idx, dimers, si, sj)
+            a = czz_free(t, h, nu, nu2, idx, dimers, si, sj, state)
             t_poly = time.time() - t0
             t0 = time.time()
-            b = czz_exact(t, h, idx, dimers, doublon, si, sj)
+            b = czz_exact(t, h, idx, dimers, doublon, si, sj, state)
             t_exact = time.time() - t0
             out.append({"Lx": Lx, "Ly": Ly, "m": Lx * Ly, "t": t,
                         "czz_poly": a, "czz_exact": b, "abs_err": abs(a - b),
@@ -458,14 +548,78 @@ def scaling(sizes, t=1.0, periodic=True, cross_check_to=64):
     return out
 
 
+def deposit_check(times=(0.1, 0.2, 0.5, 1.0, 1.5, 2.0)):
+    """The EXTERNAL check: reproduce the published exact C^zz, or say we cannot.
+
+    Everything else in this file validates the estimator against our own exact
+    many-body evolution of our own state, which cannot see a wrong state or a
+    missing flux. This one compares against someone else's answer.
+
+    It also reports the deposit's internal spread: their `Exact` and their `FLO`
+    rows disagree by up to 2.9e-2 at t = 2, so `FLO` is not the reference to
+    measure anything against -- `Exact` is, and this is how we know.
+    """
+    try:
+        import pandas as pd
+    except ImportError:
+        raise SystemExit("needs pandas + tables: pip install tables uncertainties")
+    h5 = pathlib.Path(__file__).parent.parent / "refs" / "fermionic_dynamics" / \
+        "U_0" / "exp_vals.h5"
+    if not h5.exists():
+        raise SystemExit(f"missing {h5}; see refs/README.md for the download")
+    e = pd.read_hdf(h5, "exact")
+    e = e[e.obs_type == "spin_correlator_neighbours"]
+    Lx, Ly = DEPOSIT_LATTICE
+    coord = {s_: (s_ % Lx, s_ // Lx) for s_ in range(Lx * Ly)}
+    order, idx, dm, D, H, sp, h = deposit_setup()
+    nu, nu2 = occupations(idx, dm, D, H, sp)
+    out, worst = [], 0.0
+    print("   t    triplet+flux   singlet+flux    no flux   |  their Exact-FLO")
+    for t in times:
+        A = {r.site_coords: r.obs_val for r in e[(e.ev_time == t)
+                                                 & (e.method == "Exact")].itertuples()}
+        F = {r.site_coords: r.obs_val for r in e[(e.ev_time == t)
+                                                 & (e.method == "FLO")].itertuples()}
+        keys = [(coord[i], coord[j]) for (i, j) in dm]
+        hp = hopping(Lx, Ly, idx, periodic=True)          # the old, flux-free H
+        d = {}
+        for lbl, hh, st in (("trip", h, "triplet"), ("sing", h, "singlet"),
+                            ("noflux", hp, "triplet")):
+            v = [czz_free(t, hh, nu, nu2, idx, dm, i, j, st) for (i, j) in dm]
+            d[lbl] = max(abs(a - A[k]) for a, k in zip(v, keys))
+        d["their_spread"] = max(abs(A[k] - F[k]) for k in keys)
+        worst = max(worst, d["trip"])
+        out.append({"t": t, **d})
+        print(f"  {t:4.2f}   {d['trip']:.3e}     {d['sing']:.3e}   "
+              f"{d['noflux']:.3e}  |  {d['their_spread']:.3e}")
+    ok = worst < 1e-8
+    print(f"\n{'PASS' if ok else 'FAIL'}: worst |ours - their Exact| = {worst:.2e}. "
+          f"The singlet and the flux-free Hamiltonian are off by up to "
+          f"{max(max(r['sing'], r['noflux']) for r in out):.2e} -- "
+          f"{'both corrections are needed' if ok else 'something is still wrong'}.")
+    return out, ok
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--open", action="store_true", help="open boundaries")
+    ap.add_argument("--deposit", action="store_true",
+                    help="check against the published exact data (needs refs/)")
+    ap.add_argument("--state", default="triplet", choices=sorted(DIMER_SIGN))
     args = ap.parse_args()
+    if args.deposit:
+        print("EXTERNAL check against Zenodo 17799843, method='Exact':\n")
+        rows, ok = deposit_check()
+        d = pathlib.Path(__file__).parent / "data" / "deposit_check.json"
+        d.write_text(json.dumps(rows, indent=1))
+        print(f"wrote {d}")
+        raise SystemExit(0 if ok else 1)
     per = not args.open
     print("U = 0 validation: polynomial estimator vs exact many-body evolution")
-    print(f"(periodic={per}, J=1, dimer covering along x, one doublon + one holon)\n")
-    v = validate([(2, 2), (3, 2), (4, 2), (3, 3)], [0.0, 0.25, 0.5, 1.0, 2.0], per)
+    print(f"(periodic={per}, J=1, no flux, {args.state} dimers along x, "
+          f"one doublon + one holon)\n")
+    v = validate([(2, 2), (3, 2), (4, 2), (3, 3)], [0.0, 0.25, 0.5, 1.0, 2.0],
+                 per, args.state)
     print("\nwall-time scaling of the polynomial estimator (no exact reference):")
     s = scaling([(4, 4), (8, 8), (16, 16), (32, 32), (64, 64), (128, 128),
                  ], 1.0, per)
@@ -473,6 +627,6 @@ if __name__ == "__main__":
     print(f"\nworst |C_poly - C_exact| = {worst:.3e}")
     p = pathlib.Path(__file__).parent / "data" / "free_fermion.json"
     p.parent.mkdir(exist_ok=True)
-    p.write_text(json.dumps({"validation": v, "scaling": s,
+    p.write_text(json.dumps({"validation": v, "scaling": s, "state": args.state,
                              "worst_abs_err": worst, "periodic": per}, indent=1))
     print(f"wrote {p}")

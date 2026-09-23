@@ -168,9 +168,9 @@ ENT_RANGE = (0.3, 1.0)
 # links at U = 0, against the exact free-fermion result, for chi = 256 .. 2048.
 #
 #   chi    256     512    1024    2048
-#   err  0.100   0.085   0.078   0.077     (mean over t in [0.5, 2])
+#   err  0.096   0.082   0.076   0.074     (mean over t in [0.5, 2])
 #
-# The error is essentially FLAT in chi -- err ~ chi^-0.12, so doubling the bond
+# The error is essentially FLAT in chi -- err ~ chi^-0.13, so doubling the bond
 # dimension buys 9%. It has plateaued at ~0.077, which at late times is several
 # times LARGER than the signal itself (exact |C^zz| = 0.021-0.031 for t >= 1.5).
 # Extrapolating that slope, reaching our tolerance would need chi ~ 2e12.
@@ -179,10 +179,13 @@ ENT_RANGE = (0.3, 1.0)
 # point (m=28, t=2, ent_rate=0.6) the entropy model predicts chi ~ 6.6e3 would
 # suffice. It is not merely mis-calibrated, it is the wrong shape -- an entropy
 # argument cannot see an error that saturates in chi.
-TDVP_MEASURED = {256: 0.1002, 512: 0.0846, 1024: 0.0782, 2048: 0.0773}
-TDVP_SLOPE = -0.12          # d log(err) / d log(chi), fitted
+TDVP_MEASURED = {256: 0.0965, 512: 0.0824, 1024: 0.0761, 2048: 0.0737}
+TDVP_SLOPE = -0.128         # d log(err) / d log(chi), fitted
 TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
-           "source": "Zenodo 17799843, TDVP vs FLO, dimer-link C^zz"}
+           "source": "Zenodo 17799843, TDVP vs the deposit's 'Exact' rows, "
+                     "dimer-link C^zz. NOT vs their 'FLO' rows: those two "
+                     "disagree by up to 2.9e-2 at t = 2, and free_fermion.py "
+                     "--deposit shows 'Exact' is the exact one"}
 
 # AND THAT RUN WAS NOWHERE NEAR A LEADERSHIP-SCALE ATTEMPT.
 # Snake MPS on 28 sites costs ~chi^3 per bond update, ~5.6e4 updates for the full
@@ -205,9 +208,9 @@ TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
 # Absolute error against exact FLO at U = 0, by time and bond dimension:
 #
 #    t     exact    chi=256   chi=512  chi=1024  chi=2048   ratio 256/2048
-#   0.1    0.9418   7.93e-3   7.38e-3   7.36e-3   7.35e-3      1.1x
-#   0.5    0.2429   6.36e-2   4.78e-2   3.31e-2   2.56e-2      2.5x
-#   2.0    0.0211   1.72e-1   1.47e-1   1.44e-1   1.57e-1      1.1x
+#   0.1    0.9418   7.94e-3   7.38e-3   7.37e-3   7.35e-3      1.1x
+#   0.5    0.2423   6.43e-2   4.84e-2   3.37e-2   2.62e-2      2.4x
+#   2.0    0.0411   1.63e-1   1.38e-1   1.38e-1   1.51e-1      1.1x
 #
 # At t = 0.1 the state is barely entangled and chi = 256 is wild overkill -- a
 # truncation-limited calculation would be at machine precision there. Instead the
@@ -222,18 +225,24 @@ TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
 #
 #    t    slope d log(err)/d log(chi)   reading
 #   0.1           -0.03                 floored
-#   0.3           -0.30                 truncation-limited
-#   0.5           -0.45                 truncation-limited
+#   0.3           -0.29                 truncation-limited
+#   0.5           -0.44                 truncation-limited
 #   0.7           -0.37                 truncation-limited
-#   1.0           -0.26                 truncation-limited
+#   1.0           -0.27                 truncation-limited
 #   1.5           -0.07                 stalling
 #   2.0           -0.04                 floored
 #
 # "A chi-independent floor present from the earliest times" is therefore right at
 # t = 0.1 and wrong as a blanket statement: through the middle of the window the
 # run IS bond-dimension-limited and chi buys error at a real rate (2.5x over 8x in
-# chi at t = 0.5). The pooled TDVP_SLOPE = -0.12 averages a floor, a converging
+# chi at t = 0.5). The pooled TDVP_SLOPE = -0.13 averages a floor, a converging
 # regime and a second floor, and must not be extrapolated in either direction.
+#
+# One more thing the full deposit settles: WHICH reference. It ships `Exact`,
+# `FLO` and `Majorana Propagation` rows, and `Exact` and `FLO` disagree by up to
+# 2.9e-2 at t = 2 -- the size of the errors being measured. calibration/
+# free_fermion.py --deposit reproduces `Exact` to 3e-10 and `FLO` only to 2.9e-2,
+# so every number here is against `Exact`.
 #
 # Both ends still defeat the dataset as a bound, for different reasons:
 #   * t = 0.1 -- barely entangled, chi = 256 is wild overkill, yet the error is
@@ -243,9 +252,9 @@ TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
 #     which, because it varies chi and never varies dt. That one missing scan is
 #     the calculation O10 needs, and it is a dt scan in the same library they
 #     used (TeNPy), not a new TDVP implementation.
-#   * t >= 1.5 -- the error at chi = 2048 (0.13, dimer links) is roughly four
-#     times the mean |C^zz| there (0.034) and six times the signed mean
-#     (0.021-0.031). A calculation whose error exceeds its answer bounds nothing.
+#   * t >= 1.5 -- the error at chi = 2048 (0.128, dimer links) is roughly 3.6
+#     times the mean |C^zz| there (0.035). A calculation whose error exceeds its
+#     answer bounds nothing.
 #
 # What survives unchanged: this dataset cannot bound what tensor networks can do
 # on this problem, the chi-extrapolation to 2e12 is meaningless, and the METHODS
@@ -257,16 +266,17 @@ TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
 # implementation that removed it could plausibly reach this accuracy at modest
 # chi, which would move the classical upper edge well above 26.
 TDVP_FLOOR = {"t": 0.1, "exact": 0.9418,
-              "err": {256: 7.93e-3, 512: 7.38e-3, 1024: 7.36e-3, 2048: 7.35e-3},
+              "err": {256: 7.935e-3, 512: 7.383e-3, 1024: 7.365e-3,
+                      2048: 7.354e-3},
               "verdict": "not truncation-limited at t = 0.1; see TDVP_SLOPE_BY_T"}
 
 # Per-time chi slope on the dimer links, fitted over chi = 256..2048, and the
 # mean |C^zz| there. Regenerate with `python3 calibration/tdvp_check.py --json`;
 # both come from Zenodo 17799843, not from any run of ours.
-TDVP_SLOPE_BY_T = {0.1: -0.033, 0.3: -0.298, 0.5: -0.447, 0.7: -0.373,
-                   1.0: -0.262, 1.5: -0.074, 2.0: -0.040}
-TDVP_SIGNAL_BY_T = {0.1: 0.9418, 0.3: 0.5872, 0.5: 0.2429, 0.7: 0.0933,
-                    1.0: 0.0753, 1.5: 0.0364, 2.0: 0.0344}
+TDVP_SLOPE_BY_T = {0.1: -0.033, 0.3: -0.294, 0.5: -0.440, 0.7: -0.371,
+                   1.0: -0.268, 1.5: -0.073, 2.0: -0.036}
+TDVP_SIGNAL_BY_T = {0.1: 0.9418, 0.3: 0.5869, 0.5: 0.2423, 0.7: 0.0931,
+                    1.0: 0.0753, 1.5: 0.0347, 2.0: 0.0411}
 
 # PEAK-FLOP ARITHMETIC, NOT A DEMONSTRATED WALL TIME (review #7). Dividing a
 # chi^3 operation count by a machine's peak rate assumes perfect strong scaling
@@ -304,17 +314,40 @@ def tdvp_chi_for(tol: float) -> float:
 # (arXiv:2510.26300); calibration/free_fermion.py is an independent
 # implementation of it.
 #
-# VALIDATED, not asserted: against exact many-body evolution at m = 4, 6, 8, 9
-# and t = 0, 0.25, 0.5, 1, 2, the worst disagreement is 1.7e-15 -- machine
-# precision. An O(m) form (sparse Krylov propagator, block-collapsed sums)
-# reproduces the O(M^2) form exactly and was timed out to m = 1024.
+# VALIDATED TWICE, and the second one mattered.
+#
+# INTERNALLY, against exact many-body evolution at m = 4, 6, 8, 9 and
+# t = 0, 0.25, 0.5, 1, 2: worst disagreement 7.8e-16, machine precision. An O(m)
+# form (sparse Krylov propagator, block-collapsed sums) reproduces the O(M^2)
+# form exactly and was timed out to m = 1024.
+#
+# EXTERNALLY, against the published exact C^zz for the same 7x4 instance
+# (`python3 calibration/free_fermion.py --deposit`): 2.9e-10. That check is what
+# caught two physics errors an internal check cannot see, because it validates
+# the estimator against OUR state and OUR Hamiltonian:
+#
+#   * the dimers were SINGLETS, (|A> - |B>)/sqrt(2). The experiment uses the
+#     Sz = 0 TRIPLET, the + combination (arXiv:2510.26300 Fig. 1). Both give
+#     C^zz = -1 at t = 0, so nothing internal could tell them apart; they differ
+#     by up to 0.20 by t = 0.5.
+#   * there was NO PI FLUX. The experiment threads pi through the short cycle,
+#     a Peierls phase of pi/4 on every y-bond. With Lx = 7 odd the lattice is
+#     not bipartite, so this is not a gauge choice: it moves C^zz by up to 0.13.
+#
+# Neither error touches the COST below -- the operation count and the memory are
+# identical for either state and for a complex hopping matrix -- so the frontier
+# and the classical band are unchanged. What changes is that the arm now
+# reproduces the experiment it claims to be the free-fermion limit of.
 #
 # The frontier below is a MEASURED single-core wall time for unoptimised
 # CPython, deliberately: it needs no extrapolation, and it already exceeds the
 # ED band by six orders of magnitude.
 FREE_FERMION = {
     "valid_at": "U/J = 0 exactly",
-    "worst_abs_err": 1.7e-15,
+    "worst_abs_err": 7.8e-16,
+    "deposit_abs_err": 2.9e-10,        # vs the published exact C^zz at 7x4
+    "state": "Sz = 0 triplet",
+    "flux_y": 0.7853981633974483,      # pi/4 per y-bond = pi through the cycle
     "validated_m": (4, 6, 8, 9),
     "validated_t": (0.0, 0.25, 0.5, 1.0, 2.0),
     # one core, unoptimised CPython; log-log exponent 0.979 -- linear

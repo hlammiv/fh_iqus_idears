@@ -781,11 +781,36 @@ Neither piece needs the branches. The argument is the experimental paper's
 Appendix E (arXiv:2510.26300); `calibration/free_fermion.py` is an independent
 implementation of it.
 
-**Validated, not asserted.** Against exact many-body evolution at `m = 4, 6, 8, 9`
-and `t = 0, 0.25, 0.5, 1, 2`, the worst disagreement is **1.7 × 10⁻¹⁵** — machine
-precision. An `O(m)` form (sparse Krylov propagator, block-collapsed sums)
-reproduces the `O(M²)` form to 10⁻¹⁶ and was timed out to `m = 16384`, giving a
-log–log exponent of **0.979**: linear, as claimed.
+**Validated twice, and the second one mattered.**
+
+*Internally*, against exact many-body evolution at `m = 4, 6, 8, 9` and
+`t = 0, 0.25, 0.5, 1, 2`: worst disagreement **7.8 × 10⁻¹⁶**, machine precision.
+An `O(m)` form (sparse Krylov propagator, block-collapsed sums) reproduces the
+`O(M²)` form to 10⁻¹⁶ and was timed out to `m = 16384`, giving a log–log exponent
+of **0.979**: linear, as claimed.
+
+*Externally*, against the **published** exact `C^zz` for the same 7 × 4 instance
+(`python3 calibration/free_fermion.py --deposit`): **2.9 × 10⁻¹⁰**. That check is
+the one that earned its keep, because an internal check evolves *our* state under
+*our* Hamiltonian and so cannot see either of the two errors it caught:
+
+- **The dimers were singlets.** `(|A⟩ − |B⟩)/√2`, where the experiment uses the
+  `S^z = 0` **triplet**, the `+` combination ("Each link corresponds to the
+  S^z_total = 0 triplet state", arXiv:2510.26300 Fig. 1). Both give `C^zz = −1`
+  at `t = 0`, so no internal check can distinguish them — and they differ by up
+  to **0.20** by `t = 0.5`.
+- **There was no π flux.** The experiment threads π through the short direction:
+  "a π phase flux in the long direction — i.e. the Peierls phase in the short
+  direction … around each highlighted plaquette `φ_ij = π/4`". With `Lx = 7` odd
+  the lattice is not bipartite, so this is not removable by a gauge choice; it
+  moves `C^zz` by up to **0.13**.
+
+Neither error touches the cost below — the operation count and the memory are the
+same for either state and for a complex hopping matrix — so the frontier and the
+classical band are unchanged. What changes is that the arm now reproduces the
+experiment it claims to be the free-fermion limit of. The deposit's own `Exact`
+and `FLO` rows disagree by up to `2.9 × 10⁻²` at `t = 2`; ours matches `Exact`,
+which is how the TDVP comparison in §5 knows which to measure against.
 
 **The frontier.** At 0.70 ms per site per correlator on **one core** of
 unoptimised CPython, twenty time points fit `m ≈ 4 × 10⁷` into a week. Against

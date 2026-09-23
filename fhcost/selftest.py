@@ -1215,6 +1215,32 @@ def main() -> int:
           f"worst |C_poly - C_exact| = {ff['worst_abs_err']:.1e} at m = "
           f"{ff['validated_m']}, t = {ff['validated_t']} "
           f"(calibration/free_fermion.py)")
+    check("and against SOMEONE ELSE'S exact answer, which is the check that bit",
+          ff["deposit_abs_err"] < 1e-8,
+          f"{ff['deposit_abs_err']:.1e} against the published exact C^zz on the "
+          f"7x4 instance. The internal check cannot see a wrong state or a "
+          f"missing flux, because it evolves the same ones")
+    _dj = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "deposit_check.json"
+    if _dj.exists():
+        import json as _json
+        _DD = _json.loads(_dj.read_text())
+        _w = max(r["trip"] for r in _DD)
+        _s = max(r["sing"] for r in _DD)
+        _n = max(r["noflux"] for r in _DD)
+        check("the singlet and the flux-free Hamiltonian are BOTH visibly wrong",
+              _w < 1e-8 and _s > 1e-2 and _n > 1e-2,
+              f"triplet + pi flux {_w:.1e}; singlet {_s:.2f}; no flux {_n:.2f}. "
+              f"Both give C^zz = -1 at t = 0, which is why neither showed up "
+              f"until the deposit was read")
+        check("and their own 'FLO' rows are not the reference to measure against",
+              max(r["their_spread"] for r in _DD) > 1e-2,
+              f"the deposit's 'Exact' and 'FLO' disagree by up to "
+              f"{max(r['their_spread'] for r in _DD):.1e}, the size of the TDVP "
+              f"errors in O10; ours reproduces 'Exact' to {_w:.0e}")
+    check("the state and the flux are recorded, not left implicit",
+          ff["state"].startswith("Sz = 0 triplet") and abs(ff["flux_y"] - 0.7853981633974483) < 1e-12,
+          f"{ff['state']}, Peierls phase pi/4 per y-bond "
+          f"(arXiv:2510.26300 Fig. 1 and Sec. I)")
     secs = ff["seconds"]
     per = [secs[m] / m for m in sorted(secs)]
     check("and its measured cost is LINEAR in m, not exponential",

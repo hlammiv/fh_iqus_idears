@@ -131,6 +131,23 @@ Two traps worth recording, since both silently return the wrong thing:
 - the `spins` column is `None` throughout, which makes any pandas merge that
   includes it drop every row without error.
 
+**What the deposit settled that the paper alone would not have.** Comparing our
+independent free-fermion estimator to their exact rows (`python3
+calibration/free_fermion.py --deposit`) pinned down the instance completely, and
+caught two errors in ours:
+
+| | read off | how |
+|---|---|---|
+| dimer covering (13 links) | the site pairs with `C^zz = -1` exactly at `t = 0` | `spin_correlator_neighbours` |
+| doublon (3, 2), holon (0, 0) | the single nonzero entries at `t = 0` | `Doublon`, `Holon` |
+| `S^z = 0` **triplet**, not singlet | 500x better agreement at `t = 0.1` | confirmed in the paper, Fig. 1 |
+| **pi flux**, Peierls `pi/4` per y-bond | one-body charge matches to `2e-10` instead of `3e-2` | confirmed in the paper, Sec. I |
+
+And a third: their `Exact` and `FLO` rows **disagree**, by up to `2.9e-2` at
+`t = 2`. Ours reproduces `Exact` to `3e-10` and `FLO` only to `2.9e-2`, so
+`Exact` is the reference. Measuring TDVP against `FLO` would have charged it with
+someone else's error.
+
 **And the tooling answer.** The deposit's own metadata records the simulator as
 `Tenpy $\chi=512$`: their TDVP is **TeNPy**. That settles what the missing dt
 scan should be written in — `calibration/tdvp_dt.py` configures the same library
