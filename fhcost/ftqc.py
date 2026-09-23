@@ -399,8 +399,8 @@ def max_m_pinnacle(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
     lo, hi = M_MIN, m_hi
     if ok(hi):
         return hi
-    for _ in range(34):
-        mid = 0.5 * (lo + hi)
+    for _ in range(80):          # same iteration count as every other arm, so a
+        mid = 0.5 * (lo + hi)    # parity check against the explorer is exact
         lo, hi = (mid, hi) if ok(mid) else (lo, mid)
     return lo
 

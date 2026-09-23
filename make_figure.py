@@ -198,6 +198,12 @@ for tv, lab, col in ((1.0 / 26.0, r"slide 1: $t \leq 1/m$", F.ORANGE),
                     color=col, va="center", ha="left",
                     arrowprops=dict(arrowstyle="->", color=col, lw=0.8))
 
+# Model fingerprint, so a figure can never be compared against a table or an
+# explorer built from a different model (second-pass review #3).
+from fhcost.record import model_id
+fig.text(0.995, 0.004, f"model {model_id()}", ha="right", va="bottom",
+         fontsize=4.2, color="0.55")
+
 out = pathlib.Path(__file__).parent / "figures"
 out.mkdir(exist_ok=True)
 for ext in ("pdf", "png"):

@@ -69,5 +69,9 @@ ax.annotate("only fault tolerance\nclears the classical band",
             arrowprops=dict(arrowstyle="->", color=C["surface"], lw=1.8,
                             connectionstyle="arc3,rad=-0.25"))
 
+from fhcost.record import model_id
+fig.text(0.995, 0.004, f"model {model_id()}", ha="right", va="bottom",
+         fontsize=5.5, color="0.6")
+
 fig.tight_layout(pad=0.6)
 H.save(fig, "fh_resource_estimate_slide", script=__file__)

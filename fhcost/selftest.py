@@ -1,6 +1,7 @@
 """Unit and sanity checks. Pure arithmetic -- allocates nothing, runs in <1 s."""
 from __future__ import annotations
-import math
+import math, re, pathlib
+from dataclasses import fields as dc_fields
 import numpy as np
 from .budget import DEFAULT
 from . import hubbard, nisq, ftqc, classical, curves, converged, presets
@@ -585,6 +586,27 @@ def main() -> int:
     if FAILS:
         print(f"{len(FAILS)} FAILED: " + ", ".join(FAILS))
         return 1
+    # ---- one model, one record (second-pass review #3) ----------------------
+    import json
+    from . import record as _rec
+    root = pathlib.Path(__file__).resolve().parent.parent
+    live = _rec.model_id()
+    rj = root / "RESULTS.json"
+    check("RESULTS.json exists and is the current model",
+          rj.exists() and json.loads(rj.read_text())["model_id"] == live,
+          f"model {live}")
+    html = (root / "explorer.html").read_text()
+    stamp = re.search(r'const MODEL_ID = "([0-9a-f]+)"', html)
+    check("explorer.html is stamped with the same model",
+          bool(stamp) and stamp.group(1) == live,
+          f"explorer {stamp.group(1) if stamp else 'unstamped'} vs code {live}")
+    check("every Config field is exported to the explorer",
+          all(f'"{f.name}"' in html.split("END GENERATED")[0]
+              for f in dc_fields(DEFAULT)),
+          "CFG0 is generated, never typed")
+    # the JS port itself is checked in a headless browser by check_parity.py;
+    # selftest stays pure arithmetic and does not shell out
+
     print("all checks passed")
     return 0
 

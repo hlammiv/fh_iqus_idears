@@ -261,6 +261,39 @@ Until at least one purpose-built, leadership-scale classical attack is run, the
 honest headline is "clears the **exact-diagonalisation** frontier", not "clears
 classical".
 
+### O11b. Multiproduct coefficients are calibrated only to tau <= 0.5
+*Tier-1 done; tier-2 rerun queued. (Second-pass finding #2.)*
+
+The model reused the SECOND-order coefficient at every multiproduct order.
+Validating the convergence order does not justify that -- the order and the
+coefficient are different things. Order-2k coefficients are now extracted from
+the calibration data (`calibration/fit_w.py --mpf`), r >= 4, U/J = 4:
+
+    W_MPF = {4: {0.25: 0.118, 0.5: 0.161},
+             6: {0.25: 0.031, 0.5: 0.017},
+             8: {0.25: 0.007, 0.5: 0.004}}
+
+At tau = 0.5 order 4, W_4 = 0.161 against W_2 = 1.290, so the proper coefficient
+moves the step count materially: MPF at n = 1e6 gives 22 / 28 / 28 at orders
+4 / 6 / 8 against 23 / 23 / 21 before, putting the interior optimum at order 6.
+
+**Only tau <= 0.5 is usable.** At tau >= 1 the observable error passes through
+zero crossings and the extracted coefficient swings 3-13x across r. Every MPF
+point on the figure is beyond even this reduced domain -- a stronger caveat than
+the second-order calibration carries, and `selftest` asserts it.
+
+**Queued rerun (~1-2 hours on lenore, all patches <= 12 sites):**
+1. finer r sampling (r = 1..128, not powers of two) to locate the asymptotic
+   plateau and step over the zero crossings;
+2. record **state infidelity** alongside the observable error -- it is monotone
+   and has no zero crossings, so it pins the coefficient where the observable
+   cannot;
+3. more tau values, for interpolation rather than clamping.
+
+Nothing here fixes tau > 2 or m > 12; that is O9.
+
+## First-pass review status
+
 | # | finding | status |
 |---|---|---|
 | 1 | initial state and connected correlator incompatible | **fixed** — matched to arXiv:2510.26300 |
@@ -274,3 +307,45 @@ classical".
 | 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured (O5); geometry, cluster matching and velocities still open |
 | 10 | error components do not combine to the tolerance | open |
 | 11 | implementation and reporting issues | **fixed** — all eleven; headlines now generated from one record |
+
+## Second-pass review status
+
+| # | finding | status |
+|---|---|---|
+| 1 | the convergence criterion fails an exact physical limit | **fixed** — factorial Lieb-Robinson form, exact t -> 0 limit |
+| 2 | the default Trotter calibration is used beyond its evidence | **partial** — order-2k coefficients measured (O11b); domain still exceeded (O9) |
+| 3 | Python, the explorer and the documents disagree | **fixed** — one model, one record; see below |
+| 4 | factory cleanup neglects circuit-level errors | open |
+| 5 | Pinnacle lacks the common FT resource/error ledger | open |
+| 6 | Hamming-weight workspace does not match the cited circuit | open |
+| 7 | the classical baseline misses the U = 0 easy limit | open |
+| 8 | the signal fit does not support per-time relative accuracy | open |
+| 9 | zero uncertainty edges disappear from the plot | open |
+| 10 | integer lattice reporting ignores initial-state constraints | open |
+
+### What #3 closed, and what it did not
+
+`fhcost/` is now the only model. `make_record.py` writes `RESULTS.json` and
+stamps every consumer from it: the explorer's entire constants block, the
+headline prose in `HEADLINES.md` and `README.md`, and a model fingerprint on the
+figure, the slide, `crossovers.md` and the explorer header. `make_record.py
+--check` fails if any of them is stale, and `selftest` asserts the fingerprints
+agree.
+
+The JavaScript is still a second implementation of the *functions*. It is no
+longer a second set of *assumptions*, and it is no longer trusted: the page
+recomputes eight configurations x six lattice sizes x sixteen intermediates,
+plus eight qubit counts x seven architectures, plus the classical band, against
+the Python answers on load, and `check_parity.py` reads the verdict out of a
+headless Chrome. A 1e-7 nudge to one line of the port trips 209 probes.
+
+**Still open from #3:** the port is verified, not generated. A future change to
+`fhcost/` will make the parity check go red rather than fixing the JavaScript
+automatically. Generating the port from a shared intermediate representation
+would remove the remaining hand-maintenance; it is not worth it yet.
+
+**Also fixed in passing:** one headline line asserted that nothing classical
+converges, on the strength of the finite-size buffer at t = 0 (2 sites) -- which
+actually shows the opposite. The headline now evaluates the criterion
+self-consistently at each arm's own t_max, where nothing on the figure closes the
+loop, exact diagonalisation included.
