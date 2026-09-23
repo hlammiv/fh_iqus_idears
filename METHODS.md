@@ -433,6 +433,64 @@ threshold B = 1.58%, exponent (d+1)/2, reproducing every entry to within 26%
 across twelve orders of magnitude); it is labelled a refit, not an independently
 demonstrated hardware threshold.
 
+### Hamming-weight phasing: one construction (review #6)
+
+The workspace was a log-sized weight register plus a "phase-gradient register"
+whose size was **the rotation synthesis T-count**. A T-count is not a register
+size, and this was not the workspace of the construction whose T-count the model
+was already charging. It happened to land near the right answer at one batch
+size and was wrong by 3.6× at 256 and 5.9× at 432.
+
+Campbell's Theorem 2 (arXiv:2012.09238, Appendix E) is explicit. A batch of `b`
+identical-angle phase gates `∏ⱼ exp(iθZⱼ)` costs
+
+```
+k     = floor(log2 b) + 1     arbitrary rotations
+alpha = b - w(b)              Toffoli gates AND clean ancillas
+```
+
+with `w` the popcount. Everything now comes from that one statement — workspace,
+T-count, synthesis count and depth:
+
+| | |
+|---|---|
+| clean ancillas | `alpha`, reused across batches |
+| T gates per group | `4·(m/b)·alpha + (m/b)·k·n_syn` |
+| depth per group | `(m/b)·(2⌈log₂b⌉ + n_syn)` — batches **serialise**, they share the workspace |
+| synthesised rotations per shot | `Σᵢ |cᵢ| kᵢ · r · c_rot · (m/b)·k` |
+
+`alpha` reproduces the review's 63 / 255 / 428 at `b` = 64 / 256 / 432 exactly,
+and is non-decreasing in `b`, so the bisection stays monotone. `hwp_group` also
+reproduces Campbell's Eq. (E16) batching map, which is the closest thing to a
+compiled count available without a compiler.
+
+**Batch size is now a real space–time knob**, because both sides of it come from
+the same theorem: `b = 1` is plain synthesis (no ancillas, `m` rotations),
+`b = m` is minimum T-count at maximum workspace. At `m = 256` that is 0 ancillas
+and 2.4×10⁷ T gates against 255 ancillas and 1.8×10⁶. The default is the full
+batch, which is the construction whose T-count the model always used — the
+change is that it now pays for it. `crossovers.md` carries the trade.
+
+**Synthesis error is allocated over the whole shot.** It was divided by the
+number of rotation *groups* per step (`c_rot` = 5), ignoring the step count, the
+`k` weight-register rotations each group produces, and the multiproduct branches.
+The union bound now runs over every synthesised rotation, weighted by `|cᵢ|kᵢ`
+across branches — 3.0× the single-circuit count at order 4, 8.2× at order 6.
+
+**Effect.** The old formula was wrong in *both* directions, and the correction
+shows it:
+
+| n | surface FT before | after | Pinnacle before | after |
+|---|---:|---:|---:|---:|
+| 10⁵ | 4.9 | **9.4** | 11.5 | **14.1** |
+| 10⁶ | 25.7 | 25.8 | 38.6 | 38.0 |
+| 10⁷ | 52.6 | **50.4** | 126 | **115** |
+| 10⁸ | 251 | **222** | 350 | **305** |
+
+It was too *large* at small `m` — the bogus ~60-qubit gradient register dominated
+— and far too *small* at large `m`, where the true workspace is linear in `m`,
+not logarithmic.
+
 ### Pinnacle on the common ledger (review #5)
 
 This arm was costed more loosely than the surface-code arm in three ways, and

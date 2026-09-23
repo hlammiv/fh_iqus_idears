@@ -127,6 +127,11 @@ class Config:
     # A FLOOR on the magic plant, not its size: the unit count is set by the T
     # rate the circuit demands (select_factory). The old default of 8 was
     # arbitrary and never binds at any plotted point.
+    # Hamming-weight phasing batch size: 0 = phase a whole group of m
+    # identical-angle rotations at once (minimum T-count, maximum workspace).
+    # A smaller batch trades T gates for ancillas; both sides come from
+    # Campbell Thm 2, so the trade is consistent. Not optimised -- see O13.
+    hwp_batch: int = 0
     n_factories: int = 1
     d_max: int = 101
 

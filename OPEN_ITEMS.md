@@ -317,11 +317,31 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 3 | Python, the explorer and the documents disagree | **fixed** — one model, one record; see below |
 | 4 | factory cleanup neglects circuit-level errors | **fixed** — published operating points replace the cubic law; selection is p-aware and plant-level |
 | 5 | Pinnacle lacks the common FT resource/error ledger | **fixed** — workspace charged, engine selected and certified, stalls and rejection scheduled |
-| 6 | Hamming-weight workspace does not match the cited circuit | open |
+| 6 | Hamming-weight workspace does not match the cited circuit | **fixed** — Campbell Thm 2; workspace, T-count, depth and synthesis all from one construction |
 | 7 | the classical baseline misses the U = 0 easy limit | open |
 | 8 | the signal fit does not support per-time relative accuracy | open |
 | 9 | zero uncertainty edges disappear from the plot | open |
 | 10 | integer lattice reporting ignores initial-state constraints | open |
+
+### What #6 closed, and what it did not
+
+The workspace formula read a synthesis T-count as a register size. It is now
+Campbell Thm 2's `alpha = b - w(b)`, reproducing 63 / 255 / 428 at
+`b = 64 / 256 / 432`, and the T-count, depth and synthesis allocation all come
+from the same batching rather than from three different places. The synthesis
+allowance now covers every synthesised rotation in the shot, branches included,
+instead of dividing by the five rotation groups per step.
+
+The old formula was wrong in both directions: too large at small `m` (a bogus
+~60-qubit gradient register) and far too small at large `m` (log instead of
+linear). Surface FT 4.9 -> 9.4 at `n = 1e5` and 251 -> 222 at `1e8`.
+
+**Still open from #6 (O13):** the batch size is a free parameter, not an
+optimised one. It is a genuine space-time trade -- at `m = 256`, `b = 1` costs
+0 ancillas and 2.4e7 T gates while `b = m` costs 255 ancillas and 1.8e6 -- and
+the model simply takes the full batch. The optimum depends on `d`, which depends
+on the T-count, so choosing it needs an inner loop. `crossovers.md` shows what
+the knob is worth; nothing chooses it.
 
 ### What #5 closed, and what it did not
 

@@ -40,7 +40,7 @@ OTHER CORRECTIONS FOLDED IN
 from __future__ import annotations
 import math
 from .budget import Config, DEFAULT
-from .hubbard import (counts, step_depth, eps_absolute, multiproduct_l1,
+from .hubbard import (counts, step_depth, eps_absolute, multiproduct_l1, trotter_steps,
                       multiproduct_branches, t_max, signal_at, conf_z)
 from .nisq import M_MIN
 
@@ -184,20 +184,88 @@ def magic_cost(cfg: Config = DEFAULT) -> tuple[float, float]:
     return r[3], r[4]
 
 
-def hwp_workspace(m: float, cfg: Config = DEFAULT) -> float:
-    """Logical qubits Hamming-weight phasing needs, which were never charged.
+# ---------------------------------------------------------------------------
+# HAMMING-WEIGHT PHASING -- ONE construction, everything derived from it
+#
+# The previous version charged a log-sized weight register plus a "phase-gradient
+# register" whose size was the rotation SYNTHESIS T-count. That is not a register
+# size, and it is not the workspace of the construction whose T-count the model
+# was already using. It happened to land near the right answer at one batch size
+# (64 -> 64 against 63) and was wrong by 3.6x at 256 and 5.9x at 432.
+#
+# Campbell, arXiv:2012.09238 Appendix E, Theorem 2 is explicit. A batch of b
+# identical-angle phase gates prod_j exp(i theta Z_j) costs
+#
+#     k = floor(log2 b) + 1     arbitrary rotations
+#     alpha = b - w(b)          Toffoli gates AND clean ancillas
+#
+# with w(b) the popcount. alpha reproduces the review's 63 / 255 / 428 at
+# b = 64 / 256 / 432 exactly, and is non-decreasing in b, so the bisection stays
+# monotone. Batches within a group run SEQUENTIALLY because they share the
+# ancilla workspace, which is what makes b a genuine space-time knob: b = 1 is
+# plain synthesis (no ancillas, m rotations), b = m is minimum T-count at
+# maximum workspace.
+ROTATION_GROUPS_PER_STEP = None     # = cfg.c_rot; named here for the reader
 
-    Phasing k identical-angle rotations computes their Hamming weight into a
-    ceil(log2 k)-qubit register and applies one rotation per register bit, so the
-    T-count saving comes with a workspace cost. A phase-gradient register of
-    n_syn qubits is also needed; it is catalytic, so it is paid once.
-    [Gidney, Quantum 2, 74 (2018)]
+
+def popcount(b: int) -> int:
+    return bin(int(b)).count("1")
+
+
+def hwp_batch_size(m: float, cfg: Config = DEFAULT) -> int:
+    """Rotations phased together. cfg.hwp_batch = 0 means the whole group."""
+    b = int(cfg.hwp_batch) if cfg.hwp_batch > 0 else int(math.floor(m))
+    return max(1, min(b, max(int(math.floor(m)), 1)))
+
+
+def hwp_group(m: float, cfg: Config = DEFAULT) -> dict:
+    """Cost of ONE group of m identical-angle rotations, from Theorem 2."""
+    b = hwp_batch_size(m, cfg)
+    n_batches = max(m / b, 1.0)
+    alpha = b - popcount(b)                       # clean ancillas == Toffolis
+    k = math.floor(math.log2(b)) + 1              # arbitrary rotations per batch
+    return {"batch": b, "n_batches": n_batches,
+            "ancilla": float(alpha),              # peak: batches reuse it
+            "toffoli": n_batches * alpha,
+            "rotations": n_batches * k,
+            # a Hamming-weight tree over b bits is ~log2 b Toffoli layers, and it
+            # is computed and uncomputed; the k weight-register rotations act on
+            # distinct qubits and run in parallel
+            "toffoli_depth": n_batches * 2.0 * max(math.ceil(math.log2(b)), 1),
+            "rotation_layers": n_batches}
+
+
+def hwp_workspace(m: float, cfg: Config = DEFAULT) -> float:
+    """Clean ancillas the construction needs. Campbell Thm 2: alpha = b - w(b).
+
+    This is a property of the BATCH, not of the synthesis precision -- the old
+    formula read a T-count as a register size, which is the error review #6
+    names.
     """
-    c = counts(m, cfg)
-    n_distinct = max(c["n_rot"] / max(m, 1.0), 1.0)
-    eps_syn = cfg.frac_syn * eps_absolute(cfg, m) / max(n_distinct, 1.0)
-    n_syn = ROSS_SELINGER * math.log2(1.0 / eps_syn)
-    return math.ceil(math.log2(max(m, 2.0))) + math.ceil(n_syn)
+    return hwp_group(m, cfg)["ancilla"]
+
+
+def n_synth_rotations(m: float, cfg: Config = DEFAULT) -> float:
+    """Arbitrary rotations actually synthesised in one shot, ALL of them.
+
+    The synthesis allowance was previously divided by the number of rotation
+    GROUPS per step (c_rot = 5), ignoring the step count, the weight-register
+    rotations each group produces, and the multiproduct branches. Branch i runs
+    at k_i times the base step count and enters the estimator with weight |c_i|,
+    so the union bound over synthesis bias carries both.
+    """
+    g = hwp_group(m, cfg)
+    r = trotter_steps(m, cfg)
+    per_step = cfg.c_rot * g["rotations"]
+    return sum(abs(ci) * ki * r * per_step
+               for ki, ci in multiproduct_branches(cfg.trotter_order_k))
+
+
+def synthesis_cost(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
+    """(per-rotation synthesis error, T gates per rotation)."""
+    n_rot_syn = max(n_synth_rotations(m, cfg), 1.0)
+    eps_syn = cfg.frac_syn * eps_absolute(cfg, m) / n_rot_syn
+    return eps_syn, ROSS_SELINGER * math.log2(1.0 / eps_syn)
 
 
 def star_theta(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
@@ -251,15 +319,17 @@ def n_shots_total(cfg: Config = DEFAULT, m: float | None = None) -> float:
 
 
 def t_counts(m: float, cfg: Config = DEFAULT) -> tuple[float, float]:
-    """(total T gates, sequential T-layers) with Hamming-weight phasing."""
-    c = counts(m, cfg)
-    r = c["steps"]
-    n_distinct = max(c["n_rot"] / max(m, 1.0), 1.0)      # distinct angles
-    eps_syn = cfg.frac_syn * eps_absolute(cfg, m) / max(n_distinct, 1.0)
-    n_syn = ROSS_SELINGER * math.log2(1.0 / eps_syn)
-    lg = math.log2(max(m, 2.0))
-    n_t = r * cfg.c_rot * (4.0 * (m - 1.0) + lg * n_syn)
-    d_t = r * cfg.c_rot * (2.0 * lg + n_syn)
+    """(total T gates, sequential T-layers) for the Hamming-weight construction.
+
+    Derived from hwp_group, so qubits, T-count, synthesis count and depth all
+    come from the SAME circuit (review #6). Batches are sequential -- they share
+    the ancilla workspace -- so the depth carries the batch count too.
+    """
+    r = trotter_steps(m, cfg)
+    g = hwp_group(m, cfg)
+    _, n_syn = synthesis_cost(m, cfg)
+    n_t = r * cfg.c_rot * (4.0 * g["toffoli"] + g["rotations"] * n_syn)
+    d_t = r * cfg.c_rot * (g["toffoli_depth"] + g["rotation_layers"] * n_syn)
     return max(n_t, 1.0), max(d_t, 1.0)
 
 

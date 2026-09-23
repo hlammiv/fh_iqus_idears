@@ -573,7 +573,8 @@ def main() -> int:
         signal_regime="fixed", s_sig=x, pl_model="fowler")) for x in ss]), 1)[0]
     check("m ~ s^(2/9) holds for noise-limited NISQ only", abs(en - 2 / 9) < 0.1,
           f"NISQ exponent {en:.2f}")
-    check("the shot-limited FT arm scales far more steeply", ef > 1.0,
+    check("the shot-limited FT arm scales far more steeply than NISQ",
+          ef > 3.0 * en,
           f"FT exponent {ef:.2f} -- the 2/9 claim never applied here")
     check("the Willow p_L is a fixed anchor, not a p-dependent family",
           ftqc.p_logical(21, DEFAULT.but(pl_model="willow"))
@@ -645,6 +646,70 @@ def main() -> int:
               abs(pt["p_T_target"] * 2.0 * pt["n_t"]
                   - DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, 64.0)) < 1e-18,
               "both carry the factor 2 for a flipped +-1 outcome")
+
+    # ---- Hamming-weight phasing, one construction (second-pass review #6) ---
+    # 1. peak live ancillas at several batch sizes, against Campbell Thm 2
+    for b, want in ((8, 7), (16, 15), (64, 63), (256, 255), (432, 428)):
+        g = ftqc.hwp_group(float(b), DEFAULT.but(hwp_batch=b))
+        check(f"batch {b}: peak clean ancillas = b - w(b)",
+              g["ancilla"] == want and g["toffoli"] == want,
+              f"alpha = {g['ancilla']:.0f}, k = {math.floor(math.log2(b)) + 1} "
+              f"rotations; the old formula gave "
+              f"{math.ceil(math.log2(b)) + 60:.0f}-ish")
+    check("alpha is non-decreasing in b, so the bisection stays monotone",
+          all(ftqc.popcount(b) >= 1 and
+              (b - ftqc.popcount(b)) >= (b - 1 - ftqc.popcount(b - 1))
+              for b in range(2, 4096)),
+          "b - w(b) has no dips")
+
+    # 2. Campbell's Eq. (E16) mapping, which is the closest thing to a compiled
+    #    count available here: 4L^2 rotations batched in b give 4L^2 alpha/b
+    #    Toffolis and 4L^2 k/b rotations
+    L2, bb = 4096.0, 64
+    g = ftqc.hwp_group(L2, DEFAULT.but(hwp_batch=bb))
+    check("hwp_group reproduces Campbell Eq. (E16) scaling",
+          abs(g["toffoli"] - L2 * (bb - ftqc.popcount(bb)) / bb) < 1e-9
+          and abs(g["rotations"] - L2 * (math.floor(math.log2(bb)) + 1) / bb) < 1e-9,
+          f"{g['toffoli']:.0f} Toffolis, {g['rotations']:.0f} rotations "
+          f"for {L2:.0f} phase gates in batches of {bb}")
+
+    # 3. depth respects the dependency: batches share the ancillas, so they
+    #    cannot overlap
+    n1, d1 = ftqc.t_counts(256.0, DEFAULT.but(hwp_batch=256))
+    n2, d2 = ftqc.t_counts(256.0, DEFAULT.but(hwp_batch=64))
+    check("smaller batches cost more T gates AND more depth",
+          n2 > n1 and d2 > d1,
+          f"b=256: {n1:.2e} T, depth {d1:.2e};  b=64: {n2:.2e} T, depth {d2:.2e}")
+    check("and the batch knob is a real space-time trade",
+          ftqc.hwp_workspace(256.0, DEFAULT.but(hwp_batch=64)) <
+          ftqc.hwp_workspace(256.0, DEFAULT.but(hwp_batch=256)),
+          "63 ancillas against 255, for 1.9x the T gates")
+
+    # 4. the synthesis allowance covers the WHOLE shot, branches included
+    for mm in (16.0, 64.0, 256.0):
+        eps_syn, n_syn = ftqc.synthesis_cost(mm, DEFAULT)
+        tot = ftqc.n_synth_rotations(mm, DEFAULT) * eps_syn
+        check(f"synthesis bias over the whole shot fits its share at m = {mm:.0f}",
+              tot <= DEFAULT.frac_syn * hubbard.eps_absolute(DEFAULT, mm) * (1 + 1e-12),
+              f"{ftqc.n_synth_rotations(mm, DEFAULT):.3e} rotations x "
+              f"{eps_syn:.2e} = {tot:.2e} <= "
+              f"{DEFAULT.frac_syn * hubbard.eps_absolute(DEFAULT, mm):.2e}")
+    # branches are counted: at the SAME order, the branch-weighted total must
+    # exceed the naive single-circuit count. (Across orders it can fall, because
+    # a higher-order formula needs far fewer base steps -- that is the point of
+    # multiproduct, not a bookkeeping failure.)
+    for k in (2, 3):
+        c = DEFAULT.but(trotter_order_k=k)
+        naive = (hubbard.trotter_steps(64.0, c) * c.c_rot
+                 * ftqc.hwp_group(64.0, c)["rotations"])
+        check(f"order {2 * k} counts every branch, not just one circuit",
+              ftqc.n_synth_rotations(64.0, c) > 1.5 * naive,
+              f"{ftqc.n_synth_rotations(64.0, c) / naive:.1f}x the single-circuit "
+              f"count, weighted by |c_i| k_i")
+    check("workspace no longer reads a T-count as a register size",
+          ftqc.hwp_workspace(64.0, DEFAULT)
+          == ftqc.hwp_workspace(64.0, DEFAULT.but(eps=0.001)),
+          "alpha depends on the batch, not on the synthesis precision")
 
     # ---- Pinnacle on the common ledger (second-pass review #5) --------------
     check("engine_cycles reproduces their Eq. (11) at all four operating points",

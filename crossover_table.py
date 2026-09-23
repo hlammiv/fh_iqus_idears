@@ -64,6 +64,9 @@ VARS = [
     (DEFAULT.but(ram_bytes=100e15), "100 PB data centre"),
     (DEFAULT.but(t_round=240e-9), "240 ns code round"),
     (DEFAULT.but(star_kappa=0.0533), "STAR rotation error ÷10"),
+    (DEFAULT.but(hwp_batch=16), "HWP batch 16 (low workspace)"),
+    (DEFAULT.but(hwp_batch=64), "HWP batch 64"),
+    (DEFAULT.but(hwp_batch=1), "no HWP (plain synthesis)"),
 ]
 for cfg, lab in VARS:
     W(row(cfg, lab) + "\n")
