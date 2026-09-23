@@ -284,6 +284,32 @@ Until at least one purpose-built, leadership-scale classical attack is run, the
 honest headline is "clears the **exact-diagonalisation** frontier", not "clears
 classical".
 
+### O15. The clamp beyond tau = 2 is NOT testable at n <= 14 -- measured
+The clamp probe ran on lenore: W_eff beyond tau = 2 on two lattice sizes, with
+the decision rule fixed in `calibration/apply_clamp.py` before the data existed.
+
+| tau | n = 12 | n = 14 | clamped | spread | vs clamp |
+|---|---|---|---|---|---|
+| 2.5 | 0.0773 | 0.0821 | 0.1190 | **1.06x** | 0.69x |
+| 3.0 | 0.0674 | 0.0332 | 0.1190 | 2.03x | 0.28x |
+| 4.0 | 0.0481 | 0.0319 | 0.1190 | 1.51x | 0.27x |
+
+**Verdict: the sizes DISAGREE and nothing was written.** The n = 12 series alone
+was a clean monotone decline that looked like solid support for "the clamp is
+conservative"; n = 14 breaks it. That is precisely why the rule was committed
+first.
+
+The one exception is **tau = 2.5**, where the two sizes agree to 1.06% and the
+causal cone (2 v tau = 10 sites) fits inside both lattices with margin. At
+tau = 3 the cone is exactly 12 sites and at tau = 4 it is 16, wider than either
+patch -- so the cone argument explains which points are testable, though not
+perfectly: tau = 3 nominally fits n = 12 and still disagrees by 2x.
+
+So a tau = 2.5 extension is *available* on one validated point, worth 0.69x in W
+and 0.83x in step count. It has NOT been taken, because taking it would mean
+relaxing the pre-committed rule after seeing the data. Closing this properly
+needs n = 16 or larger, where the cone fits at tau = 3-4.
+
 ### O14. Platform arms depend on numbers that are moving fast
 The neutral-atom surface arm is **fidelity-limited**: at the measured 5e-3 it
 does not exist, and at p <~ 2e-3 it does. That is a falsifiable prediction

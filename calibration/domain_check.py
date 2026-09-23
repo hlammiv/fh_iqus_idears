@@ -132,10 +132,19 @@ def main(as_json=False):
         print(f"  {'n':>3} {'tau':>6} {'measured':>9} {'table':>9} {'ratio':>7}"
               f"  substep conv")
         pts = []
+        CONV_TOL = 1e-10     # the reference must be far better than the signal
         for mm in sorted(T["meta"], key=lambda x: x["n"]):
             rs = [r for r in T["rows"] if r["patch"] == mm["patch"]
                   and r["steps"] >= R_ASYMPTOTIC and r["W_eff"]]
             if not rs:
+                continue
+            if mm.get("substep_convergence", 0) > CONV_TOL:
+                # the memory-capped Krylov basis was not compensated by enough
+                # substepping, so the "exact" reference is wrong at a level that
+                # swamps the Trotter error being measured. Report and skip.
+                print(f"  {mm['n']:>3} {mm['tau']:>6.3f} {'EXCLUDED':>9} "
+                      f"{'':>9} {'':>7}  reference conv "
+                      f"{mm['substep_convergence']:.1e} > {CONV_TOL:.0e}")
                 continue
             w = float(np.median([r["W_eff"] for r in rs]))
             tab = _H.w_measured(mm["tau"], 4.0)
