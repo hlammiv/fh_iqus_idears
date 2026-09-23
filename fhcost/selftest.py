@@ -1070,6 +1070,29 @@ def main() -> int:
               f"{_D['worst_time_holdout']:+.0%}; the clamp beyond tau = 2 cannot "
               f"be worth more than that")
 
+    # ---- the trajectory, not the fixed-time sweep (second-pass #2) ---------
+    if _dc.exists():
+        _T = _json.loads(_dc.read_text())
+        if "trajectory" in _T and len(_T["trajectory"]) >= 4:
+            _tr = [x for x in _T["trajectory"] if x["n"] >= 6]
+            check("every trajectory reference is converged, not just recorded",
+                  all(x["substep_convergence"] < 1e-10 for x in _T["trajectory"]),
+                  "worst substep convergence "
+                  f"{max(x['substep_convergence'] for x in _T['trajectory']):.1e} "
+                  "-- the first n = 14 attempt came back at 2.2e-2 and was excluded")
+            check("the fixed-time table is CONSERVATIVE at the operating points",
+                  all(x["ratio"] < 1.0 for x in _tr),
+                  "measured/table = " + ", ".join(f"n={x['n']}: {x['ratio']:.2f}"
+                                                  for x in _tr)
+                  + " -- the table over-predicts W, so it over-charges gates")
+            check("but these sizes do NOT determine the exponent",
+                  _T.get("alpha_se", 0) > 0.05
+                  and _T["alpha_ci95"][0] < 1.75 < _T["alpha_ci95"][1],
+                  f"alpha = {_T['alpha_measured']:.2f} +- {_T['alpha_se']:.2f}, "
+                  f"95% CI {_T['alpha_ci95'][0]:.2f}..{_T['alpha_ci95'][1]:.2f}; "
+                  f"including n = 4, 5 flips it to {_T['alpha_all_n']:.2f}. The "
+                  f"adopted 1.75 and Campbell's 2.25 are both inside")
+
     # ---- is the published TDVP truncation-limited? (O10) -------------------
     _tj = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "tdvp_check.json"
     if _tj.exists():

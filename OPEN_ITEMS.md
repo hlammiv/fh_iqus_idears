@@ -182,13 +182,43 @@ and tau up to ~13.
 Because of this every arm is now reported as a **band** between Campbell's bound
 and the calibration, rather than as a point value. Neither edge is the answer.
 
-**What would close it.** Review test 3: measure `W_eff` at the pairs
-`(m, tau = sqrt(m)/v)` instead of on a fixed-time size sweep. Everything measured
-so far is a fixed-time sweep, and the `m^(7/4)` exponent rests on the trajectory.
-`calibration/domain_check.py` prints the patch list and memory: `n <= 14` fits
-locally (`rectangle2x7`, 11.8M states, 176 MB/vector), `n = 16` needs ~10 GB and
-belongs on `lenore_remote`. Together with the O11b multiproduct rerun that is the
-whole remaining compute.
+**Review test 3 is now MEASURED, and it answers half the question.** `W_eff` at
+the pairs `(m, tau = sqrt(m)/v)` -- the trajectory the model actually walks, not
+a fixed-time sweep -- for every patch up to `n = 14`, each with an exact
+reference converged to `~1e-15`:
+
+| n | tau | W measured | W from the table | ratio |
+|---|---|---|---|---|
+| 4 | 1.000 | 0.25608 | 0.18990 | 1.35 |
+| 5 | 1.118 | 0.19386 | 0.17614 | 1.10 |
+| 6 | 1.225 | 0.07099 | 0.16564 | **0.43** |
+| 9 | 1.500 | 0.10231 | 0.14447 | 0.71 |
+| 12 | 1.732 | 0.12250 | 0.13112 | 0.93 |
+| 14 | 1.871 | 0.08103 | 0.12448 | 0.65 |
+
+**The good half.** For every `n >= 6` the fixed-time table **over**-predicts `W`
+at the operating point, by 1.1-2.3x. That is the conservative direction: a larger
+`W` buys more Trotter steps and so more gates than the trajectory needs. The
+central assumption under test -- that `W` depends on `tau` alone, so the table can
+be read at `tau = sqrt(m)/v` -- holds to about a factor of two, in our favour.
+
+**The half that is not settled, and cannot be at this scale.** Fitting `W` against
+`m` gives `W ~ m^+0.31` and an implied `alpha = 1.75 + gamma/2 = 1.91`, against
+`1.58` from the table -- a 7x difference in gate count by `m = 400`, in the
+*anti*-conservative direction. But that is four points with real scatter:
+
+> `alpha = 1.91 +- 0.20`, 95% CI **1.50 to 2.31** -- and including `n = 4, 5`
+> flips it to **1.42**.
+
+The adopted `1.75` and Campbell's `2.25` both sit comfortably inside that
+interval. These lattices do not determine the exponent, and saying they give
+`1.91` would be reading noise. `domain_check.py` prints the interval next to the
+point estimate so the number cannot be quoted without it.
+
+`n = 16` (`square4`, 165.6M sector states, 2.5 GB/vector) is running on
+`lenore_remote`. It adds a fifth point and will narrow the interval by perhaps a
+third -- not enough to close the exponent, which is worth saying in advance
+rather than after. The O11b multiproduct rerun is the other outstanding compute.
 
 ### O10. The tensor-network question is OPEN, not resolved
 *Raised by #8. This is the item most likely to reverse a headline.*
@@ -486,7 +516,7 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | # | finding | status |
 |---|---|---|
 | 1 | the convergence criterion fails an exact physical limit | **fixed** — factorial Lieb-Robinson form, exact t -> 0 limit |
-| 2 | the default Trotter calibration is used beyond its evidence | **partial** — order-2k coefficients measured (O11b); domain still exceeded (O9) |
+| 2 | the default Trotter calibration is used beyond its evidence | **partial** — order-2k coefficients measured (O11b); the trajectory is now measured at every n ≤ 14 and the table is conservative there by 1.1–2.3×, but the exponent is unresolved (α = 1.91 ± 0.20, CI 1.50–2.31) and the domain is still exceeded (O9) |
 | 3 | Python, the explorer and the documents disagree | **fixed** — one model, one record; see below |
 | 4 | factory cleanup neglects circuit-level errors | **fixed** — published operating points replace the cubic law; selection is p-aware and plant-level |
 | 5 | Pinnacle lacks the common FT resource/error ledger | **fixed** — workspace charged, engine selected and certified, stalls and rejection scheduled |

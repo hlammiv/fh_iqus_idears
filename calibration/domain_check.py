@@ -193,6 +193,23 @@ def main(as_json=False):
                   f"(Campbell's bound gives 2.25)")
             print(f"  at m = 400 the measured and table exponents differ by "
                   f"{400.0 ** (alpha - (1.75 + gam_t / 2.0)):.2f}x in gate count")
+            # ... but say how well the exponent is actually determined, because
+            # four noisy points fitted in log-log will happily produce a number
+            res = ws_log = np.log(ws) - (gam * np.log(ns) + np.polyfit(
+                np.log(ns), np.log(ws), 1)[1])
+            se = float(np.sqrt((res ** 2).sum() / max(len(ns) - 2, 1)
+                               / ((np.log(ns) - np.log(ns).mean()) ** 2).sum()))
+            out["alpha_se"] = se / 2.0
+            lo, hi = alpha - se, alpha + se          # +-2 sigma on alpha
+            out["alpha_ci95"] = [lo, hi]
+            allg = float(np.polyfit(np.log([x["n"] for x in pts]),
+                                    np.log([x["W_measured"] for x in pts]), 1)[0])
+            out["alpha_all_n"] = 1.75 + allg / 2.0
+            print(f"  BUT the fit is {len(ns)} points with scatter: alpha = "
+                  f"{alpha:.2f} +- {se / 2.0:.2f}, 95% CI {lo:.2f}..{hi:.2f}")
+            print(f"  and including n = 4, 5 flips it to {1.75 + allg / 2.0:.2f}. "
+                  f"The adopted 1.75 and Campbell's 2.25 are both inside that "
+                  f"interval, so these sizes do NOT determine the exponent.")
 
     clamp = HERE / "data" / "clamp_probe.json"
     if clamp.exists():
@@ -239,21 +256,32 @@ def main(as_json=False):
 
     print("\n" + "=" * 70)
     print("STILL NEEDED to close finding #2 (review test 3)\n")
-    print("  Measure W_eff along the ADOPTED trajectory tau = sqrt(m)/v, not on a")
-    print("  fixed-time size sweep. Everything above is a fixed-time sweep, and")
-    print("  the whole m^(7/4) claim rests on the trajectory instead:\n")
-    print(f"  {'patch':>14} {'sites':>6} {'tau':>6} {'sector dim':>13} {'GB/vec':>8}  where")
+    done = {m["patch"] for m in (json.loads(traj.read_text())["meta"]
+                                 if traj.exists() else [])}
+    print("  W_eff along the ADOPTED trajectory tau = sqrt(m)/v -- not the")
+    print("  fixed-time size sweep that everything above measures, because the")
+    print("  m^(7/4) claim rests on the trajectory instead:\n")
+    print(f"  {'patch':>14} {'sites':>6} {'tau':>6} {'sector dim':>13} {'GB/vec':>8}  status")
     for name, n in (("square2", 4), ("cross5", 5), ("rectangle2x3", 6),
                     ("square3", 9), ("rectangle3x4", 12), ("rectangle2x7", 14),
                     ("square4", 16)):
         up, dn = (n + 1) // 2, n // 2
         dim = math.comb(n, up) * math.comb(n, dn)
         gb = dim * 16 / 2 ** 30
+        st = "DONE" if name in done else ("lenore" if gb > 0.5 else "local")
         print(f"  {name:>14} {n:>6} {math.sqrt(n) / V_B:>6.2f} {dim:>13,} "
-              f"{gb:>8.3f}  {'local' if gb < 0.5 else 'lenore'}")
-    print("\n  n <= 14 fits locally (< 1 GB peak). n = 16 needs ~10 GB and belongs")
-    print("  on lenore_remote. Also queued: the O11b multiproduct rerun (finer r,")
-    print("  state infidelity alongside the observable error, more tau).")
+              f"{gb:>8.3f}  {st}")
+    miss = [x for x in ("square2", "cross5", "rectangle2x3", "square3",
+                        "rectangle3x4", "rectangle2x7", "square4") if x not in done]
+    if miss:
+        print(f"\n  Outstanding: {', '.join(miss)}. n = 16 is 2.5 GB/vector and a")
+        print("  12-vector Krylov basis, so it belongs on lenore_remote with")
+        print("  FH_MEM_CAP_GB=45 FH_KRYLOV_GB=30 FH_TRAJ_STEPS=8,12,16,24,32.")
+    else:
+        print("\n  Every trajectory point is measured. What remains is not more")
+        print("  sizes at this scale -- the exponent is unresolved by a factor")
+        print("  that n = 16 will not close -- but the O11b multiproduct rerun")
+        print("  (finer r, state infidelity alongside the observable error).")
 
     if as_json:
         p = HERE / "data" / "domain_check.json"
