@@ -215,25 +215,58 @@ TDVP_AT = {"m": 28, "u_over_j": 0.0, "t_range": (0.5, 2.0),
 # The `max_bond_dimension` column confirms every run saturated its cap, so
 # truncation was binding; it simply was not what limited the accuracy.
 #
-# CONCLUSION: the published TDVP carries a chi-INDEPENDENT error floor of
-# ~7e-3 present from the earliest times -- plausibly two-site TDVP projection
-# error on a snake MPS with long-range Jordan-Wigner strings, or the time step,
-# or the GPR smoothing. It is therefore NOT a converged tensor-network
-# calculation, the chi-extrapolation to 2e12 is meaningless, and this dataset
-# CANNOT bound what tensor networks can do on this problem.
+# CONCLUSION, and a correction to the earlier version of it. Reading all four
+# bond dimensions at every time (calibration/tdvp_check.py, run against the full
+# deposit rather than the two-point comparison above) shows the chi dependence is
+# NON-MONOTONIC IN TIME:
 #
-# Note what this does to the argument in METHODS 5: the conclusion there (drop
-# the entropy-derived arm) stands, because the entropy model is contradicted by
-# a floor it cannot represent. But the REASONING offered there -- "the error is
-# flat in chi, so TN fails" -- was wrong: flatness in chi is evidence the run was
-# not chi-limited, not evidence that chi cannot help.
+#    t    slope d log(err)/d log(chi)   reading
+#   0.1           -0.03                 floored
+#   0.3           -0.30                 truncation-limited
+#   0.5           -0.45                 truncation-limited
+#   0.7           -0.37                 truncation-limited
+#   1.0           -0.26                 truncation-limited
+#   1.5           -0.07                 stalling
+#   2.0           -0.04                 floored
+#
+# "A chi-independent floor present from the earliest times" is therefore right at
+# t = 0.1 and wrong as a blanket statement: through the middle of the window the
+# run IS bond-dimension-limited and chi buys error at a real rate (2.5x over 8x in
+# chi at t = 0.5). The pooled TDVP_SLOPE = -0.12 averages a floor, a converging
+# regime and a second floor, and must not be extrapolated in either direction.
+#
+# Both ends still defeat the dataset as a bound, for different reasons:
+#   * t = 0.1 -- barely entangled, chi = 256 is wild overkill, yet the error is
+#     7.9e-3 and eight times the bond dimension removes 8% of it. That is not
+#     truncation. It is the time step, the two-site projection, the snake-MPS
+#     Jordan-Wigner strings or the GPR smoothing -- and the deposit CANNOT say
+#     which, because it varies chi and never varies dt. That one missing scan is
+#     the calculation O10 needs, and it is a dt scan in the same library they
+#     used (TeNPy), not a new TDVP implementation.
+#   * t >= 1.5 -- the error at chi = 2048 (0.13, dimer links) is roughly four
+#     times the mean |C^zz| there (0.034) and six times the signed mean
+#     (0.021-0.031). A calculation whose error exceeds its answer bounds nothing.
+#
+# What survives unchanged: this dataset cannot bound what tensor networks can do
+# on this problem, the chi-extrapolation to 2e12 is meaningless, and the METHODS
+# 5 conclusion (drop the entropy-derived arm) stands -- the entropy model is
+# contradicted by a floor it cannot represent at t = 0.1, whatever happens in
+# between.
 #
 # The floor sits at ~7e-3, essentially AT our absolute tolerance (~6e-3). A clean
 # implementation that removed it could plausibly reach this accuracy at modest
 # chi, which would move the classical upper edge well above 26.
 TDVP_FLOOR = {"t": 0.1, "exact": 0.9418,
               "err": {256: 7.93e-3, 512: 7.38e-3, 1024: 7.36e-3, 2048: 7.35e-3},
-              "verdict": "chi-independent floor; not truncation-limited"}
+              "verdict": "not truncation-limited at t = 0.1; see TDVP_SLOPE_BY_T"}
+
+# Per-time chi slope on the dimer links, fitted over chi = 256..2048, and the
+# mean |C^zz| there. Regenerate with `python3 calibration/tdvp_check.py --json`;
+# both come from Zenodo 17799843, not from any run of ours.
+TDVP_SLOPE_BY_T = {0.1: -0.033, 0.3: -0.298, 0.5: -0.447, 0.7: -0.373,
+                   1.0: -0.262, 1.5: -0.074, 2.0: -0.040}
+TDVP_SIGNAL_BY_T = {0.1: 0.9418, 0.3: 0.5872, 0.5: 0.2429, 0.7: 0.0933,
+                    1.0: 0.0753, 1.5: 0.0364, 2.0: 0.0344}
 
 # PEAK-FLOP ARITHMETIC, NOT A DEMONSTRATED WALL TIME (review #7). Dividing a
 # chi^3 operation count by a machine's peak rate assumes perfect strong scaling
@@ -392,8 +425,9 @@ def max_m_fixed_t_detail(t: float, cfg: Config = DEFAULT) -> dict:
     elif v > ed:
         meth, claim = ("snake MPS",
                        "entropy-derived chi; NO convergence guarantee -- the "
-                       "only published TDVP attempt on this observable has a "
-                       "chi-independent error floor (O10)")
+                       "only published TDVP attempt on this observable is not "
+                       "converged: an unexplained floor at t = 0.1 and an error "
+                       "larger than the signal at late times (O10)")
     else:
         meth, claim = ("exact diagonalisation", "exact within the sector")
     return {"t": t, "m": v, "method": meth, "claims": claim,

@@ -504,7 +504,7 @@ def main() -> int:
     check("classical band is ED-set, m ~ 24-26", 20 <= lo <= 30 and 24 <= hi <= 32,
           f"{lo:.0f} .. {hi:.0f}")
     # --- review finding #8: measured tensor-network performance ---
-    check("TDVP error is flat in chi", abs(classical.TDVP_SLOPE) < 0.3
+    check("the POOLED TDVP error is flat in chi", abs(classical.TDVP_SLOPE) < 0.3
           and classical.TDVP_MEASURED[2048] / classical.TDVP_MEASURED[256] > 0.5,
           f"{classical.TDVP_MEASURED[256]:.3f} -> {classical.TDVP_MEASURED[2048]:.3f} "
           "over an 8x range in chi")
@@ -512,10 +512,11 @@ def main() -> int:
           classical.TDVP_MEASURED[2048] > hubbard.s_residual())
     # the published TDVP is not bond-dimension-limited at all
     fl = classical.TDVP_FLOOR["err"]
-    check("TDVP carries a chi-independent error floor at early times",
+    check("but that pooling hides a floor at t = 0.1 specifically",
           fl[256] / fl[2048] < 1.3 and fl[2048] > 5e-3,
           f"t=0.1: {fl[256]:.2e} at chi=256 vs {fl[2048]:.2e} at chi=2048, "
-          "an 8x increase in chi removing 8%")
+          "an 8x increase in chi removing 8% -- and the pooled slope averages "
+          "this floor with a genuinely truncation-limited middle (see below)")
     check("so that dataset cannot bound what tensor networks can do",
           fl[2048] > 0.5 * hubbard.eps_absolute(DEFAULT, 30.0),
           "the floor sits at roughly our whole absolute tolerance")
@@ -1068,6 +1069,44 @@ def main() -> int:
               f"holding tau = 1 out and predicting it overshoots by "
               f"{_D['worst_time_holdout']:+.0%}; the clamp beyond tau = 2 cannot "
               f"be worth more than that")
+
+    # ---- is the published TDVP truncation-limited? (O10) -------------------
+    _tj = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "tdvp_check.json"
+    if _tj.exists():
+        import json as _json
+        _T = _json.loads(_tj.read_text())["dimer"]
+        _f = _T["0.1"]
+        check("the stored TDVP floor is what the full deposit says",
+              all(abs(_f[str(c)] - classical.TDVP_FLOOR["err"][c]) < 5e-5
+                  for c in (256, 512, 1024, 2048)),
+              "chi = 256..2048 at t = 0.1: "
+              + ", ".join(f"{_f[str(c)]:.2e}" for c in (256, 512, 1024, 2048))
+              + " -- reproduced from Zenodo 17799843, not re-entered by hand")
+        check("and the stored per-time slopes are too",
+              all(abs(_T[f"{t}"]["slope"] - v) < 5e-3
+                  for t, v in classical.TDVP_SLOPE_BY_T.items()),
+              "d log(err)/d log(chi) at t = "
+              + ", ".join(f"{t}: {v:+.2f}" for t, v in
+                          sorted(classical.TDVP_SLOPE_BY_T.items())))
+        check("chi dependence is NON-monotonic in time, so no single slope holds",
+              _T["0.1"]["slope"] > -0.10 and _T["0.5"]["slope"] < -0.35
+              and _T["2.0"]["slope"] > -0.10,
+              f"floored at t = 0.1 ({_T['0.1']['slope']:+.2f}), genuinely "
+              f"truncation-limited at t = 0.5 ({_T['0.5']['slope']:+.2f}), "
+              f"floored again at t = 2.0 ({_T['2.0']['slope']:+.2f}); the pooled "
+              f"TDVP_SLOPE = {classical.TDVP_SLOPE:+.2f} averages all three")
+        check("at t = 0.1 the floor is not truncation -- chi = 256 is ample there",
+              _T["0.1"][str(256)] / _T["0.1"][str(2048)] < 1.2
+              and _T["0.1"][str(2048)] > 1e-3,
+              f"8x the bond dimension removes "
+              f"{1 - _T['0.1']['2048'] / _T['0.1']['256']:.0%} of a "
+              f"{_T['0.1']['2048']:.1e} error on a barely entangled state; the "
+              f"deposit varies chi and never dt, so it cannot say which term it is")
+        check("at late times the published error EXCEEDS the signal",
+              all(_T[f"{t}"][str(2048)] > _T[f"{t}"]["signal"]
+                  for t in (1.5, 2.0)),
+              f"t = 2: err {_T['2.0']['2048']:.3f} vs mean |C| "
+              f"{_T['2.0']['signal']:.3f} -- that run bounds nothing there")
 
     # ---- the additional implementation checks (second pass) -----------------
     # every public entry point must refuse an over-allocated error budget

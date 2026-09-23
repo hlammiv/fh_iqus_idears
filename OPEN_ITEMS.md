@@ -199,26 +199,49 @@ n ~ 1.7e4". **The band narrowed because an unvalidated arm was removed, not
 because tensor networks were shown to fail** -- and removing an arm is a change in
 the direction that flatters the quantum curves, which deserves suspicion.
 
-**Sharpened by a diagnostic that cost nothing to run.** Splitting the published
-TDVP error by TIME rather than averaging it:
+**Sharpened by a diagnostic that cost nothing to run, then corrected by doing it
+properly.** The first pass compared two bond dimensions at three times. Reading
+*all four* chi at *every* time -- `calibration/tdvp_check.py`, against the full
+Zenodo deposit rather than the summary that was stored -- shows the chi
+dependence is **non-monotonic in time**, which the two-point comparison hid:
 
-| t | exact | chi=256 | chi=2048 | ratio |
-|---|---|---|---|---|
-| 0.1 | 0.9418 | 7.93e-3 | 7.35e-3 | **1.1x** |
-| 0.5 | 0.2429 | 6.36e-2 | 2.56e-2 | 2.5x |
-| 2.0 | 0.0211 | 1.72e-1 | 1.57e-1 | 1.1x |
+| t | mean \|C\| | chi=256 | chi=512 | chi=1024 | chi=2048 | slope | reading |
+|---|---|---|---|---|---|---|---|
+| 0.1 | 0.9418 | 7.93e-3 | 7.38e-3 | 7.36e-3 | 7.35e-3 | **-0.03** | floored |
+| 0.3 | 0.5872 | 2.96e-2 | 2.09e-2 | 1.75e-2 | 1.58e-2 | -0.30 | truncation-limited |
+| 0.5 | 0.2429 | 6.36e-2 | 4.78e-2 | 3.31e-2 | 2.56e-2 | **-0.45** | truncation-limited |
+| 0.7 | 0.0933 | 6.91e-2 | 5.74e-2 | 4.13e-2 | 3.26e-2 | -0.37 | truncation-limited |
+| 1.0 | 0.0753 | 5.05e-2 | 4.20e-2 | 3.38e-2 | 2.96e-2 | -0.26 | truncation-limited |
+| 1.5 | 0.0364 | 1.17e-1 | 1.02e-1 | 1.02e-1 | 9.85e-2 | -0.07 | stalling |
+| 2.0 | 0.0344 | 1.72e-1 | 1.47e-1 | 1.44e-1 | 1.57e-1 | **-0.04** | floored |
 
-At t = 0.1 the state is barely entangled and chi = 256 is wild overkill; a
-truncation-limited calculation would be at machine precision. Instead the error
-is 7.9e-3, and an **eightfold** increase in bond dimension removes **8%** of it.
-The deposit's `max_bond_dimension` column confirms every run saturated its cap,
-so truncation was binding -- it simply was not what limited the accuracy.
+(slope = d log err / d log chi; dimer links, U = 0, against exact FLO. The same
+script prints the all-neighbour-pairs version, which tells the same story.)
 
-So the published TDVP carries a **chi-independent error floor of ~7e-3 from the
-earliest times** (plausibly two-site TDVP projection error on a snake MPS with
-long-range Jordan-Wigner strings, or the time step, or the GPR smoothing). It is
-**not a converged tensor-network calculation**, the chi-extrapolation to 2e12 is
-meaningless, and this dataset **cannot bound what tensor networks can do here**.
+The numbers previously stored in `classical.py` **reproduce exactly** from the
+full release, so the extraction was right. The *interpretation* was not. "A
+chi-independent floor from the earliest times" holds at t = 0.1 and again from
+t >= 1.5, and is **false through the middle of the window**, where the run is
+genuinely bond-dimension-limited -- 8x the chi buys 2.5x the error at t = 0.5.
+The pooled `TDVP_SLOPE = -0.12` averages a floor, a converging regime and a
+second floor, and cannot be extrapolated in either direction.
+
+Both ends still defeat the dataset as a bound, for different reasons:
+
+- **t = 0.1.** The state is barely entangled, chi = 256 is wild overkill, and a
+  truncation-limited calculation would be at machine precision. Instead the error
+  is 7.9e-3 and an **eightfold** increase in bond dimension removes **8%** of it.
+  The deposit's `max_bond_dimension` column confirms every run saturated its cap,
+  so truncation was binding -- it simply was not what limited the accuracy.
+- **t >= 1.5.** The chi = 2048 error (0.13) is about **four times** the mean
+  |C^zz| there (0.034), six times the signed mean (0.021-0.031). A calculation
+  whose error exceeds its answer bounds nothing.
+
+So the published TDVP is **not a converged tensor-network calculation**, the
+chi-extrapolation to 2e12 is meaningless, and this dataset **cannot bound what
+tensor networks can do here**. What it is *not* is uniformly chi-insensitive, and
+the repo no longer says that: `TDVP_SLOPE_BY_T` carries the time resolution and
+five selftest checks tie it to the regenerated JSON.
 
 This also corrects the reasoning given in METHODS 5. The conclusion there --
 drop the entropy-derived arm -- stands, because the entropy model cannot
@@ -271,14 +294,21 @@ job. lenore's ceiling is chi ~ 4800, only 2x the published value, which would
 test the measured slope over one more factor of two and predict 0.077 -> 0.072:
 too weak to settle anything.
 
-**The decisive cheap test, if this is picked up again**, is not more chi at all.
-Hold chi fixed and vary the TDVP time step. If the error moves with dt at fixed
-chi, the 0.077 plateau is integration error, the chi-extrapolation is void in
-both directions, and no bond dimension settles the question. If it does not move,
-the plateau is real and the band is on firmer ground. Either outcome is decisive
-and it runs at chi ~ 2048. It needs a correct fermionic 2D TDVP on a doubly
-periodic torus -- use a library (TeNPy has Fermi-Hubbard and two-site TDVP built
-in); hand-rolling one risks a confidently wrong number.
+**The decisive cheap test is not more chi at all.** Hold chi fixed and vary the
+TDVP time step. The deposit varies chi over an 8x range and **never varies dt**,
+so it structurally cannot say what the t = 0.1 floor is made of. If the error
+moves with dt at fixed chi, that floor is integration error, the
+chi-extrapolation is void in both directions, and no bond dimension settles the
+question. If it does not move, the floor is real and the band is on firmer
+ground. Either outcome is decisive, and it runs at chi ~ 2048.
+
+*What exists already, checked before writing anything.* The collaboration's own
+runs are **TeNPy** -- their metadata literally reads `Tenpy $\chi=512$` -- and
+TeNPy ships Fermi-Hubbard and two-site TDVP. So the dt scan is a configuration of
+their library at their parameters, not a new fermionic 2D TDVP on a doubly
+periodic torus; hand-rolling one would risk a confidently wrong number for no
+gain. TeNPy 1.1.0 and quimb 1.15.0 are installed locally; neither is on lenore
+yet, which is a one-line install when the scan is ready for production sizes.
 
 Until at least one purpose-built, leadership-scale classical attack is run, the
 honest headline is "clears the **exact-diagonalisation** frontier", not "clears
@@ -622,9 +652,12 @@ The TDVP peak-FLOP arithmetic is labelled as such, with an explicit
 
 **Still open from #7:** the review's third test -- vary the TDVP time step AND
 bond dimension against an exact small reference, to identify what causes the
-chi-independent plateau -- is not done. It needs a correct fermionic 2D TDVP on
-a doubly periodic torus, which is O10, not something to hand-roll. Until then
-the U > 0 band stays an ED capacity with the tensor-network question open.
+floor -- is not done. The bond-dimension half is now done from the published
+deposit (O10): the chi dependence is resolved in time and the floor is isolated
+to t = 0.1 and t >= 1.5. The dt half needs a run, but not a hand-rolled one --
+the published runs are TeNPy, which has Fermi-Hubbard and two-site TDVP, so it is
+a configuration of their library at their parameters. Until it happens the U > 0
+band stays an ED capacity with the tensor-network question open.
 
 Nothing here touches `U > 0`. The free-fermion claim is confined to `U = 0`
 exactly; no accuracy claim is made at small non-zero U, where the natural next

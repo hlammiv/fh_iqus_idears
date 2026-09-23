@@ -98,6 +98,47 @@ what connectivity alone could buy, not a machine.
 
 ---
 
+## The published simulation deposit — Zenodo 17799843
+
+`calibration/tdvp_check.py` (O10) needs more than the summary numbers: it needs
+every bond dimension at every time, and the exact reference to compare them to.
+Both are in the data release that accompanies arXiv:2510.26300.
+
+| item | value |
+|---|---|
+| DOI / record | Zenodo **17799843** |
+| archive | `fermionic_dynamics.zip`, 112 MB |
+| licence | **CC-BY-4.0** |
+| extracted to | `refs/fermionic_dynamics/{U_0,U_4}/exp_vals.h5` (566 + 489 MB) |
+| in git? | **no** — 1 GB; `refs/fermionic_dynamics/` is gitignored, this row is the record |
+
+```
+curl -sL -o fermionic_dynamics.zip https://zenodo.org/records/17799843/files/fermionic_dynamics.zip
+unzip -q fermionic_dynamics.zip -d refs/fermionic_dynamics
+pip install tables uncertainties        # pandas-in-HDF5 with pickled error bars
+python3 calibration/tdvp_check.py --json
+```
+
+`exp_vals.h5` holds pandas frames keyed by method: raw hardware, TFLO/GPR
+mitigated, **TDVP at chi = 256, 512, 1024, 2048**, Majorana propagation, and the
+**exact FLO** reference at U = 0. `obs_type = spin_correlator_neighbours` is the
+observable this model costs.
+
+Two traps worth recording, since both silently return the wrong thing:
+
+- the bond dimension lives in the `method` string (`TDVP chi=512`), **not** in
+  `max_bond_dimension`, for this observable;
+- the `spins` column is `None` throughout, which makes any pandas merge that
+  includes it drop every row without error.
+
+**And the tooling answer.** The deposit's own metadata records the simulator as
+`Tenpy $\chi=512$`: their TDVP is **TeNPy**. That settles what the missing dt
+scan should be written in — `calibration/tdvp_dt.py` configures the same library
+rather than hand-rolling a fermionic 2D TDVP on a doubly periodic torus. TeNPy
+1.1.0 and quimb 1.15.0 are installed locally; neither is on lenore yet.
+
+---
+
 ## Constants sourced earlier (unchanged)
 
 | constant | source |
