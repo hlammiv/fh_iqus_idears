@@ -155,6 +155,14 @@ and tau up to ~13.
   range and is held fixed beyond tau = 2. That is conservative against the
   measured trend, but a tau^3 law stretched 6.6x past its data is not defensible
   on its own.
+* **Every plotted operating point is outside the calibrated domain** -- worst case
+  m = 383 and tau = 9.8 against m <= 12 and tau <= 2. `hubbard.calibration_status`
+  reports this per point and the figure marks the calibrated m.
+* **Leave-one-out stability degrades with time**: refitting without the n = 12
+  patch moves the coefficient 0-11% at tau = 0.25-0.5 but up to 82% at tau = 2,
+  worst precisely where the extrapolation is longest.
+* The two Trotter models are **SCENARIOS, not an uncertainty interval**. Neither is
+  a guaranteed edge and the truth is not required to lie between them.
 
 Because of this every arm is now reported as a **band** between Campbell's bound
 and the calibration, rather than as a point value. Neither edge is the answer.

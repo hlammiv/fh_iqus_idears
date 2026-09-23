@@ -43,6 +43,11 @@ ax.axhspan(BAND_LO, BAND_HI, color=F.PALEGREY, alpha=0.55, lw=0, zorder=0)
 ax.axhline(BAND_HI, color=F.DARKGREY, lw=0.9, ls=(0, (4, 2)), zorder=3)
 ax.text(1.3e2, 12.0, f"classically easy  ($m\\leq{BAND_HI:.0f}$)",
         fontsize=6.0, color=F.DARKGREY, va="center", ha="left")
+# the Trotter calibration covers m <= 12 only; everything above is extrapolated
+from fhcost.hubbard import W_DOMAIN as _WD
+ax.axhline(_WD["sites"][1], color=F.GREY, lw=0.7, ls=(0, (1, 2)), zorder=1)
+ax.text(2.6e8, _WD["sites"][1] * 1.12, "calibrated $m$", fontsize=5.4,
+        color=F.GREY, va="bottom", ha="right")
 
 def msk(y):
     return np.where(y > 0, y, np.nan)

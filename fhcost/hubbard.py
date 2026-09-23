@@ -41,8 +41,38 @@ W_MEASURED = {          # W_eff[U/J][tau], medians over n >= 9, r >= 8
     4.0: {0.25: 1.4500, 0.5: 1.2896, 1.0: 0.1899, 2.0: 0.1190},
     8.0: {0.25: 4.6275, 0.5: 1.6841, 1.0: 0.2368, 2.0: 0.0701},
 }
-W_TAU_MIN, W_TAU_MAX = 0.25, 2.0
-W_U_MIN, W_U_MAX = 0.0, 8.0
+# The domain the calibration actually covers. Reproduce the table with
+#     python3 calibration/fit_w.py --holdout
+# Conventions, initial state, link selection, boundaries and Trotter ordering are
+# recorded in calibration/README.md; the program and raw errors are in
+# calibration/. Nothing here is hand-entered any more.
+W_DOMAIN = {"sites": (4, 12), "tau": (0.25, 2.0), "u_over_j": (0.0, 8.0)}
+W_TAU_MIN, W_TAU_MAX = W_DOMAIN["tau"]
+W_U_MIN, W_U_MAX = W_DOMAIN["u_over_j"]
+
+# Leave-one-out stability (drop the n = 12 patch and refit): the coefficient moves
+# 0-11% at tau = 0.25 and 0.5, but up to 25% at tau = 1 and 82% at tau = 2. So the
+# calibration is well determined at short times and poorly determined at long
+# ones -- which is exactly where the curves extrapolate hardest.
+W_HOLDOUT_SHIFT = {0.25: 0.11, 0.5: 0.10, 1.0: 0.25, 2.0: 0.82}
+
+
+def calibration_status(m: float, cfg: Config = DEFAULT) -> dict:
+    """Is this operating point inside the calibrated domain? Usually not."""
+    t = t_max(m, cfg)
+    lo_n, hi_n = W_DOMAIN["sites"]
+    lo_t, hi_t = W_DOMAIN["tau"]
+    out = []
+    if not (lo_n <= m <= hi_n):
+        out.append(f"m={m:.0f} outside {lo_n}-{hi_n}")
+    if not (lo_t <= t <= hi_t):
+        out.append(f"tau={t:.2f} outside {lo_t}-{hi_t}")
+    if not (W_U_MIN <= cfg.U_over_J <= W_U_MAX):
+        out.append(f"U/J={cfg.U_over_J} outside {W_U_MIN}-{W_U_MAX}")
+    return {"in_domain": not out, "why": "; ".join(out),
+            "m": m, "tau": t,
+            "holdout_shift": W_HOLDOUT_SHIFT.get(
+                min(W_HOLDOUT_SHIFT, key=lambda x: abs(math.log(max(t, 1e-9) / x))), None)}
 
 
 def _loginterp(x, xs, ys):

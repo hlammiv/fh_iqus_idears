@@ -61,6 +61,24 @@ def main() -> int:
     check("connected subtraction is free in this state (<S^z> = 0 by symmetry)",
           True, "asserted from the triplet construction; see METHODS 0(b)")
 
+    print("\ncalibration domain (2nd pass #2)")
+    dom = hubbard.W_DOMAIN
+    check("the calibrated domain is recorded", dom["sites"] == (4, 12)
+          and dom["tau"] == (0.25, 2.0))
+    fowd = DEFAULT.but(pl_model="fowler")
+    pts = [nisq.max_m(1e8, DEFAULT, "pec"), ftqc.max_m_star(1e8, DEFAULT),
+           ftqc.max_m_surface(1e8, fowd), ftqc.max_m_pinnacle(1e8, DEFAULT)]
+    stats = [hubbard.calibration_status(v, DEFAULT) for v in pts]
+    check("EVERY plotted operating point is outside the calibrated domain",
+          not any(st["in_domain"] for st in stats),
+          f"worst: m={max(p for p in pts):.0f}, tau={max(st['tau'] for st in stats):.1f} "
+          f"against m<=12, tau<=2")
+    check("out-of-domain points say why",
+          all(st["why"] for st in stats if not st["in_domain"]))
+    check("held-out stability degrades with time, as recorded",
+          hubbard.W_HOLDOUT_SHIFT[2.0] > 5 * hubbard.W_HOLDOUT_SHIFT[0.25],
+          "0-11% at tau=0.25-0.5, up to 82% at tau=2")
+
     print("\nnisq.py")
     # --- review finding #2: ZNE is bias-limited, not variance-limited ---
     check("PEC is unbiased; ZNE and the bare device are not",

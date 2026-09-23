@@ -30,11 +30,14 @@ LABELS = {
 
 MPF_ORDER = 2      # k=2 -> order-4 multiproduct
 
-# The Trotter step count is the dominant uncertainty, so every arm is reported as
-# a BAND between the two defensible conventions rather than as a point value:
-#   lower edge  Campbell's worst-case commutator bound  (150-450x loose, measured)
-#   upper edge  the exact-diagonalisation calibration   (m <= 12, tau <= 2)
-# Neither edge is "the answer". See OPEN_ITEMS.md O9.
+# The Trotter step count is the dominant uncertainty, so every arm is reported
+# across TWO SCENARIOS rather than as a point value:
+#   "bound"     Campbell's worst-case commutator bound
+#   "measured"  the exact-diagonalisation calibration, extrapolated beyond its
+#               domain of m <= 12 and tau <= 2
+# These are SCENARIOS, not an uncertainty interval: neither is a guaranteed edge,
+# the truth is not required to lie between them, and the shaded region carries no
+# confidence level. See OPEN_ITEMS.md O9 and hubbard.calibration_status.
 TROTTER_EDGES = ("extensive", "measured")
 
 
