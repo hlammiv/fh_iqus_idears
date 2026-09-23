@@ -959,6 +959,83 @@ Exposed in `fhcost/budget.py`; swept in `crossovers.md`.
    from the shot budget, not a demonstrated capability; sparse Pauli–Lindblad PEC
    has been shown at γ² ~ 10–10², not e¹⁶. The NISQ curve is an upper bound.
 
+## 7b. Which integer lattices can actually hold the state (review #10)
+
+`floor(sqrt(m))` is not enough, and the headline it produced was wrong. The
+specified state is half-filled at `S^z_tot = 0`: one holon, one doublon, and
+`S^z = 0` triplets covering every remaining site in pairs. Two constraints
+follow, and a 5×5 fails both:
+
+1. **The site count must be even.** Each triplet contributes one up and one down,
+   and so does the doublon, so `N_up = (N−2)/2 + 1 = N/2`. On 25 sites that is
+   not an integer.
+2. **The remainder must admit a perfect dimer covering.** On 25 sites, 23 remain
+   after the defects — odd, so no covering exists at all.
+
+Both are satisfiable exactly when `N` is even. A grid is bipartite, `N` even
+forces at least one side even, which makes the two colour classes equal; putting
+the holon and doublon on **opposite sublattices** then leaves equal classes, and
+Gomory's theorem gives a perfect matching of the rest. So the rule is *even site
+count, defects on opposite sublattices*, and the defect placement is ours.
+
+Squares are not required — the experiment itself uses 7×4 — so rectangles are
+admitted, with the most square winning on a tie and an **aspect cap of 2**:
+beyond that a ribbon is quasi-1D, which is a different and materially easier
+problem.
+
+The correction runs in both directions. `floor(sqrt(m))` named an *impossible*
+lattice at four of five sizes checked, and it also **understated** the capacity:
+
+| capacity m | floor(sqrt) | admissible |
+|---:|---|---|
+| 13 | 3×3 = 9 — impossible | **3×4 = 12** |
+| 25 | 5×5 = 25 — impossible | **4×6 = 24** |
+| 63 | 7×7 = 49 — impossible | **6×10 = 60** |
+| 125 | 11×11 = 121 — impossible | **10×12 = 120** |
+
+At `n = 10⁶` the largest admissible lattices are NISQ 3×4, STAR 4×5, surface FT
+3×4, Pinnacle 4×6. `max_integer_L` is kept only so an old caller fails loudly.
+
+## 7c. The additional implementation checks
+
+Five smaller items from the same review, each verified against the code before
+being acted on.
+
+**The error ledger was enforced only as a side effect.** It is checked inside
+`eps_absolute`, so every costing path did hit it — `frac_stat = 0.9` is rejected
+at all six public entry points. But a precondition should not depend on being
+reached through a tolerance calculation, so `hubbard.validate(cfg)` is now
+explicit and also rejects `eps ∉ (0,1)`, `p` at or above threshold,
+`n_times < 1`, and a zero absolute floor.
+
+**`s_sig` was inert.** Under the default `signal_regime = "curve"` it is not
+used, so the "weak signal" and "strong signal" sensitivity rows were reprinting
+the baseline. Those rows now vary the fixed-signal *scenario* (where `s_sig` does
+bite: 11.5 → 26.8) plus the parameters the curve actually uses —
+`s_data_rel_unc`, `s_abs_floor`, and the superseded envelope bound.
+
+**The cluster prose contradicted the implementation.** It claimed the buffered
+cluster expansion is uncompetitive "at any xi in the plausible range (checked
+from 0.2 to 1.0)". It is not: `cluster_t_reach` gives 0.368 at `xi = 0.2` and 0
+at 0.5 and 1.0. The buffer is `xi ln(1/eps)`, so a short correlation length makes
+the cluster cheap. The surviving claim is narrower and is now what the docstring
+says.
+
+**Two different questions were being read as one.** `max_m_fixed_t(0.02) ≈ 10⁵`
+sites and `classical_t_reach ≈ 0.013` are both correct: the first is a *capacity
+at fixed t* from an entropy-derived bond dimension with no convergence
+guarantee, the second is the time to which a *bound certifies* a
+thermodynamic-limit answer. `max_m_fixed_t_detail` now returns the method and
+the non-claim alongside the number.
+
+**Tests that assert narrative.** The review is right that a test deriving its
+expectation from the same formula it checks catches regressions but is not
+independent validation. Where such tests have been touched in this pass they
+have been rewritten to test a mechanism against a measured or published number —
+Campbell's Theorem 2, Litinski's Table 1, the Pinnacle Eq. (11) timings, the
+`(ln n)^{4/9}` law, exact many-body evolution at `U = 0`, rendered polygon area.
+The ones not yet touched remain regression tests and are not evidence.
+
 ## 8b. Hygiene (review #11)
 
 Eleven implementation and reporting defects, all confirmed against the code

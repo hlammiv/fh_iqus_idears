@@ -382,8 +382,38 @@ if __name__ == "__main__":
 UNBOUNDED = 1e9   # sentinel: m is not the limiting quantity at this t
 
 
-def max_m_fixed_t(t: float, cfg: Config = DEFAULT) -> float:
+def max_m_fixed_t_detail(t: float, cfg: Config = DEFAULT) -> dict:
+    """The number, the METHOD that produced it, and what it does not claim."""
+    v = max_m_fixed_t(t, cfg)
+    ed = float(ed_frontier(cfg))
+    if v >= UNBOUNDED:
+        meth, claim = ("light-cone cluster",
+                       "exact truncation; the cone does not grow with m")
+    elif v > ed:
+        meth, claim = ("snake MPS",
+                       "entropy-derived chi; NO convergence guarantee -- the "
+                       "only published TDVP attempt on this observable has a "
+                       "chi-independent error floor (O10)")
+    else:
+        meth, claim = ("exact diagonalisation", "exact within the sector")
+    return {"t": t, "m": v, "method": meth, "claims": claim,
+            "not_a_certificate": "a CAPACITY at fixed t, not a certified "
+                                 "converged answer; converged.classical_t_reach "
+                                 "answers the other question and reports "
+                                 f"t = {__import__('fhcost.converged', fromlist=['x']).classical_t_reach(cfg):.4f}"}
+
+
+def max_m_fixed_t(t: float, cfg: Config = DEFAULT) -> dict | float:
     """Best classical reach at a FIXED evolution time t (not t = sqrt(m)/v).
+
+    DIFFERENT QUESTION FROM converged.classical_t_reach, and the two were being
+    read as interchangeable. This asks "how many sites can a method carry to
+    time t within the budget", answered by an ENTROPY-derived bond dimension
+    with no convergence guarantee; that asks "to what time does a bound CERTIFY
+    a thermodynamic-limit answer". At t = 0.02 this returns ~1e5 sites while
+    classical_t_reach reports 0.013 -- both correct, neither a contradiction.
+    Use max_m_fixed_t_detail() to get the method and assumption alongside the
+    number (second-pass review, additional checks).
 
     This is the panel that shows why the time-window convention decides the
     whole question. At small t the causal cone of <Z_i(t) Z_j(0)> contains only

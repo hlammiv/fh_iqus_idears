@@ -146,11 +146,90 @@ def fmt_crossing(v) -> str:
     return f"not reached below n = {CROSSING_LIMIT:.0e}" if v is None else f"{v:.2e}"
 
 
-def max_integer_L(m: float) -> int:
-    """Largest integer side length fitting a continuous capacity m.
+# ---------------------------------------------------------------------------
+# WHICH INTEGER LATTICES CAN ACTUALLY HOLD THE STATE (second-pass review #10)
+#
+# floor(sqrt(m)) is not enough. The specified initial state is half-filled with
+# S^z_tot = 0: one holon, one doublon, and S^z = 0 triplets covering every
+# remaining site in pairs. Two constraints follow, and a 5x5 satisfies neither:
+#
+#   1. N_sites must be EVEN. Each triplet contributes one up and one down, and
+#      so does the doublon, giving N_up = (N-2)/2 + 1 = N/2. On 25 sites that is
+#      not an integer.
+#   2. The N-2 sites left after the defects must admit a PERFECT DIMER COVERING.
+#      On 25 sites, 23 remain -- odd, so no covering exists at all.
+#
+# Both are satisfiable exactly when N is even. A grid graph is bipartite, and
+# N even forces at least one side even, which makes the two colour classes
+# equal; putting the holon and the doublon on OPPOSITE sublattices then leaves
+# equal classes, and Gomory's theorem gives a perfect matching of the rest. So
+# the admissibility rule is "N even, defects on opposite sublattices", and the
+# defect placement is ours to choose.
+#
+# Restricting to squares would be needlessly harsh -- the experiment itself uses
+# 7x4 -- so rectangles are admitted and the most square one wins on a tie.
+LATTICE_SPEC = ("half filling, S^z_tot = 0, one holon + one doublon, "
+                "S^z = 0 triplets on a perfect dimer covering of the rest; "
+                "nearest-neighbour grid, doubly periodic")
 
-    The curves solve for a CONTINUOUS m, which is a capacity proxy, not an actual
-    square lattice. A machine with capacity m = 63 runs a 7x7, not a 7.94x7.94.
+
+MAX_ASPECT = 2.0   # beyond this a grid is a quasi-1D ribbon, not a 2D lattice
+                   # -- and a materially easier classical problem
+
+
+def lattice_admissible(lx: int, ly: int,
+                       max_aspect: float = MAX_ASPECT) -> tuple[bool, str]:
+    """Can an lx x ly grid hold the specified initial state, and is it 2D?"""
+    n = lx * ly
+    if lx < 2 or ly < 2:
+        return False, "a lattice needs at least two sites on a side to have a bond"
+    if n % 2:
+        return False, (f"{n} sites is odd: half filling with S^z_tot = 0 needs "
+                       f"N_up = N/2, and {n} - 2 = {n - 2} sites cannot be "
+                       f"perfectly dimer-covered either")
+    a = max(lx, ly) / min(lx, ly)
+    if a > max_aspect + 1e-12:
+        return False, (f"aspect {a:.1f} > {max_aspect}: a ribbon this thin is "
+                       f"quasi-1D, and a different -- easier -- problem")
+    return True, ""
+
+
+def admissible_lattices(m: float, square_only: bool = False,
+                        max_aspect: float = MAX_ASPECT):
+    """[(lx, ly, sites)] fitting capacity m, largest first, most square first."""
+    lim = int(math.floor(m))
+    out = []
+    for lx in range(2, lim + 1):
+        if lx * lx > lim:
+            break
+        for ly in range(lx, lim // lx + 1):
+            if square_only and lx != ly:
+                continue
+            ok, _ = lattice_admissible(lx, ly, max_aspect)
+            if ok and lx * ly <= lim:
+                out.append((lx, ly, lx * ly))
+    out.sort(key=lambda t: (-t[2], t[1] - t[0]))
+    return out
+
+
+def best_lattice(m: float, square_only: bool = False,
+                 max_aspect: float = MAX_ASPECT):
+    """(lx, ly, sites) -- the largest admissible lattice, or None."""
+    a = admissible_lattices(m, square_only, max_aspect)
+    return a[0] if a else None
+
+
+def fmt_lattice(m: float, square_only: bool = False) -> str:
+    b = best_lattice(m, square_only)
+    return "none" if b is None else f"{b[0]}x{b[1]}"
+
+
+def max_integer_L(m: float) -> int:
+    """DEPRECATED: floor(sqrt(m)) ignores the initial state. Use best_lattice.
+
+    Kept only so an old caller fails loudly rather than silently reporting an
+    inadmissible size; selftest asserts it disagrees with best_lattice where the
+    review said it does.
     """
     return int(math.floor(math.sqrt(max(m, 0.0))))
 

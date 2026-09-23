@@ -321,7 +321,60 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 7 | the classical baseline misses the U = 0 easy limit | **fixed** — free-fermion estimator implemented and validated to 1.7e-15; band relabelled |
 | 8 | the signal fit does not support per-time relative accuracy | **fixed** — envelope separated from bound, per-time tolerances, floor independent of the fit |
 | 9 | zero uncertainty edges disappear from the plot | **fixed** — clipped and hatched, scenario span labelled, rendered check added |
-| 10 | integer lattice reporting ignores initial-state constraints | open |
+| 10 | integer lattice reporting ignores initial-state constraints | **fixed** — admissibility from the state spec; rectangles with an aspect cap |
+| extras | ledger enforcement, inert `s_sig`, cluster prose, fixed-t vs certified, narrative tests | **fixed** (last is acknowledged, not removed) |
+
+All ten findings and the five additional checks have been worked. Nine are
+closed; #2 is partial (order-2k coefficients measured, but the calibration
+domain is still exceeded -- O9 and O11b). The review's "recommended next work"
+list maps onto them as follows, with what remains:
+
+| recommended | state |
+|---|---|
+| 1. exact-limit semantics: t = 0, U = 0, admissible states | done (#1, #7, #10) |
+| 2. reproducible evidence: calibration code, raw data, held-out checks | done (`calibration/`, four programs + data + README) |
+| 3. Python/JavaScript parity and a shared result record | done (#3; verified in a headless browser on every publish) |
+| 4. a common FT resource ledger | done (#4, #5, #6); Pinnacle per-candidate block packing still open |
+| 5. precision at each time | done (#8); `s_data_rel_unc` and `s_abs_floor` are now the leveraged assumptions |
+| 6. recompute architecture comparisons | done, but every arm moved: see HEADLINES.md, and the classical baseline is an ED capacity, not a hardness result |
+
+### What #10 closed, and what it did not
+
+`floor(sqrt(m))` named lattices the specified state cannot occupy. Half filling
+at `S^z_tot = 0` with one holon, one doublon and a perfect triplet covering needs
+an EVEN site count (N_up = N/2) and a dimer-coverable remainder; a 5x5 fails
+both, leaving 23 sites. `lattice_admissible` checks it and says why;
+`best_lattice` enumerates rectangles (the experiment uses 7x4) with the most
+square winning and an aspect cap of 2, beyond which a ribbon is quasi-1D and a
+materially easier problem.
+
+The correction runs both ways: floor(sqrt) named an impossible lattice at four of
+five sizes checked AND understated the capacity -- at m = 13 it said 3x3 = 9,
+while 3x4 = 12 is both admissible and larger.
+
+**Still open from #10:** the review also asked for compiled resource feasibility
+per admissible candidate, including code-block and replica packing. The model
+still costs a continuous m and reports the admissible lattice afterwards; it does
+not re-cost each candidate with its own qubit count rounded to code blocks. For
+Pinnacle in particular, k = 14-16 logical qubits per block means the packing is
+lumpy and the honest answer per candidate could differ by a block.
+
+### The additional implementation checks
+
+* **Ledger enforcement** was a side effect of `eps_absolute`. It did work --
+  `frac_stat = 0.9` is rejected at all six public entry points -- but
+  `hubbard.validate(cfg)` is now explicit and also checks eps, p against
+  threshold, n_times and the absolute floor.
+* **`s_sig` was inert** under `signal_regime = "curve"`, so two sensitivity rows
+  reprinted the baseline. They now vary the fixed-signal scenario and the
+  parameters the curve uses.
+* **The cluster prose was wrong**: `cluster_t_reach(xi=0.2) = 0.368`, not zero.
+  The claim is now confined to `xi >~ 0.5`.
+* **Capacity at fixed t vs certified time** are different questions;
+  `max_m_fixed_t_detail` carries the method and the non-claim.
+* **Tests asserting narrative** -- acknowledged. Those touched in this pass now
+  test a mechanism against a measured or published number; the rest are
+  regression tests and are not evidence.
 
 ### What #9 closed, and what it did not
 

@@ -76,6 +76,7 @@ def generated_block(rec: dict) -> str:
          f'const MODEL_ID = {js(rec["model_id"])};',
          "// the multiproduct order the dashed arm uses, from fhcost.curves",
          f"const MPF_ORDER = {js(curves.MPF_ORDER)};",
+         f"const MAX_ASPECT = {js(curves.MAX_ASPECT)};",
          f"const CFG0 = {js(cfg0)};",
          f"const PRESETS = {js(presets)};",
          "// published |C^zz| (TFLO+GPR, Zenodo 17799843): [[U/J, [[t, s]...]]...]",
@@ -136,10 +137,17 @@ def headline_lines(rec: dict) -> list[str]:
          f"STAR {curves.fmt_crossing(s['n_star_clears_classical_hi'])}, "
          f"NISQ+PEC {curves.fmt_crossing(s['n_pec_clears_classical_hi'])}, "
          f"surface FT {curves.fmt_crossing(s['n_ft_clears_classical_hi'])}.",
-         f"- Continuous m is a capacity proxy. At n = 10^6 the feasible integer "
-         f"lattices are NISQ {curves.max_integer_L(r6['nisq_pec'])}x"
-         f"{curves.max_integer_L(r6['nisq_pec'])}, "
-         f"FT {curves.max_integer_L(r6['surface'])}x{curves.max_integer_L(r6['surface'])}."]
+         f"- Continuous m is a capacity proxy, and not every integer lattice can "
+         f"hold the state: half filling at S^z_tot = 0 with one holon, one "
+         f"doublon and a perfect triplet covering needs an EVEN site count, so "
+         f"floor(sqrt(m)) can name a lattice that does not exist. At n = 10^6 "
+         f"the largest admissible lattices are NISQ "
+         f"{curves.fmt_lattice(r6['nisq_pec'])}, STAR "
+         f"{curves.fmt_lattice(r6['star'])}, FT "
+         f"{curves.fmt_lattice(r6['surface'])}, Pinnacle "
+         f"{curves.fmt_lattice(r6['pinnacle'])} "
+         f"(aspect capped at {curves.MAX_ASPECT:.0f}; beyond that a ribbon is "
+         f"quasi-1D)."]
     pe = rec["variants"]["trotter_bound"]["reach"]["1e+06"]["nisq_pec"]
     L.append("- Trotter: under the commutator bound mitigated NISQ does not reach even a"
              f" 2x2 lattice; under the exact-diagonalisation calibration it reaches"

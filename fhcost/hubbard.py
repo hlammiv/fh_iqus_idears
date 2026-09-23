@@ -417,6 +417,27 @@ def error_ledger(cfg: Config = DEFAULT) -> dict:
     return d
 
 
+def validate(cfg: Config = DEFAULT) -> Config:
+    """Reject a configuration before costing it, not halfway through.
+
+    The error ledger is checked inside eps_absolute, so every costing path does
+    hit it -- but only as a side effect, which is a fragile place for a
+    precondition. This is the explicit entry point, and selftest asserts that
+    every public max_m raises on an over-allocated budget (second-pass review,
+    additional checks).
+    """
+    error_ledger(cfg)
+    if not 0.0 < cfg.eps < 1.0:
+        raise ValueError(f"eps must be a relative error in (0,1): {cfg.eps}")
+    if cfg.p < 0.0 or cfg.p >= cfg.p_th:
+        raise ValueError(f"p = {cfg.p} is not below the threshold {cfg.p_th}")
+    if cfg.n_times < 1:
+        raise ValueError(f"n_times must be >= 1: {cfg.n_times}")
+    if cfg.s_abs_floor <= 0.0:
+        raise ValueError("s_abs_floor must be positive or tolerances collapse")
+    return cfg
+
+
 def eps_absolute(cfg: Config = DEFAULT, m: float | None = None) -> float:
     """Absolute tolerance for a SYSTEMATIC error: eps x the tightest signal.
 

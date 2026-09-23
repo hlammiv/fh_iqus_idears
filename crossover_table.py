@@ -48,8 +48,15 @@ VARS = [
     (DEFAULT.but(p=1e-5), "p = 1e-5"),
     (DEFAULT.but(p=3e-3), "p = 3e-3 (today)"),
     (DEFAULT.but(eps=0.01), "eps = 0.01"),
-    (DEFAULT.but(s_sig=0.03), "s = 0.03 (weak signal)"),
-    (DEFAULT.but(s_sig=0.3), "s = 0.3 (strong signal)"),
+    # s_sig is INERT under the default signal_regime="curve" -- these rows were
+    # identical to the baseline (second-pass review, additional checks). Vary
+    # the parameters the curve actually uses, and give the fixed-signal
+    # scenario its own rows where s_sig does bite.
+    (DEFAULT.but(signal_regime="fixed", s_sig=0.03), "fixed s = 0.03 (weak)"),
+    (DEFAULT.but(signal_regime="fixed", s_sig=0.3), "fixed s = 0.3 (strong)"),
+    (DEFAULT.but(s_data_rel_unc=0.40), "signal data 40% uncertain"),
+    (DEFAULT.but(s_abs_floor=0.05), "absolute floor 0.05"),
+    (DEFAULT.but(signal_bound="envelope"), "envelope bound (superseded)"),
     (DEFAULT.but(budget_s=86400.0), "1 day"),
     (DEFAULT.but(budget_s=30 * 86400.0), "1 month"),
     (DEFAULT.but(v=4.0), "v = 4J (correlation front)"),

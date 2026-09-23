@@ -645,8 +645,46 @@ def main() -> int:
           or True, "floor() applied in both nisq and ftqc")
     check("an unfound crossing says so rather than claiming 'never'",
           "not reached below" in curves.fmt_crossing(None))
-    check("integer lattice side is reported, not a fractional one",
-          curves.max_integer_L(63.0) == 7)
+    # ---- admissible integer lattices (second-pass review #10) ---------------
+    # 1. the state specification is checked, not assumed
+    ok25, why25 = curves.lattice_admissible(5, 5)
+    check("a 5x5 cannot hold the specified state, and says why",
+          not ok25 and "odd" in why25 and "23" in why25,
+          why25)
+    check("but the experiment's own 7x4 can",
+          curves.lattice_admissible(7, 4)[0],
+          "28 sites, 26 after the defects, perfectly dimer-coverable")
+    for lx, ly in ((4, 6), (2, 2), (12, 17), (10, 12)):
+        okk, _ = curves.lattice_admissible(lx, ly)
+        n = lx * ly
+        check(f"{lx}x{ly}: even sites, integer N_up, coverable remainder",
+              okk and n % 2 == 0 and (n - 2) % 2 == 0,
+              f"N = {n}, N_up = N_dn = {n // 2}, {n - 2} sites in "
+              f"{(n - 2) // 2} triplets")
+    # 2. inadmissible sizes are REJECTED, not rounded into
+    check("a quasi-1D ribbon is rejected rather than counted as a 2D lattice",
+          not curves.lattice_admissible(2, 13)[0]
+          and "quasi-1D" in curves.lattice_admissible(2, 13)[1],
+          f"aspect 6.5 > {curves.MAX_ASPECT}")
+    check("odd-sided squares are rejected at every size checked",
+          all(not curves.lattice_admissible(L, L)[0] for L in (3, 5, 7, 9, 11)),
+          "3x3, 5x5, 7x7, 9x9, 11x11 all have odd site counts")
+    # 3. and floor(sqrt(m)) really did name lattices that cannot exist
+    _bad = [m for m in (9.0, 13.0, 25.0, 63.0, 124.8)
+            if not curves.lattice_admissible(curves.max_integer_L(m),
+                                             curves.max_integer_L(m))[0]]
+    check("floor(sqrt(m)) named an impossible lattice at most sizes",
+          len(_bad) >= 4,
+          f"inadmissible at m = {_bad}; the review's 5x5 case is one of them")
+    _b13 = curves.best_lattice(13.0)
+    check("and the admissible answer uses MORE of the capacity, not less",
+          _b13 == (3, 4, 12) and 12 > curves.max_integer_L(13.0) ** 2,
+          f"m = 13: 3x4 = 12 sites admissible, against an inadmissible "
+          f"{curves.max_integer_L(13.0)}x{curves.max_integer_L(13.0)} = "
+          f"{curves.max_integer_L(13.0)**2}")
+    check("every reported lattice fits its capacity",
+          all((lambda b: b is None or b[2] <= m)(curves.best_lattice(m))
+              for m in (4.0, 13.0, 22.0, 26.9, 124.8, 204.0)))
     # the signal scaling differs by regime -- 2/9 was only ever right for NISQ
     ss = [0.03, 0.06, 0.12]
     en = np.polyfit(np.log(ss), np.log([nisq.max_m(1e6, DEFAULT.but(
@@ -739,6 +777,69 @@ def main() -> int:
               abs(pt["p_T_target"] * 2.0 * pt["n_t"]
                   - DEFAULT.frac_magic * hubbard.eps_absolute(DEFAULT, 64.0)) < 1e-18,
               "both carry the factor 2 for a flipped +-1 outcome")
+
+    # ---- the additional implementation checks (second pass) -----------------
+    # every public entry point must refuse an over-allocated error budget
+    _bad = DEFAULT.but(frac_stat=0.9)
+    _entries = {
+        "nisq.max_m": lambda c: nisq.max_m(1e6, c, "pec"),
+        "nisq.max_m_ideal": lambda c: nisq.max_m_ideal(1e6, c),
+        "ftqc.max_m_surface": lambda c: ftqc.max_m_surface(1e6, c),
+        "ftqc.max_m_star": lambda c: ftqc.max_m_star(1e6, c),
+        "ftqc.max_m_pinnacle": lambda c: ftqc.max_m_pinnacle(1e6, c),
+        "classical.band": classical.band,
+    }
+    _taken = []
+    for _nm, _fn in _entries.items():
+        try:
+            _fn(_bad)
+            _taken.append(_nm)
+        except ValueError:
+            pass
+    check("every entry point refuses an over-allocated error budget",
+          not _taken, f"frac_stat = 0.9 with the other shares unchanged sums to "
+                      f"1.45; accepted by {_taken or 'nothing'}")
+    check("and validate() is an explicit precondition, not a side effect",
+          hubbard.validate(DEFAULT) is DEFAULT,
+          "checks the ledger, eps in (0,1), p below threshold, n_times, floor")
+    for _kw, _why in (({"p": 0.05}, "p above threshold"), ({"eps": 2.0}, "eps > 1"),
+                      ({"n_times": 0}, "no time points"),
+                      ({"s_abs_floor": 0.0}, "zero floor collapses tolerances")):
+        try:
+            hubbard.validate(DEFAULT.but(**_kw))
+            check(f"validate rejects {_why}", False, f"accepted {_kw}")
+        except ValueError:
+            check(f"validate rejects {_why}", True)
+
+    # s_sig is INERT under the default regime -- the sensitivity rows that varied
+    # it were reporting the baseline twice
+    _sw = nisq.max_m(1e6, DEFAULT.but(s_sig=0.03), "pec")
+    _ss = nisq.max_m(1e6, DEFAULT.but(s_sig=0.3), "pec")
+    check("s_sig does nothing under signal_regime='curve', and is not varied there",
+          _sw == _ss == nisq.max_m(1e6, DEFAULT, "pec"),
+          f"both {_sw:.2f}; crossovers.md now varies the fixed-signal scenario "
+          f"and the parameters the curve actually uses")
+    _fw = nisq.max_m(1e6, DEFAULT.but(signal_regime="fixed", s_sig=0.03), "pec")
+    _fs = nisq.max_m(1e6, DEFAULT.but(signal_regime="fixed", s_sig=0.3), "pec")
+    check("under the fixed-signal scenario it does bite",
+          _fs > 1.3 * _fw, f"{_fw:.1f} -> {_fs:.1f}")
+
+    # the cluster prose contradicted the implementation at small xi
+    _ct = {xi: converged.cluster_t_reach(DEFAULT.but(xi=xi))
+           for xi in (0.2, 0.5, 1.0)}
+    check("the cluster method is NOT uncompetitive at every xi -- only xi >~ 0.5",
+          _ct[0.2] > 0.3 and _ct[0.5] == 0.0 and _ct[1.0] == 0.0,
+          f"t_reach: " + ", ".join(f"xi={k}: {v:.3f}" for k, v in _ct.items())
+          + " -- the docstring claiming failure at all xi is corrected")
+
+    # capacity at fixed t and certified time are different questions
+    _d = classical.max_m_fixed_t_detail(0.02, DEFAULT)
+    check("a fixed-t capacity carries its method and its non-claim",
+          _d["method"] == "snake MPS" and "NO convergence guarantee" in _d["claims"]
+          and "certified" in _d["not_a_certificate"],
+          f"m = {_d['m']:.0f} at t = 0.02 by {_d['method']}, against a certified "
+          f"t_reach of {converged.classical_t_reach(DEFAULT):.4f} -- different "
+          f"questions, not a contradiction")
 
     # ---- zero band edges stay visible (second-pass review #9) ---------------
     # 1. a synthetic band with ONE zero edge must survive

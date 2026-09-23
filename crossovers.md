@@ -1,6 +1,6 @@
 # Crossovers and sensitivity
 
-Model `8ece05684fd0` -- the same fingerprint the figure and `explorer.html`
+Model `90e49ba5d473` -- the same fingerprint the figure and `explorer.html`
 carry. Differing ids mean differing models; do not compare across them.
 
 All entries are `m` at `n = 10^6` unless the column says otherwise, for one
@@ -23,8 +23,11 @@ Each row changes ONE input from the baseline.
 | p = 1e-5 | 24–26 | 169.3 | 301 | 228.1 | 114 | 7 | 6.9e+04 |
 | p = 3e-3 (today) | 24–26 | 7.2 | 10 | 10.6 | 0 | 0 | never |
 | eps = 0.01 | 24–26 | 6.1 | 12 | 6.5 | 0 | 0 | 3.1e+09 |
-| s = 0.03 (weak signal) | 24–26 | 13.1 | 20 | 22.0 | 13 | 7 | 8.1e+06 |
-| s = 0.3 (strong signal) | 24–26 | 13.1 | 20 | 22.0 | 13 | 7 | 8.1e+06 |
+| fixed s = 0.03 (weak) | 24–26 | 11.5 | 18 | 17.5 | 8 | 0 | 2.7e+07 |
+| fixed s = 0.3 (strong) | 24–26 | 26.8 | 30 | 56.6 | 156 | 28 | 9.8e+04 |
+| signal data 40% uncertain | 24–26 | 11.7 | 18 | 19.2 | 8 | 6 | 1.4e+07 |
+| absolute floor 0.05 | 24–26 | 14.4 | 21 | 24.7 | 17 | 8 | 4.9e+06 |
+| envelope bound (superseded) | 24–26 | 15.8 | 22 | 27.6 | 26 | 9 | 3.2e+06 |
 | 1 day | 24–26 | 12.3 | 18 | 17.1 | 11 | 5 | 5.3e+07 |
 | 1 month | 24–26 | 13.7 | 21 | 25.3 | 14 | 11 | 2.4e+06 |
 | v = 4J (correlation front) | 24–26 | 25.7 | 35 | 40.7 | 32 | 19 | 1.2e+05 |

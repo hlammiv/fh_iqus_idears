@@ -149,9 +149,23 @@ def cluster_t_reach(cfg: Config = DEFAULT) -> float:
 
     For the cluster to beat exact diagonalisation on a 28-site lattice it would
     have to be SMALLER than 28 sites, i.e. R <~ 2.4, which at t = 0.5 permits a
-    residual of only exp(-1.4) ~ 25%. So at 10% relative accuracy the cluster
-    expansion is simply not a competitive method here, at any xi in the plausible
-    range (checked from 0.2 to 1.0).
+    residual of only exp(-1.4) ~ 25%.
+
+    CORRECTED (second-pass review, additional checks): an earlier version of this
+    docstring said the method fails "at any xi in the plausible range (checked
+    from 0.2 to 1.0)". The implementation says otherwise at the bottom of that
+    range. Measured here:
+
+        xi = 0.2  ->  t_reach = 0.368
+        xi = 0.5  ->  t_reach = 0
+        xi = 1.0  ->  t_reach = 0
+
+    The buffer is xi ln(1/eps), so a short correlation length makes it cheap: at
+    xi = 0.2 the cluster is small enough to fit and reaches t ~ 0.37, further
+    than exact diagonalisation certifies (0.013). The claim that survives is
+    narrower -- the method is uncompetitive at xi >~ 0.5, and at xi = 0.2 it is
+    NOT, which is a statement about the correlation length rather than about the
+    method.
 
     Caveat in the other direction: this costs FULL diagonalisation inside the
     cluster (4^N). A cluster with an approximate inner solver is not costed, and
