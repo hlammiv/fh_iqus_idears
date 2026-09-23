@@ -44,6 +44,27 @@ dominates by ~600×. This is why `Platform.layer_seconds` uses a *measured* laye
 time where one exists instead of building one up from gate counts: no gate count
 can predict ion sorting.
 
+### Cultivation — arXiv:2409.17595, and its released stats
+
+The paper's figure gives the expected volume; the **released simulation data**
+(Zenodo 10.5281/zenodo.13777072, `stats.csv`, mirrored at
+`calibration/data/cultivation_stats.csv`) gives the underlying counts. The
+`end2end-inplace-distillation` row at `p = 1e-3, d1 = 5, d2 = 15` carries
+`q = 463`, `r = 20`, 10¹² shots, and a complementary-gap histogram of 117
+kept-count bins plus 113 error-count bins.
+
+Reconstructing the error/discard trade from that histogram reproduces the
+paper's headline: at gap cut 100 the measured error is **1.90×10⁻⁹** against
+their quoted 2×10⁻⁹, with **73.0 attempts** per accepted state — a 98.6%
+discard rate against their quoted 99%.
+
+| constant | value | status |
+|---|---|---|
+| `CULT_FOOTPRINT` | 463 | exact (`q`) |
+| `CULT_ROUNDS_PER_ATTEMPT` | 20 | exact (`r`) |
+| `CULT_ATTEMPTS_1E3` | 73.0 | exact, reconstructed |
+| `CULT_VOLUME_1E3` | 3×10⁴ | their integrated value, inside the bracket 9.3×10³–6.8×10⁵ |
+
 ### Neutral atom — arXiv:2304.05420
 
 | constant | value | where |

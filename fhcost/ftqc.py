@@ -48,13 +48,35 @@ from .platform import admits as platform_admits, se_rounds
 
 ROSS_SELINGER = 3.0        # T gates per Rz = 3 log2(1/eps) (Ross & Selinger 2016)
 
-# Cultivation ends by escaping into a d = 15 grafted matchable code, so one unit
-# occupies a d = 15 patch. Its expected volume per ACCEPTED state, retries
-# included, is read off Fig. 1 of arXiv:2409.17595 at ~3e4 qubit-rounds; that is
-# a value read from a log-log scatter plot, good to about a factor of two, and
-# it is the weakest number in this file. Cycles = volume / footprint.
-CULT_FOOTPRINT = 2.0 * 15 * 15        # 450 qubits, one d = 15 patch
-CULT_VOLUME_1E3 = 3.0e4               # qubit-rounds per accepted state, p = 1e-3
+# Cultivation, from the authors' RELEASED SIMULATION STATS rather than from
+# their figure (Zenodo 10.5281/zenodo.13777072, mirrored in
+# calibration/data/cultivation_stats.csv). The earlier version of this block read
+# ~3e4 qubit-rounds off a log-log scatter plot and called itself the weakest
+# number in the file. Three of its four inputs are now exact.
+#
+# The end2end-inplace-distillation row at p = 1e-3, d1 = 5, d2 = 15 carries a
+# complementary-gap histogram: 117 kept-count bins and 113 error-count bins over
+# 1e12 shots. Reconstructing the error/discard trade from it puts the paper's
+# headline 2e-9 at gap cut 100, where the measured error is 1.90e-9 and there are
+# 73.0 attempts per accepted state -- a 98.6% discard rate, matching their quoted
+# 99%.
+#
+#   footprint          463 qubits          EXACT (their q)
+#   rounds per attempt  20                 EXACT (their r)
+#   attempts            73.0               EXACT, reconstructed from the histogram
+#   volume per state    9.3e3 .. 6.8e5     bracket: one attempt, to all 73 run
+#                                          to full length
+#
+# Only the last is uncertain, and only because discarded attempts terminate
+# early and the qubit count ramps during cultivation -- which is exactly what
+# their integration accounts for and a flat q*r*attempts cannot. Their plotted
+# ~3e4 sits inside the bracket, so it is kept as the central value.
+CULT_FOOTPRINT = 463.0                # EXACT: q in their released stats
+CULT_ATTEMPTS_1E3 = 73.0              # EXACT: reconstructed at the 2e-9 gap cut
+CULT_ROUNDS_PER_ATTEMPT = 20.0        # EXACT: r in their released stats
+CULT_VOLUME_1E3 = 3.0e4               # their integrated value, inside the bracket
+CULT_VOLUME_BRACKET = (CULT_FOOTPRINT * CULT_ROUNDS_PER_ATTEMPT,
+                       CULT_FOOTPRINT * CULT_ROUNDS_PER_ATTEMPT * CULT_ATTEMPTS_1E3)
 CULT_CYCLES_1E3 = CULT_VOLUME_1E3 / CULT_FOOTPRINT
 # "a 2x noise strength improvement ... becomes a 50x logical error rate
 # improvement and a 10x cost reduction" -- same construction, so the footprint

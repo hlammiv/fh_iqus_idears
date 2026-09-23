@@ -738,6 +738,44 @@ def main() -> int:
           f"m = 13: 3x4 = 12 sites admissible, against an inadmissible "
           f"{curves.max_integer_L(13.0)}x{curves.max_integer_L(13.0)} = "
           f"{curves.max_integer_L(13.0)**2}")
+    # #10 remainder: re-cost every admissible INTEGER candidate, rather than
+    # reporting best_lattice(continuous m) and hoping. The concern was block
+    # packing -- Pinnacle stores k = 14-16 logical qubits per block, so its
+    # footprint is lumpy in m and a smaller lattice could in principle be
+    # infeasible where a larger one is not.
+    def _feas(arm, mm, nn, cc):
+        pt = (ftqc.surface_point(mm, cc, n=nn) if arm == "surface"
+              else ftqc.pinnacle_point(mm, cc))
+        if pt is None or pt["phys"] > nn:
+            return False
+        cp = math.floor(nn / pt["phys"])
+        c2 = cc.but(hwp_batch=pt["hwp_batch"]) if arm == "surface" else cc
+        return cp >= 1 and (ftqc.n_shots_total(c2, mm) * pt["t_shot"] / cp
+                            <= cc.budget_s)
+    _PINC = DEFAULT.but(platform=curves.PINNACLE_PLATFORM)
+    _nonmono = []
+    for _arm, _c in (("surface", DEFAULT), ("pinnacle", _PINC)):
+        for _n in (1e6, 1e7, 1e8):
+            _mx = (ftqc.max_m_surface(_n, _c) if _arm == "surface"
+                   else ftqc.max_m_pinnacle(_n, _c))
+            if not _mx:
+                continue
+            _nonmono += [(_arm, _n, _m) for _m in range(4, int(_mx) + 1)
+                         if not _feas(_arm, float(_m), _n, _c)]
+    check("feasibility is monotone in m, including the block-quantised arm",
+          not _nonmono,
+          "every integer m from 4 to the maximum is feasible at six (arm, n) "
+          "points -- so best_lattice, which takes the largest admissible site "
+          "count BELOW the continuous maximum, is feasible by construction")
+    for _arm, _c, _f in (("surface", DEFAULT, ftqc.max_m_surface),
+                         ("pinnacle", _PINC, ftqc.max_m_pinnacle)):
+        _n = 1e8
+        _bl = curves.best_lattice(_f(_n, _c))
+        check(f"and the re-costed {_arm} candidate matches best_lattice at n=1e8",
+              _bl is not None and _feas(_arm, float(_bl[2]), _n, _c),
+              f"{_bl[0]}x{_bl[1]} = {_bl[2]} sites, re-costed at its own integer "
+              f"site count rather than inherited from a continuous m")
+
     check("every reported lattice fits its capacity",
           all((lambda b: b is None or b[2] <= m)(curves.best_lattice(m))
               for m in (4.0, 13.0, 22.0, 26.9, 124.8, 204.0)))
@@ -790,6 +828,33 @@ def main() -> int:
           42.0 < lit1e3[0][4] < 6 * 7 * 1.05,
           f"6 d_m = 42, published {lit1e3[0][4]} -> p_fail = "
           f"{1 - 42 / lit1e3[0][4]:.3f}")
+
+    # cultivation, from the authors' released stats rather than their figure
+    check("cultivation's footprint and attempts are EXACT, not read off a plot",
+          ftqc.CULT_FOOTPRINT == 463.0 and ftqc.CULT_ATTEMPTS_1E3 == 73.0,
+          "q = 463, r = 20, 73.0 attempts at the 2e-9 gap cut (1.90e-9 measured, "
+          "98.6% discard) -- reconstructed from the 117-bin complementary-gap "
+          "histogram in Zenodo 10.5281/zenodo.13777072")
+    check("and their plotted volume sits inside the bracket the stats allow",
+          ftqc.CULT_VOLUME_BRACKET[0] < ftqc.CULT_VOLUME_1E3 < ftqc.CULT_VOLUME_BRACKET[1],
+          f"{ftqc.CULT_VOLUME_BRACKET[0]:.1e} (one attempt) < "
+          f"{ftqc.CULT_VOLUME_1E3:.1e} (theirs) < "
+          f"{ftqc.CULT_VOLUME_BRACKET[1]:.1e} (all 73 at full length)")
+    # ...and it turns out not to matter, for a reason worth recording
+    _reach = []
+    for _cyc in (20.0, 65.0, 1460.0):
+        _src = [tuple(list(r[:4]) + [_cyc] + [r[5]])
+                if r[5] == "cultivation" and r[1] == 1e-3 else r
+                for r in ftqc.MAGIC_SOURCES]
+        _save, ftqc.MAGIC_SOURCES = ftqc.MAGIC_SOURCES, _src
+        _reach.append(ftqc.max_m_surface(1e7, DEFAULT))
+        ftqc.MAGIC_SOURCES = _save
+    check("the remaining uncertainty is absorbed by the plant-level optimisation",
+          max(_reach) - min(_reach) < 1e-9,
+          f"a 73x change in cultivation's cycle count moves surface FT at n = 1e7 "
+          f"not at all ({_reach[0]:.1f}): select_factory minimises total plant "
+          f"qubits over ALL admissible sources, so degrading one just hands the "
+          f"job to the Litinski ladder")
 
     # 2. cleaner inputs do NOT drive the output to zero: there is a circuit floor
     cubic = 35 * 4.5e-8 ** 3

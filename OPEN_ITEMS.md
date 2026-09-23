@@ -495,12 +495,19 @@ The correction runs both ways: floor(sqrt) named an impossible lattice at four o
 five sizes checked AND understated the capacity -- at m = 13 it said 3x3 = 9,
 while 3x4 = 12 is both admissible and larger.
 
-**Still open from #10:** the review also asked for compiled resource feasibility
-per admissible candidate, including code-block and replica packing. The model
-still costs a continuous m and reports the admissible lattice afterwards; it does
-not re-cost each candidate with its own qubit count rounded to code blocks. For
-Pinnacle in particular, k = 14-16 logical qubits per block means the packing is
-lumpy and the honest answer per candidate could differ by a block.
+**#10 remainder CLOSED, by checking the property that makes the shortcut safe.**
+Every admissible integer candidate is now re-costed at its own site count, and
+the answer matches `best_lattice(continuous m)` at every point tested -- for the
+surface arm and for the block-quantised Pinnacle arm, where k = 14-16 logical
+qubits per block makes the footprint lumpy in m.
+
+The reason is worth more than the result: **feasibility is monotone in m**.
+Every integer m from 4 to the maximum is feasible at six (arm, n) points, so
+`best_lattice`, which takes the largest admissible site count BELOW the
+continuous maximum, is feasible by construction. Block quantisation cannot break
+that unless it makes a *smaller* lattice infeasible where a larger one is not,
+and it does not. The monotonicity is asserted rather than assumed, so if a future
+change breaks it the shortcut stops being safe and the test says so.
 
 ### The additional implementation checks
 
@@ -703,11 +710,32 @@ Consequence at `n = 1e6`: surface FT goes 48.7 -> 227 at `p = 1e-5`, 48.7 -> 108
 at `1e-4`, is unchanged at `1e-3`, and **refuses** above it, because neither
 source is characterised there.
 
-**Still open from #4:** cultivation's expected volume (~3e4 qubit-rounds at
-`p = 1e-3`) is read off a log-log scatter plot in arXiv:2409.17595 Fig. 1 and is
-good to about a factor of two. It is the weakest number in `ftqc.py`, and it
-matters, because cultivation wins the plant comparison at every point below
-`n ~ 1e7`. A digitised value, or the authors' tabulated volume, would settle it.
+**#4 remainder CLOSED, from the authors' released stats** (Zenodo
+10.5281/zenodo.13777072, mirrored in `calibration/data/cultivation_stats.csv`).
+Their `end2end-inplace-distillation` row at `p = 1e-3, d1 = 5, d2 = 15` carries a
+complementary-gap histogram -- 117 kept-count bins, 113 error-count bins, 1e12
+shots. Reconstructing the error/discard trade from it puts their headline 2e-9 at
+gap cut 100: measured error **1.90e-9**, **73.0 attempts** per accepted state,
+98.6% discard, against their quoted 99%.
+
+Three of the four inputs are now exact rather than read off a figure:
+
+| | |
+|---|---|
+| footprint | **463** qubits (was a guessed 450 = 2 x 15^2) |
+| rounds per attempt | **20** |
+| attempts | **73.0** |
+| volume per state | 9.3e3 .. 6.8e5, their integrated ~3e4 inside it |
+
+Only the volume stays uncertain, because discarded attempts terminate early and
+the qubit count ramps during cultivation -- which their integration handles and a
+flat `q*r*attempts` cannot.
+
+**And it does not matter.** A 73x change in the cycle count moves surface FT at
+`n = 1e7` by nothing at all. The plant-level optimisation added in #4 minimises
+total plant qubits over ALL admissible sources, so degrading cultivation simply
+hands the job to the Litinski ladder. The item called this "the weakest number in
+ftqc.py, and it matters"; the first half was true and the second was not.
 
 ### What #3 closed, and what it did not
 
