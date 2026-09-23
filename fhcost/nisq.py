@@ -71,7 +71,8 @@ from __future__ import annotations
 import math
 from .budget import Config, DEFAULT
 from .hubbard import (counts, qubits_per_copy, multiproduct_l1,
-                      multiproduct_branches, signal_at, eps_absolute, conf_z)
+                      multiproduct_branches, signal_at, eps_absolute,
+                      eps_statistical, conf_z)
 
 M_MIN = 4.0      # smallest real lattice is 2x2; m=1 has no hopping term
 
@@ -175,7 +176,7 @@ def time_required(m: float, cfg: Config = DEFAULT, strategy: str = "pec") -> flo
     c = counts(m, cfg)
     # statistical ALLOWANCE is frac_stat of the tolerance, and it is a
     # confidence half-width: z * sigma <= allowance, so sigma <= allowance / z
-    delta = cfg.frac_stat * eps_absolute(cfg, m) / conf_z(cfg)
+    delta = cfg.frac_stat * eps_statistical(cfg, m) / conf_z(cfg)
     # Per-BRANCH accounting. Branch i is its own circuit at k_i x the base step
     # count, so it has k_i x the gates (hence k_i x the PEC exponent) and k_i x
     # the runtime. Optimal allocation over independent unbiased branch estimators
@@ -225,7 +226,7 @@ def max_m_ideal(n: float, cfg: Config = DEFAULT) -> float:
     m = n / (3.0 if cfg.encoding == "compact" else 2.0)
     if m < M_MIN:
         return 0.0
-    dd = cfg.frac_stat * eps_absolute(cfg, min(m, 1e6)) / conf_z(cfg)
+    dd = cfg.frac_stat * eps_statistical(cfg, min(m, 1e6)) / conf_z(cfg)
     need = cfg.n_times / dd ** 2
     lo, hi = M_MIN, m
     if need * counts(hi, cfg)["t_circuit"] <= cfg.budget_s * max(1.0, math.floor(n / qubits_per_copy(hi, cfg))):

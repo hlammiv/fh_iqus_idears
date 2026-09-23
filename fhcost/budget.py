@@ -269,6 +269,19 @@ class Config:
     s_res_slope: float = 0.021    # residual growth per (U/J)/4       FITTED +- 0.003
     t_melt_base: float = 0.426    # melting time at U = 0, in 1/J     FITTED +- 0.007
     t_melt_slope: float = 0.021   # melting-time growth per (U/J)/4   FITTED +- 0.008
+    # --- what the COSTING model may assume about the signal (review #8) ---
+    # The envelope is not a lower bound. Inside the measured window the costing
+    # path uses the data reduced by s_data_rel_unc; outside it uses the envelope
+    # times s_extrap_factor, which is the weaker of the two because a
+    # leave-one-out refit misses the tail by -52% to +55%.
+    signal_bound: str = "lower"   # "lower" (data-based bound) | "envelope" (old)
+    s_data_rel_unc: float = 0.20  # ASSUMED uncertainty on the published points;
+                                  # the source quotes no per-point error bar
+    s_extrap_factor: float = 0.65 # beyond t = 2, from the held-out tail error
+    # An absolute error SCALE, not an inferred residual. Below this the target
+    # stops being relative. It is a specification and the single most leveraged
+    # number in the ledger; s_res_min is a fit result and must not serve here.
+    s_abs_floor: float = 0.02
 
     def but(self, **kw) -> "Config":
         return replace(self, **kw)

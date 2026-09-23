@@ -319,9 +319,47 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 5 | Pinnacle lacks the common FT resource/error ledger | **fixed** — workspace charged, engine selected and certified, stalls and rejection scheduled |
 | 6 | Hamming-weight workspace does not match the cited circuit | **fixed** — Campbell Thm 2; workspace, T-count, depth and synthesis all from one construction |
 | 7 | the classical baseline misses the U = 0 easy limit | **fixed** — free-fermion estimator implemented and validated to 1.7e-15; band relabelled |
-| 8 | the signal fit does not support per-time relative accuracy | open |
+| 8 | the signal fit does not support per-time relative accuracy | **fixed** — envelope separated from bound, per-time tolerances, floor independent of the fit |
 | 9 | zero uncertainty edges disappear from the plot | open |
 | 10 | integer lattice reporting ignores initial-state constraints | open |
+
+### What #8 closed, and what it did not
+
+Three things were conflated and are now separate: the fitted **envelope**
+(physics), a **lower bound** the costing may assume (data-based), and an
+**absolute floor** (a specification, not the fitted residual). And one tolerance
+was doing two jobs; `eps_absolute` now bounds systematics at the tightest time on
+the grid while `eps_statistical` carries the per-time shot sum.
+
+The envelope failed on its own terms: a leave-one-out refit
+(`calibration/fit_signal.py`, which preserves the data, fit, residuals and
+covariance) misses the tail by -52% to +55%, and at U/J = 4, t = 1.5 it sits 37%
+above the data -- 1.89x too few shots, exactly as the review computed.
+
+Everything tightened by 10-50%, the binding time moved off the endpoint (t = 1.6
+at m = 256, not t_max = 8), and multiproduct NISQ no longer clears the ED
+frontier at any n below 1e10.
+
+Two prior results were overturned in passing. The surface arm's drop at n = 1e6
+is a **factory-ladder edge**, not an architectural finding -- it sits exactly on
+the cultivation rung's boundary, one step from a 68x larger plant. And the
+model's agreement with `m ~ s^(2/9)` was a **floor artefact**: the s = 0.03 point
+was clipped by the floor at the fitted residual, flattening the slope to 0.275;
+unclipped it is 0.379.
+
+**Still open from #8:**
+* `s_data_rel_unc = 0.20` is an assumption. The source quotes no per-point error
+  bar, and this number now sets every tolerance in the model.
+* `s_abs_floor = 0.02` is a specification with no derivation. It is the single
+  most leveraged number in the ledger and deserves an argument from what the
+  experiment can actually resolve.
+* Seven data points per U, two U values. The interpolation in U between 0 and 4
+  is a two-point line, and beyond t = 2 there is no data at all -- the model
+  falls back to the envelope with a 0.65 factor, which the held-out test says is
+  about right but cannot confirm.
+* The review also asked that smoothed data points not be treated as independent.
+  They still are: the published values are GPR output, so neighbouring points
+  share a kernel and the residual RMS understates the true uncertainty.
 
 ### What #7 closed, and what it did not
 

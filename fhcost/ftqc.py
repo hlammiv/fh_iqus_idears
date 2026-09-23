@@ -40,8 +40,9 @@ OTHER CORRECTIONS FOLDED IN
 from __future__ import annotations
 import math
 from .budget import Config, DEFAULT
-from .hubbard import (counts, step_depth, eps_absolute, multiproduct_l1, trotter_steps,
-                      multiproduct_branches, t_max, signal_at, conf_z)
+from .hubbard import (counts, step_depth, eps_absolute, eps_statistical,
+                      multiproduct_l1, trotter_steps, multiproduct_branches,
+                      t_max, signal_at, conf_z)
 from .nisq import M_MIN
 
 ROSS_SELINGER = 3.0        # T gates per Rz = 3 log2(1/eps) (Ross & Selinger 2016)
@@ -313,8 +314,10 @@ def n_shots_total(cfg: Config = DEFAULT, m: float | None = None) -> float:
             multiproduct_branches(cfg.trotter_order_k))
     # same ledger as NISQ: a frac_stat share, as a confidence half-width.
     # This previously used the FULL tolerance, which is why FT ran 1.9x over.
-    sig = cfg.s_sig if m is None else signal_at(m, cfg)
-    delta = cfg.frac_stat * cfg.eps * max(sig, cfg.s_res_min) / conf_z(cfg)
+    # eps_statistical carries the PER-TIME sum (review #8): shots at time t cost
+    # 1/s(t)^2, and evaluating the tolerance once at t_max charged the easy times
+    # at the hard time's price and the hard times at nothing.
+    delta = cfg.frac_stat * eps_statistical(cfg, m) / conf_z(cfg)
     return cfg.n_times * w * w / delta ** 2
 
 

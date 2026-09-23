@@ -158,8 +158,13 @@ def main() -> int:
         cmax = 0.5 * math.log(1e4 * secs) / 3e-3
         check(f"mitigation-ceiling anchor, {lab}", 2850 <= cmax <= 4500, f"C_max = {cmax:.0f}")
     m_lo, m_hi = nisq.max_m(1e2, strategy="pec"), nisq.max_m(1e12, strategy="pec")
-    check("mitigated NISQ saturates (10 decades of n < 2x in m)",
-          m_hi / m_lo < 2.0, f"m: {m_lo:.1f} -> {m_hi:.1f}")
+    # Test the LAW rather than a threshold: extra qubits buy parallel copies,
+    # copies enter through a log, and m ~ (ln n)^{4/9}.
+    predicted = (math.log(1e12) / math.log(1e2)) ** (4 / 9)
+    check("mitigated NISQ grows as (ln n)^(4/9) -- slower than logarithmic",
+          abs(m_hi / m_lo - predicted) / predicted < 0.2,
+          f"m: {m_lo:.1f} -> {m_hi:.1f} over 10 decades = {m_hi/m_lo:.2f}x, "
+          f"against {predicted:.2f} predicted")
     check("unmitigated NISQ is flat in n",
           abs(nisq.max_m(1e3, strategy="none") - nisq.max_m(1e9, strategy="none")) < 1e-6)
     check("ideal p=0 is slope 1 while qubit-limited",
@@ -188,20 +193,74 @@ def main() -> int:
     # origin than the exponential that was there before
     drop_g = 1.0 - hubbard.signal(0.02, DEFAULT.but(signal_beta=2.0))
     drop_e = 1.0 - hubbard.signal(0.02, DEFAULT.but(signal_beta=1.0))
-    check("the decay is Gaussian, not exponential",
+    # This is a LOCAL constraint at the origin, not evidence of a global law.
+    # A quench has dC/dt = 0 at t = 0, which rules an exponential out near zero
+    # and says nothing about the tail -- where the held-out test below shows the
+    # envelope missing by up to 55%.
+    check("dC/dt = 0 at the origin rules out an exponential THERE",
           DEFAULT.signal_beta == 2.0 and drop_g < 0.1 * drop_e,
-          f"drop at t=0.02: {drop_g:.2e} (Gaussian) vs {drop_e:.2e} (exponential)")
+          f"drop at t=0.02: {drop_g:.2e} (beta=2) vs {drop_e:.2e} (beta=1); "
+          f"a local constraint, not a global form")
     check("order melts more slowly at larger U",
           hubbard.t_melt(DEFAULT.but(U_over_J=8)) > hubbard.t_melt(DEFAULT.but(U_over_J=4))
           > hubbard.t_melt(DEFAULT.but(U_over_J=0)))
     check("late-time AF residual grows with U",
           hubbard.s_residual(DEFAULT.but(U_over_J=8))
           > hubbard.s_residual(DEFAULT.but(U_over_J=4)))
-    check("signal decays monotonically to the residual",
+    check("the ENVELOPE decays monotonically -- the data does not",
           hubbard.signal(0.1) > hubbard.signal(1.0) > hubbard.signal(10.0)
-          >= hubbard.s_residual())
-    check("absolute tolerance has a floor at the residual",
-          hubbard.eps_absolute(DEFAULT, 1e6) >= DEFAULT.eps * DEFAULT.s_res_min)
+          >= hubbard.s_residual()
+          and hubbard.SIGNAL_DATA[4.0][-1][1] > hubbard.SIGNAL_DATA[4.0][-2][1],
+          "U=4 data falls to 0.0466 at t=1.5 and returns to 0.0532 at t=2.0")
+    check("the absolute floor is a specification, not the fitted residual",
+          hubbard.eps_absolute(DEFAULT, 1e6) >= DEFAULT.eps * DEFAULT.s_abs_floor
+          and DEFAULT.s_abs_floor != DEFAULT.s_res_min,
+          f"floor {DEFAULT.s_abs_floor} is set independently of the fit result "
+          f"{DEFAULT.s_res_min}")
+
+    # ---- the signal bound and per-time tolerances (second-pass review #8) ----
+    # 3. a monotone envelope must not loosen the tolerance near a real minimum
+    env = DEFAULT.but(signal_bound="envelope")
+    t_dip = 1.5
+    ratio = hubbard.signal(t_dip, DEFAULT) / hubbard.signal_data(t_dip, 4.0)
+    check("the envelope sits above the data exactly where the data dips",
+          ratio > 1.3,
+          f"U=4, t=1.5: envelope {hubbard.signal(t_dip, DEFAULT):.4f} vs data "
+          f"{hubbard.signal_data(t_dip, 4.0):.4f} -- {ratio**2:.2f}x too few shots")
+    for mm in (16.0, 64.0, 256.0):
+        check(f"and the bound is tighter than the envelope at m = {mm:.0f}",
+              hubbard.eps_absolute(DEFAULT, mm) < hubbard.eps_absolute(env, mm),
+              f"{hubbard.eps_absolute(DEFAULT, mm):.5f} vs "
+              f"{hubbard.eps_absolute(env, mm):.5f}")
+    check("the binding time is the dip, not t_max",
+          abs(min(hubbard.signal_grid(256.0, DEFAULT),
+                  key=lambda t: hubbard.signal_lower(t, DEFAULT))
+              - hubbard.t_max(256.0, DEFAULT)) > 1e-9,
+          f"t_max = {hubbard.t_max(256.0, DEFAULT):.1f}, binding t = "
+          f"{min(hubbard.signal_grid(256.0, DEFAULT), key=lambda t: hubbard.signal_lower(t, DEFAULT)):.1f}")
+
+    # 2. per-time coverage: zeros and deep minima must hit the floor, not zero
+    deep = DEFAULT.but(s_data_rel_unc=0.5)
+    check("a deep minimum falls through to the absolute floor, not to zero",
+          hubbard.signal_lower(2.0, deep.but(U_over_J=0.0)) == deep.s_abs_floor,
+          f"data 0.0295 x 0.5 = 0.0148 < floor {deep.s_abs_floor}")
+    check("and every tolerance stays finite and positive on the whole grid",
+          all(0 < hubbard.eps_absolute(DEFAULT, mm) < 1
+              and 0 < hubbard.eps_statistical(DEFAULT, mm) < 1
+              for mm in (4.0, 16.0, 64.0, 256.0, 1024.0)),
+          "no zero-signal blow-up")
+
+    # statistics and systematics are now bounded by DIFFERENT things
+    check("shots are paid per time; a bias must clear the worst time",
+          hubbard.signal_effective(256.0, DEFAULT) > hubbard.signal_min(256.0, DEFAULT),
+          f"effective {hubbard.signal_effective(256.0, DEFAULT):.4f} vs minimum "
+          f"{hubbard.signal_min(256.0, DEFAULT):.4f}")
+
+    # 1. held-out prediction, kept in the calibration record
+    check("the envelope's tail fails a leave-one-out test, and that is recorded",
+          hubbard.SIGNAL_HELDOUT_WORST > 0.4,
+          f"worst leave-one-out error {hubbard.SIGNAL_HELDOUT_WORST:.0%} "
+          f"(calibration/fit_signal.py); good to ~1% only out to t = 0.7")
     # the point of the short/long knob: raising U hurts at short time (bigger
     # commutator norm) but helps at long time (bigger residual -> looser tolerance)
     # The "U hurts at short time, helps at long time" sign reversal reported
@@ -340,9 +399,20 @@ def main() -> int:
           == ftqc.ENGINE_QUBITS)
     # with T supply serialised through that single engine, the storage advantage
     # of the qLDPC codes no longer translates into a large end-to-end win
-    check("Pinnacle is comparable to, not far above, the surface code",
-          0.8 < ftqc.max_m_pinnacle(1e6) / ftqc.max_m_surface(1e6, fow) < 2.0,
-          f"ratio {ftqc.max_m_pinnacle(1e6)/ftqc.max_m_surface(1e6, fow):.2f} at n=1e6")
+    # The gap at n = 1e6 is a LADDER CLIFF, not an architectural verdict: the
+    # surface arm sits exactly on the edge of the cultivation rung, and the next
+    # published source costs 30700 qubits against 450. Tightening the tolerance
+    # (review #8) pushed it onto that edge. By n = 1e7, past the cliff, the two
+    # are within a factor of three again.
+    _r6 = ftqc.max_m_pinnacle(1e6) / ftqc.max_m_surface(1e6, fow)
+    _r7 = ftqc.max_m_pinnacle(1e7) / ftqc.max_m_surface(1e7, fow)
+    _sp = ftqc.surface_point(ftqc.max_m_surface(1e6, fow), fow)
+    check("the Pinnacle-surface gap at n=1e6 is a factory-ladder edge",
+          _sp is not None and _sp["p_T"] >= 0.95 * _sp["p_T_target"],
+          f"surface sits at p_T = {_sp['p_T']:.1e} against a target of "
+          f"{_sp['p_T_target']:.1e} -- one rung from a 68x bigger plant")
+    check("and away from that edge the two stay within a small factor",
+          _r7 < 3.0, f"ratio {_r6:.2f} at n=1e6, {_r7:.2f} at n=1e7")
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8")
@@ -435,9 +505,13 @@ def main() -> int:
     check("PEC-NISQ does NOT clear the ED frontier",
           s["n_pec_clears_classical_hi"] is None,
           f"m = {s['pec_at_1e6']:.1f} at n=1e6 against a frontier of {hi:.0f}")
-    check("adding multiproduct does get it there, eventually",
-          s["n_pec_mpf_clears_classical_hi"] is not None,
-          f"at n = {curves.fmt_crossing(s['n_pec_mpf_clears_classical_hi'])}")
+    # It used to, at n ~ 4e6. Charging the tolerance per time (review #8) took
+    # it back below: 21.6 -> 19.7 at n = 1e6, against an ED frontier of 26.
+    check("and multiproduct no longer gets it there either",
+          s["n_pec_mpf_clears_classical_hi"] is None
+          and s["pec_mpf_at_1e6"] < hi,
+          f"MPF reaches {s['pec_mpf_at_1e6']:.1f} at n=1e6, frontier {hi:.0f}; "
+          f"{curves.fmt_crossing(s['n_pec_mpf_clears_classical_hi'])}")
     check("STAR, surface FT and Pinnacle all clear it",
           all(s[k] is not None for k in ("n_star_clears_classical_hi",
                                          "n_ft_clears_classical_hi",
@@ -481,10 +555,13 @@ def main() -> int:
           f"per-branch is {per_branch/naive:.1f}x the ||c||_1^2 charge")
     ftm = {k: ftqc.max_m_surface(1e6, DEFAULT.but(trotter_order_k=k, pl_model="fowler"))
            for k in (1, 2, 3, 4)}
-    # With a consistent error budget FT is so shot-limited that the extra branches
-    # never pay for themselves: multiproduct stops helping it at all.
-    check("multiproduct barely helps FT and falls off fast",
-          ftm[2] < 1.3 * ftm[1] and ftm[3] < ftm[2] and ftm[4] < ftm[3],
+    # Once the tolerance is charged per time (review #8) the FT arm becomes
+    # magic-limited, and multiproduct helps a lot at order 4 -- fewer steps means
+    # fewer T states, which relaxes the per-state target and moves the plant a
+    # rung DOWN the ladder. It still falls off above order 4, where the branch
+    # count outruns the saving.
+    check("multiproduct helps FT at order 4 and falls off above it",
+          ftm[2] > 1.5 * ftm[1] and ftm[3] < ftm[2] and ftm[4] < ftm[3],
           f"order 2/4/6/8 -> {ftm[1]:.0f}/{ftm[2]:.0f}/{ftm[3]:.0f}/{ftm[4]:.0f}")
     check("surface FT does clear it, at n ~ 1e7",
           s["n_ft_clears_classical_hi"] is not None
@@ -514,9 +591,14 @@ def main() -> int:
           tc > 0.0, f"ED certifies to t = {tc:.3f} -- the earlier claim of zero was "
                     "an artifact of a bound with no t -> 0 limit")
     fowc = DEFAULT.but(pl_model="fowler")
+    # The claim is about CERTIFIED TIME, which is what the bound is in; comparing
+    # site counts against a fixed multiple was a threshold, not the statement.
+    tq = converged.quantum_t_reach(1e8, fowc)
     check("and the FT arms certify further, not infinitely",
-          ftqc.max_m_surface(1e8, fowc) > 5 * classical.ed_frontier(),
-          f"surface FT reaches {ftqc.max_m_surface(1e8, fowc):.0f} sites vs ED's "
+          tq > 10 * tc and math.isfinite(tq)
+          and math.isfinite(ftqc.max_m_surface(1e8, fowc)),
+          f"surface FT certifies to t = {tq:.2f} against ED's {tc:.3f} "
+          f"({tq/tc:.0f}x), at m = {ftqc.max_m_surface(1e8, fowc):.0f} vs "
           f"{classical.ed_frontier()}")
     check("finite-size error has its own ledger share, not Trotter's",
           DEFAULT.frac_finite > 0
@@ -530,7 +612,7 @@ def main() -> int:
     for name, c in presets.PRESETS.items():
         check(f"preset {name!r} evaluates", nisq.max_m(1e6, c, "pec") > 0)
     check("default config anchor",
-          abs(nisq.max_m(1e6, DEFAULT, "pec") - 15.58) < 0.05,
+          abs(nisq.max_m(1e6, DEFAULT, "pec") - 13.05) < 0.05,
           f"m = {nisq.max_m(1e6, DEFAULT, 'pec'):.3f}")
     # Under the loose bound the fixed-density convention differed by 13x. The
     # exact calibration closes almost all of it: r(m=6) is 12.5 measured against
@@ -571,8 +653,19 @@ def main() -> int:
         signal_regime="fixed", s_sig=x), "pec") for x in ss]), 1)[0]
     ef = np.polyfit(np.log(ss), np.log([ftqc.max_m_surface(1e6, DEFAULT.but(
         signal_regime="fixed", s_sig=x, pl_model="fowler")) for x in ss]), 1)[0]
-    check("m ~ s^(2/9) holds for noise-limited NISQ only", abs(en - 2 / 9) < 0.1,
-          f"NISQ exponent {en:.2f}")
+    # The old "m ~ s^(2/9)" confirmation was a FLOOR ARTEFACT: with the floor at
+    # the fitted residual 0.043, the s = 0.03 point was clipped, which flattened
+    # the fitted slope to 0.275. With the floor set independently at 0.02 the
+    # clip lifts and the true local slope is 0.379. The 2/9 derivation assumed
+    # alpha = 9/4 and an s-independent step count; neither holds under the
+    # measured calibration.
+    en_clip = np.polyfit(np.log(ss), np.log([nisq.max_m(1e6, DEFAULT.but(
+        signal_regime="fixed", s_sig=x, s_abs_floor=0.043), "pec")
+        for x in ss]), 1)[0]
+    check("the old s^(2/9) agreement was the floor clipping the lowest point",
+          en > 0.35 and en_clip < 0.3,
+          f"slope {en:.3f} unclipped vs {en_clip:.3f} with the floor at the "
+          f"fitted residual; 2/9 = 0.222")
     check("the shot-limited FT arm scales far more steeply than NISQ",
           ef > 3.0 * en,
           f"FT exponent {ef:.2f} -- the 2/9 claim never applied here")

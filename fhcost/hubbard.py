@@ -261,8 +261,140 @@ def signal(t: float, cfg: Config = DEFAULT) -> float:
 
 
 def signal_at(m: float, cfg: Config = DEFAULT) -> float:
-    """The signal at the longest time this lattice is evolved to."""
+    """The ENVELOPE at the longest time this lattice is evolved to.
+
+    Diagnostic. Not the costing quantity -- see signal_lower and signal_min.
+    """
     return max(signal(t_max(m, cfg), cfg), 1e-6)
+
+
+# ---------------------------------------------------------------------------
+# THE SIGNAL THE COSTING MODEL IS ALLOWED TO ASSUME (second-pass review #8)
+#
+# The envelope is a physical description, good to ~1% out to t = 0.7. It is not
+# a lower bound, and the tolerance needs one. The published data is not monotone:
+# at U/J = 4 it falls to 0.0466 at t = 1.5 and returns to 0.0532 at t = 2.0,
+# where the envelope reads 0.0640 -- 37% high, which is 1.89x too few shots at
+# the point that binds. A leave-one-out refit (calibration/fit_signal.py) is
+# worse still: the envelope's tail predictions miss by -52% to +55%.
+#
+# So the costing path uses the DATA, reduced by a stated uncertainty, and the
+# envelope only beyond the measured range with an extra margin. Three separate
+# things that were previously one:
+#
+#   signal()        the fitted envelope        -- physics, diagnostics
+#   signal_lower()  a lower bound at time t    -- what a tolerance may assume
+#   s_abs_floor     an absolute error scale    -- a SPECIFICATION, not a fit
+#
+# and two distinct tolerances, because a systematic and a statistical error are
+# not bounded by the same thing:
+#
+#   signal_min()        the tightest over the time grid -- for Trotter,
+#                       synthesis, logical and magic bias, which are systematic
+#                       and must hold at EVERY requested time
+#   signal_effective()  the per-time shot sum expressed as one number -- for
+#                       statistics, which are paid time by time
+#
+# Published dimer-link |C^zz| (TFLO + GPR), Zenodo 17799843, accompanying
+# arXiv:2510.26300. Mirrored from calibration/fit_signal.py, which keeps the
+# fit, the residuals and the held-out test.
+SIGNAL_DATA = {
+    0.0: [(0.1, 0.9500), (0.3, 0.6378), (0.5, 0.2810), (0.7, 0.0854),
+          (1.0, 0.0680), (1.5, 0.0326), (2.0, 0.0295)],
+    4.0: [(0.1, 0.9527), (0.3, 0.6603), (0.5, 0.3292), (0.7, 0.1414),
+          (1.0, 0.0902), (1.5, 0.0466), (2.0, 0.0532)],
+}
+SIGNAL_DATA_RANGE = (0.1, 2.0)
+SIGNAL_HELDOUT_WORST = 0.55      # worst leave-one-out relative error, in the tail
+
+
+def signal_data(t: float, u: float = 4.0) -> float:
+    """Measured |C^zz|: piecewise-linear in t, linear in U between the two
+    measured couplings, clamped to the measured range."""
+    us = sorted(SIGNAL_DATA)
+
+    def one(uu):
+        rows = SIGNAL_DATA[uu]
+        ts = [r[0] for r in rows]
+        vs = [r[1] for r in rows]
+        if t <= ts[0]:
+            return vs[0]
+        if t >= ts[-1]:
+            return vs[-1]
+        for a, b, ya, yb in zip(ts, ts[1:], vs, vs[1:]):
+            if a <= t <= b:
+                f = (t - a) / (b - a)
+                return (1 - f) * ya + f * yb
+        raise AssertionError
+
+    if u <= us[0]:
+        return one(us[0])
+    if u >= us[-1]:
+        return one(us[-1])
+    for a, b in zip(us, us[1:]):
+        if a <= u <= b:
+            f = (u - a) / (b - a)
+            return (1 - f) * one(a) + f * one(b)
+    raise AssertionError
+
+
+def signal_lower(t: float, cfg: Config = DEFAULT) -> float:
+    """A lower bound on |C^zz(t)| that a tolerance may be built on.
+
+    Inside the measured window it is the data scaled down by s_data_rel_unc.
+    Outside it is the envelope scaled by s_extrap_factor, which is larger than
+    the in-window reduction because the leave-one-out test says the envelope's
+    tail is good to no better than a factor of ~1.55 either way.
+
+    cfg.signal_bound = "envelope" restores the previous behaviour, for comparison
+    only; it is not defensible as a bound.
+    """
+    # The regime knob selects WHICH signal is being costed. Only "curve" is the
+    # measured time dependence, so only "curve" consults the data.
+    if cfg.signal_regime == "fixed":
+        return max(cfg.s_sig, cfg.s_abs_floor)
+    if cfg.signal_regime == "short":
+        return max(cfg.s_short, cfg.s_abs_floor)
+    if cfg.signal_regime == "long":
+        return max(s_residual(cfg), cfg.s_abs_floor)
+    if cfg.signal_bound == "envelope":
+        return max(signal(t, cfg), cfg.s_abs_floor)
+    lo, hi = SIGNAL_DATA_RANGE
+    if lo <= t <= hi:
+        s = signal_data(t, cfg.U_over_J) * (1.0 - cfg.s_data_rel_unc)
+    else:
+        s = signal(t, cfg) * cfg.s_extrap_factor
+    return max(s, cfg.s_abs_floor)
+
+
+def signal_grid(m: float, cfg: Config = DEFAULT) -> list[float]:
+    """The times actually requested: n_times points up to t_max."""
+    tm = t_max(m, cfg)
+    n = max(int(cfg.n_times), 1)
+    return [tm * (k + 1) / n for k in range(n)]
+
+
+def signal_min(m: float, cfg: Config = DEFAULT) -> float:
+    """Tightest signal over the requested times -- what a SYSTEMATIC must meet.
+
+    This is the review's point that a monotone envelope silently loosens the
+    tolerance near a minimum: with the envelope the binding time is always
+    t_max, with the data it is wherever the oscillation dips.
+    """
+    return min(signal_lower(t, cfg) for t in signal_grid(m, cfg))
+
+
+def signal_effective(m: float, cfg: Config = DEFAULT) -> float:
+    """One number standing for the PER-TIME shot sum.
+
+    Shots at time t cost 1/s(t)^2, so the total over the grid is
+    sum_t 1/s(t)^2 = T / s_eff^2 with s_eff the harmonic-RMS below. Evaluating
+    the tolerance once at t_max, as before, charges the easy times at the hard
+    time's price and the hard times at nothing.
+    """
+    g = signal_grid(m, cfg)
+    acc = sum(1.0 / max(signal_lower(t, cfg), 1e-12) ** 2 for t in g)
+    return math.sqrt(len(g) / acc)
 
 
 def conf_z(cfg: Config = DEFAULT) -> float:
@@ -286,14 +418,33 @@ def error_ledger(cfg: Config = DEFAULT) -> dict:
 
 
 def eps_absolute(cfg: Config = DEFAULT, m: float | None = None) -> float:
-    """eps is RELATIVE; the Trotter/synthesis budgets are absolute.
+    """Absolute tolerance for a SYSTEMATIC error: eps x the tightest signal.
 
-    An absolute floor is applied so the target stays finite where the signal
-    passes through zero (review finding #10).
+    Trotter, synthesis, logical and magic-state errors are biases. They must fit
+    the tolerance at every requested time, so the binding signal is the minimum
+    over the grid, not the value at t_max (review #8).
+
+    The floor is cfg.s_abs_floor, a stated absolute error scale, NOT the fitted
+    late-time residual -- tying the floor to a fit made the fit set its own
+    tolerance.
     """
     error_ledger(cfg)          # validate at the entry point, not only on request
-    s = cfg.s_sig if m is None else signal_at(m, cfg)
-    return cfg.eps * max(s, cfg.s_res_min)
+    if m is None:
+        return cfg.eps * max(cfg.s_sig, cfg.s_abs_floor)
+    return cfg.eps * signal_min(m, cfg)
+
+
+def eps_statistical(cfg: Config = DEFAULT, m: float | None = None) -> float:
+    """Absolute tolerance for STATISTICS: eps x the per-time effective signal.
+
+    Separate from eps_absolute because shots are paid time by time while a bias
+    must clear the worst time. Collapsing the two was what let a monotone
+    envelope set both.
+    """
+    error_ledger(cfg)
+    if m is None:
+        return cfg.eps * max(cfg.s_sig, cfg.s_abs_floor)
+    return cfg.eps * signal_effective(m, cfg)
 
 
 def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None) -> float:

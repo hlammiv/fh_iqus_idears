@@ -73,6 +73,64 @@ of that edge; and they report that Trotter error "may be substantially lower tha
 worst-case commutator bounds would indicate", which supports treating the
 bound-derived step count as an upper bound (§8, item 3).
 
+### What the costing model may assume about the signal (review #8)
+
+The tolerance was set from the fitted Gaussian envelope, evaluated once at
+`t_max`. Three things were wrong with that, and they compound.
+
+**The envelope is not a lower bound.** The published data is not monotone: at
+`U/J = 4` it falls to 0.0466 at `t = 1.5` and comes back to 0.0532 at `t = 2.0`,
+where the envelope reads 0.0640. That is 37% high, which is **1.89× too few
+shots** at the point that binds. A leave-one-out refit
+(`calibration/fit_signal.py`) is worse: the envelope is good to ~1% out to
+`t = 0.7` and then misses by **−52% to +55%**.
+
+**One tolerance was doing two jobs.** A Trotter or synthesis error is a *bias*
+and must clear the tolerance at every requested time; shots are paid *per time*.
+These are now separate:
+
+| | bounded by | used for |
+|---|---|---|
+| `eps_absolute` | `signal_min` — the tightest time on the grid | Trotter, synthesis, logical, magic |
+| `eps_statistical` | `signal_effective` — the harmonic-RMS, i.e. `Σ_t 1/s(t)²` as one number | shot counts |
+
+Evaluating once at `t_max` charged the easy times at the hard time's price and
+the hard times at nothing.
+
+**The floor was the fit.** `eps_absolute` floored at `s_res_min`, a *fitted*
+late-time residual, which let the fit set its own tolerance. The floor is now
+`s_abs_floor`, a stated absolute error scale, independent of any fit — and it is
+the single most leveraged number in the ledger.
+
+So the costing path uses the **data**, reduced by `s_data_rel_unc` (an assumed
+20%; the source quotes no per-point error bar), inside the measured window
+`t ∈ [0.1, 2]`, and the envelope times `s_extrap_factor = 0.65` outside it. The
+envelope survives as the physical description and as a diagnostic;
+`signal_bound = "envelope"` restores the old behaviour for comparison only.
+
+**Effect.** Everything tightens, and the binding time moves off the endpoint —
+at `m = 256` it is `t = 1.6`, not `t_max = 8`.
+
+| n | NISQ+PEC | STAR | surface FT | Pinnacle |
+|---|---|---|---|---|
+| 10⁵ | 14.4 → 12.1 | 19.3 → 15.5 | 9.4 → 9.3 | 14.1 → 10.6 |
+| 10⁶ | 15.6 → **13.1** | 26.5 → **22.0** | 25.8 → **12.5** | 38.0 → **26.9** |
+| 10⁷ | 16.6 → 14.0 | 33.1 → 27.6 | 50.4 → 30.6 | 114.6 → 73.4 |
+| 10⁸ | 17.6 → 14.9 | 39.1 → 32.6 | 222 → 125 | 305 → 204 |
+
+Multiproduct NISQ no longer clears the ED frontier at any `n` below 10¹⁰: it
+reaches 19.7 at `n = 10⁶` against 26.
+
+**Two things this overturned.** The surface arm's large drop at `n = 10⁶` is a
+*factory-ladder edge*, not an architectural result — it sits at
+`p_T = 2.0×10⁻⁹` against a target of exactly `2.0×10⁻⁹`, one rung from a plant
+68× larger. And the model's previous agreement with `m ~ s^{2/9}` was an
+artefact: with the floor at the fitted residual 0.043 the `s = 0.03` point was
+*clipped*, flattening the slope to 0.275. With the floor set independently the
+clip lifts and the true local slope is 0.379. The 2/9 derivation assumed
+`α = 9/4` and an `s`-independent step count; neither holds under the measured
+calibration.
+
 ## 1. Circuit cost — the exponent everything rides on
 
 With W₂ = w·m (second-order Trotter commutator sum) and t_max = √m/v_B,
