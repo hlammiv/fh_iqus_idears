@@ -783,7 +783,7 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 
 | # | finding | status |
 |---|---|---|
-| 1 | initial state and connected correlator incompatible | **fixed** — matched to arXiv:2510.26300 |
+| 1 | initial state and connected correlator incompatible | **fixed** — matched to arXiv:2510.26300. Worth recording that the *specification* stayed right while one *implementation* of it did not: `free_fermion.py` used singlet dimers and no π flux until the external check against the deposit caught it (see #7). The spec is not the code |
 | 2 | ZNE feasibility omits residual bias | **fixed** — bias-limited, not variance-limited |
 | 3 | gatewise PEC overhead uses the wrong coefficient | **fixed** — attenuation separated from one-norm |
 | 4 | mitigation theorem is overstated | **fixed** — citation corrected, claims downgraded, demonstrated arm added |
