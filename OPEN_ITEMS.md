@@ -502,8 +502,11 @@ The O11b multiproduct rerun is the remaining outstanding compute, plus the
 *Raised by #8. This is the item most likely to reverse a headline.*
 
 The classical band is now **ED-only, m = 24-26**, down from 24-62. That narrowing
-is what flips "mitigated NISQ never clears classical" into "it clears at
-n ~ 1.7e4". **The band narrowed because an unvalidated arm was removed, not
+used to flip "mitigated NISQ never clears classical" into "it clears at
+n ~ 1.7e4". It no longer does: since `c_rot` was measured, bare NISQ+PEC clears
+neither band at any `n` up to 10¹³. What the narrowing flips now is the
+MULTIPRODUCT arm — `n = 4.0e8` against the narrow band, never against the wide
+one. **The band narrowed because an unvalidated arm was removed, not
 because tensor networks were shown to fail** -- and removing an arm is a change in
 the direction that flatters the quantum curves, which deserves suspicion.
 
@@ -707,12 +710,13 @@ narrower than first stated:
 | n | Helios, surface | Helios, qLDPC |
 |---|---|---|
 | 1e9 | **9.9** | 6.5 |
-| 1e10 | 12.5 | **15.3** |
-| 1e12 | 53.7 | **96.7** |
+| 1e10 | 7.9 | **9.5** |
+| 1e12 | 31.5 | **68.6** |
 
 qLDPC does NOT rescue an arm that did not exist -- transversal rounds already
-gave Helios a surface arm from `n ~ 1e8`. It overtakes only above `n ~ 1e10`,
-and is worth ~1.8x by `1e12`. Below the crossover the surface code is better,
+gave Helios a surface arm from `n = 1.5e8`, where its own qLDPC arm only starts
+at `6.3e8`. It overtakes only above `n = 4.8e9`, and is worth
+~2.2x by `1e12`. Below the crossover the surface code is better,
 because Pinnacle's single 4410-qubit magic engine serialises T supply while the
 surface plant parallelises: the storage saving (101 physical per logical against
 2500 for a d = 25 patch, 25x) does not pay until the lattice is large enough for
@@ -771,7 +775,7 @@ precision floor. Fitted orders: **3.98-4.64, 6.01-6.45, 7.66-9.08** -- nominal,
 within the drift subleading terms explain. Order 8 has no tau = 0.25 entry
 because every point there is noise, and saying so is the correct output.
 
-Consequences: MPF clears the ED frontier again, at n = 1.4e8 rather than the
+Consequences: MPF clears the ED frontier again, at n = 3.8e+08 rather than the
 original 4e6; and the optimum is **arm-dependent** -- NISQ is shot-limited so
 extra branches pay to order 8, FT is magic-limited so they stop paying after
 order 4. The old test asserted a universal interior optimum and was hiding that.

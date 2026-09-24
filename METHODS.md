@@ -302,8 +302,12 @@ that invariance directly.
 Z-type Pauli channel with RUS-total probability `q = 4p/15`; the signed inverse
 gives `gamma = 1/(1-2q)` and `2 ln(gamma)/p = 1.0670`, reproducing the STAR
 paper's `gamma^2 = exp(8 P_Z,1 N)` exactly. **Both arms are cancellation
-one-norms.** With NISQ corrected upward STAR now beats it at every `n` it can run
-(1.04x at 10^4 rising to 1.94x at 10^8), where before it lost below `n ~ 5x10^4`.
+one-norms.** With NISQ corrected upward STAR beats it from `n = 1.15×10⁵`
+(1.62× by `10^8`), where before it lost below `n ~ 5×10^4`. It does *not* beat it
+at every `n` it can run — at `10^4` and `10^5` bare NISQ is still ahead, because
+STAR's surface-code footprint starves it of parallel copies there. (That claim
+held while `c_rot = 5`; measuring `c_rot = 9` against their compiled circuit
+moved the crossover out and is the single change most responsible.)
 The margin is set by NISQ paying over all two-qubit gates while STAR pays only
 over rotations — a real architectural difference, but one whose size rests on the
 assumed ratio `c_rot/c_g = 5/15`, which has not been checked against a compiled
@@ -353,9 +357,12 @@ shot). Both penalties enter only through a logarithm — together they cost ~7 i
 | NISQ + PEC | 7.1 | 7.5 | 7.9 | 8.2 | 8.6 |
 | STAR | 5.1 | 9.2 | 10.6 | 11.7 | 12.8 |
 
-**STAR overtakes mitigated NISQ at n ≈ 5×10⁴** and settles ~1.4× above it. Below
-that its surface-code footprint starves it of parallel copies. It is still beaten
-by full FT above n ≈ 2×10⁵, and it never clears the classical band.
+**STAR overtakes mitigated NISQ at n = 1.15×10⁵** and settles ~1.6× above it.
+Below that its surface-code footprint starves it of parallel copies. It is beaten
+by full FT above **n = 1.32×10⁷**, and it clears the classical band only at
+`n = 1.05×10⁹` — two decades later than before `c_rot` was measured, which makes
+it the *last* of the four arms to clear rather than the second. Every number in
+this paragraph comes from `curves.crossover` / `curves.clears_at`.
 
 ### Which knob makes STAR effective
 
@@ -517,8 +524,13 @@ current value, and this pair records the size of this change alone.
 | 10^8 | 434 | **531** |
 
 So with the engine count as published, **Pinnacle is comparable to the surface
-code on this workload, not far above it, and the surface code overtakes it by
-n = 10^8.** The qLDPC advantage here is in *storage*, and serialised T supply
+code on this workload, not far above it, and the surface code overtakes it at
+n = 2.0×10^9** — where Pinnacle hits the hard `m ≈ 391` ceiling its magic engines
+impose (O3) while the surface arm keeps climbing. The ordering is **not
+monotone**, which is why a single crossover number was wrong here:
+`curves.crossings` reports three, a narrow blip at `2.51×10^4`/`2.75×10^4` where
+the two arms switch on within a factor of 1.1 of each other, then the durable one
+at `2.0×10^9`. The qLDPC advantage here is in *storage*, and serialised T supply
 gives most of it back. Adding engines is the obvious lever and is exposed as
 `pin_engines`, but it is **our** extrapolation, not theirs, and it has an optimum
 near 16: each engine costs 4410 qubits, so 64 engines is worse than 16.
@@ -643,8 +655,12 @@ p_out ≈ 35 p_rot³ + 6 p_rot p_m²
 the cubic law alone was missing.
 
 **Effect** (`m` at each `n`): 20.3 → 11.5 at `10⁵`, 48.3 → 38.6 at `10⁶`,
-144 → 126 at `10⁷`, 383 → 350 at `10⁸`. Pinnacle is still the strongest arm on
-the figure, and on the same *error* ledger as the surface code.
+144 → 126 at `10⁷`, 383 → 350 at `10⁸` — *measured when that correction was
+made*; see `crossovers.md` for current values. Pinnacle is the strongest arm over
+the plotted range and on the same *error* ledger as the surface code, but not at
+every `n`: the surface code is ahead in a narrow window near `n ≈ 2.6×10^4` and again above
+`n = 2.0×10^9`, where Pinnacle stops at the `m ≈ 391` ceiling its magic engines
+impose (O3).
 
 **But not on the same hardware** — see §4c. Generalised bicycle codes are not
 embeddable in the slide's nearest-neighbour grid, and once that is enforced the
@@ -943,11 +959,17 @@ represent an error that saturates in chi. So it was removed rather than refitted
 
 ### What this does and does not license
 
-Removing it narrows the band from 24-62 to 24-26, and that narrowing is what
-flips "mitigated NISQ never clears classical" into "clears at n ~ 1.7e4". **The
-band narrowed because an unvalidated arm was deleted, not because tensor networks
-were shown to fail** -- a change in the direction that flatters the quantum
-curves, and one to be suspicious of accordingly.
+Removing it narrows the band from 24-62 to 24-26. **The band narrowed because an
+unvalidated arm was deleted, not because tensor networks were shown to fail** --
+a change in the direction that flatters the quantum curves, and one to be
+suspicious of accordingly.
+
+*What the narrowing buys has itself changed.* It used to flip "mitigated NISQ
+never clears classical" into "clears at n ~ 1.7e4". It no longer flips that:
+since `c_rot` was measured, bare NISQ+PEC does not clear either band at any
+`n` up to 10¹³ (it reaches m = 18 there). What the narrowing does flip is the
+MULTIPRODUCT arm, which clears the narrow band at `n = 4.0e8` and the old wide
+one never. The suspicion is unchanged and the illustration is not.
 
 That TDVP run was a comparison baseline, not a best-effort classical attack; the
 error plateau looks systematic rather than truncation-limited, which would void

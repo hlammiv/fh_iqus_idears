@@ -543,6 +543,34 @@ def main() -> int:
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
+    # ---- the ORDERING claims, which check_docs cannot see -------------------
+    # "STAR beats NISQ at every n", "the surface code overtakes Pinnacle by 1e8",
+    # "Pinnacle is the strongest arm" -- all three were true and all three went
+    # false when c_rot was measured, silently, because they quote no number.
+    check("NISQ leads at small n; STAR takes over, then Pinnacle",
+          curves.leader(1e4) == "nisq_pec" and curves.leader(1e5) == "nisq_pec"
+          and curves.leader(1e6) == "pinnacle",
+          f"leader at 1e4/1e5/1e6/1e8/1e10 = "
+          + ", ".join(curves.leader(10.0 ** e) for e in (4, 5, 6, 8, 10)))
+    check("...so STAR does NOT beat NISQ at every n it can run",
+          curves.arm_reach("star", 1e4) < curves.arm_reach("nisq_pec", 1e4)
+          and curves.crossover("star", "nisq_pec") > 5e4,
+          f"STAR overtakes NISQ only at n = {curves.crossover('star', 'nisq_pec'):.2e}; "
+          f"METHODS said 5e4 and 'every n it can run' while c_rot was 5")
+    _sp = curves.crossings("surface", "pinnacle")
+    check("the surface/Pinnacle ordering is NOT monotone, so one number cannot fix it",
+          len(_sp) >= 3 and _sp[-1][0] > 1e9,
+          "crossings: " + ", ".join(f"{n:.2e} {w}" for n, w in _sp)
+          + " -- a narrow blip where both switch on, then the durable one")
+    check("the arm that clears the classical band FIRST is Pinnacle, last is STAR",
+          min(curves.ARMS, key=lambda a: curves.clears_at(a) or 1e99) == "pinnacle"
+          and curves.clears_at("nisq_pec") is None
+          and curves.clears_at("star") > curves.clears_at("surface"),
+          ", ".join(f"{a}: "
+                    + (f"{curves.clears_at(a):.2e}" if curves.clears_at(a) else "never")
+                    for a in curves.ARMS)
+          + " -- STAR used to clear second, at 9.8e6")
+
     # ---- first-pass #10: do the shares actually BOUND anything? ------------
     _le = hubbard.ledger_enforcement()
     _un = [k for k, v in _le.items() if not v["enforced"]]

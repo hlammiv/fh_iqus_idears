@@ -90,6 +90,37 @@ def claims():
         ("OPEN_ITEMS.md", "overshoot of the uncapped ideal line",
          r"a \*\*(\d+)×\*\* overshoot", 333333.0 / _cap1, 0.02),
     ]
+    # ORDERING claims, which check_docs could not see before: these are the ones
+    # that went stale silently when c_rot was measured.
+    out += [
+        ("METHODS.md", "STAR overtakes NISQ",
+         r"STAR beats it from `n = ([\d.]+)\u00d710\u2075`",
+         curves.crossover("star", "nisq_pec") / 1e5, 0.05),
+        ("METHODS.md", "surface overtakes STAR",
+         r"by full FT above \*\*n = ([\d.]+)\u00d710\u2077\*\*",
+         curves.crossover("surface", "star") / 1e7, 0.05),
+        ("METHODS.md", "STAR clears the classical band",
+         r"clears the classical band only at\n`n = ([\d.]+)\u00d710\u2079`",
+         curves.clears_at("star") / 1e9, 0.05),
+        ("METHODS.md", "surface overtakes Pinnacle, durably",
+         r"the surface code overtakes it at\nn = ([\d.]+)\u00d710\^9",
+         curves.crossings("surface", "pinnacle")[-1][0] / 1e9, 0.05),
+    ]
+    _he = DEFAULT.but(platform="helios", p=7.9e-4, encoding="jw",
+                      use_platform_clock=True)
+    _mpf4 = DEFAULT.but(trotter_order_k=curves.MPF_ORDER)
+    out += [
+        ("OPEN_ITEMS.md", "Helios qLDPC/surface crossover",
+         r"overtakes only above `n = ([\d.]+)e9`",
+         curves.crossover("pinnacle", "surface", _he, own_hardware=False) / 1e9, 0.05),
+        ("OPEN_ITEMS.md", "Helios surface arm onset",
+         r"surface arm from `n = ([\d.]+)e8`",
+         next(10 ** e for e in __import__("numpy").arange(6, 13, 0.02)
+              if ftqc.max_m_surface(10 ** e, _he) > 0) / 1e8, 0.05),
+        ("OPEN_ITEMS.md", "multiproduct clears the ED frontier",
+         r"clears the ED frontier again, at n = ([\d.]+)e\+08",
+         curves.clears_at("nisq_pec", _mpf4) / 1e8, 0.05),
+    ]
     _conf = DEFAULT.but(pec_model="linear", pec_coeff=2.0 * DEFAULT.depol_factor)
     out += [
         ("METHODS.md", "PEC conflation, exponent ratio",

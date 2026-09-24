@@ -289,3 +289,103 @@ if __name__ == "__main__":
     for name, m, tag in extrapolation_table(1e6):
         flag = "  <-- clears classical" if m > s["classical_band"][1] else ""
         print(f"  {name:<32}{m:>8.1f}   {tag}{flag}")
+
+
+# ---------------------------------------------------------------------------
+# Which arm leads, and where they cross. check_docs.py verifies NUMBERS quoted
+# in prose; it cannot see a claim like "STAR beats NISQ at every n". Those went
+# stale silently when c_rot was measured -- STAR's crossover with NISQ moved from
+# 5e4 to 1.3e5, its crossover with the surface code from 2e5 to 1.6e7, and
+# Pinnacle stopped being the strongest arm above 1e10. So the orderings are
+# computed here and asserted, like everything else.
+
+ARMS = ("nisq_pec", "star", "surface", "pinnacle")
+
+
+def arm_reach(name: str, n: float, cfg: Config = DEFAULT,
+              own_hardware: bool = True) -> float:
+    """One arm's m at budget n.
+
+    `own_hardware` puts each arm on the hardware it actually requires, which is
+    how the figure plots them: Fowler p_L for the surface code, and the
+    two-coupler-layer chip the generalised bicycle codes need for Pinnacle.
+    Pass False when the CALLER has already chosen a platform -- otherwise a
+    Helios study silently gets its Pinnacle arm costed on sc_long_range, which
+    is what the first version of this function did.
+    """
+    from . import nisq as _n, ftqc as _f
+    if name == "nisq_pec":
+        return _n.max_m(n, cfg, "pec")
+    if name == "star":
+        return _f.max_m_star(n, cfg)
+    if name == "surface":
+        return _f.max_m_surface(n, cfg.but(pl_model="fowler")
+                                if own_hardware else cfg)
+    if name == "pinnacle":
+        return _f.max_m_pinnacle(n, cfg.but(platform=PINNACLE_PLATFORM)
+                                 if own_hardware else cfg)
+    raise ValueError(f"unknown arm {name!r}")
+
+
+def crossover(a: str, b: str, cfg: Config = DEFAULT,
+              lo: float = 1e2, hi: float = 1e13, rising: bool = True,
+              own_hardware: bool = True):
+    """Smallest n where `a` overtakes `b` (or falls behind, if rising=False).
+
+    Bisection is not safe here -- the ordering is NOT monotone (surface leads
+    Pinnacle below ~1e5, trails it to ~1e10, leads again after) -- so this scans.
+    """
+    import math
+    want = (lambda x, y: x > y) if rising else (lambda x, y: x < y)
+    prev = None
+    e, e_hi, step = math.log10(lo), math.log10(hi), 0.02
+    while e <= e_hi:
+        n = 10.0 ** e
+        cur = want(arm_reach(a, n, cfg, own_hardware),
+                   arm_reach(b, n, cfg, own_hardware))
+        if prev is False and cur:
+            return n
+        prev = cur
+        e += step
+    return None
+
+
+def crossings(a: str, b: str, cfg: Config = DEFAULT, lo: float = 1e2,
+              hi: float = 1e13, own_hardware: bool = True) -> list[tuple]:
+    """EVERY n where the `a`/`b` ordering flips, as (n, "a>b" | "a<b").
+
+    Reporting only the first is how "the surface code overtakes Pinnacle by
+    n = 1e8" survived: surface leads below ~2.5e4, trails to ~1e10, then leads
+    again. A single crossover number cannot describe that.
+    """
+    import math
+    out, prev = [], None
+    e, e_hi = math.log10(lo), math.log10(hi)
+    while e <= e_hi:
+        n = 10.0 ** e
+        cur = arm_reach(a, n, cfg, own_hardware) > arm_reach(b, n, cfg, own_hardware)
+        if prev is not None and cur != prev:
+            out.append((n, f"{a}>{b}" if cur else f"{a}<{b}"))
+        prev = cur
+        e += 0.02
+    return out
+
+
+def leader(n: float, cfg: Config = DEFAULT) -> str:
+    """Which arm reaches furthest at this budget."""
+    return max(ARMS, key=lambda k: arm_reach(k, n, cfg))
+
+
+def clears_at(name: str, cfg: Config = DEFAULT, lo: float = 1e2,
+              hi: float = 1e13):
+    """Smallest n at which this arm exceeds the top of the classical band."""
+    import math
+    from . import classical as _c
+    top = _c.band(cfg)["band"][1]
+    e, e_hi = math.log10(lo), math.log10(hi)
+    while e <= e_hi:
+        n = 10.0 ** e
+        if arm_reach(name, n, cfg) > top:
+            return n
+        e += 0.02
+    return None
