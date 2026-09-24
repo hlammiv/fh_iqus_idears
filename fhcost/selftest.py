@@ -543,6 +543,26 @@ def main() -> int:
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
+    # ---- first-pass #10: do the shares actually BOUND anything? ------------
+    _le = hubbard.ledger_enforcement()
+    _un = [k for k, v in _le.items() if not v["enforced"]]
+    check("the ledger sums to the tolerance AND six of seven shares are SPENT",
+          abs(sum(v["share"] for v in _le.values()) - 1.0) < 1e-9
+          and len(_un) == 1 and _un[0] == "finite size",
+          "enforced at the point of use: "
+          + ", ".join(sorted(k for k, v in _le.items() if v["enforced"]))
+          + f"; allocated but never spent: {_un[0]}")
+    _mbest = max(nisq.max_m(1e6, DEFAULT, "pec"), ftqc.max_m_star(1e6),
+                 ftqc.max_m_surface(1e6, DEFAULT.but(pl_model="fowler")))
+    _need = converged.m_certified(hubbard.t_max(_mbest, DEFAULT), DEFAULT)
+    check("...and the unspent one CANNOT be spent under this time convention",
+          _need > 10 * _mbest,
+          f"the best arm at n = 1e6 reaches m = {_mbest:.0f}, whose own t_max "
+          f"would need m >= {_need:.0f} to certify the thermodynamic limit -- "
+          f"{_need / _mbest:.0f}x. The 10% finite-size share is reserved for a "
+          f"question the plotted arms do not answer (O7), which is the honest "
+          f"residual of first-pass #10 rather than an arithmetic failure")
+
     # ---- #9's integration geometry: the cone integral, checked -------------
     # hubbard.mean_cone_fraction's docstring says the closed form is "checked
     # against numerical integration in selftest". It said that before the check

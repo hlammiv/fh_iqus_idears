@@ -475,6 +475,46 @@ def error_ledger(cfg: Config = DEFAULT) -> dict:
     return d
 
 
+# Where each share is actually SPENT. First-pass review #10 asked whether the
+# components combine to the tolerance; summing them to 1.0 is only half of that
+# answer, because a share that is allocated and never enforced is not a bound on
+# anything. Six of the seven are enforced at the point of use. The seventh is
+# not, and that is not an oversight -- it is O7/O8 showing up in the ledger.
+LEDGER_ENFORCED = {
+    "trotter":         "hubbard.trotter_steps picks r from frac_trotter * eps",
+    "synthesis":       "ftqc.surface_point sets the rotation precision from frac_syn",
+    "logical":         "surface/star/pinnacle reject a point whose 2 q_L L p_L "
+                       "exceeds frac_logical * eps",
+    "magic states":    "select_factory / select_engine refuse above "
+                       "frac_magic * eps / (2 n_T)",
+    "mitigation bias": "nisq.time_required returns inf when residual_bias "
+                       "exceeds frac_mitig * eps",
+    "statistical":     "the shot count is set by frac_stat * eps_statistical / z",
+}
+LEDGER_UNENFORCED = {
+    "finite size":     "ALLOCATED, NEVER SPENT. frac_finite appears only in "
+                       "converged.m_certified, which no plotted arm consults. "
+                       "Under t_max = sqrt(m)/v it CANNOT be spent: certifying "
+                       "the thermodynamic limit needs ~30x the sites at every "
+                       "size (O7), so no point on the figure has its finite-size "
+                       "error inside 10% of the tolerance. The honest reading is "
+                       "that the plotted arms answer a finite-lattice question "
+                       "and this share is reserved for one they do not answer.",
+}
+
+
+def ledger_enforcement(cfg: Config = DEFAULT) -> dict:
+    """{component: (share, where it is enforced or why it is not)}."""
+    d = error_ledger(cfg)
+    out = {}
+    for k, v in d.items():
+        if k == "TOTAL":
+            continue
+        out[k] = {"share": v, "enforced": k in LEDGER_ENFORCED,
+                  "where": LEDGER_ENFORCED.get(k) or LEDGER_UNENFORCED[k]}
+    return out
+
+
 def validate(cfg: Config = DEFAULT) -> Config:
     """Reject a configuration before costing it, not halfway through.
 
