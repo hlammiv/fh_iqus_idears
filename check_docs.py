@@ -83,6 +83,12 @@ def claims():
              r"front at weight 10⁻² \| \*\*([\d.]+)\*\*", sg["velocity"]["v_front"][0], 0.02),
             ("OPEN_ITEMS.md", "bulk velocity",
              r"bulk \(mean radius\) \| \*\*([\d.]+)\*\*", sg["velocity"]["v_mean"], 0.02),
+            ("OPEN_ITEMS.md", "cluster buffer xi at eps = 1e-2",
+             r"\| 10⁻² \| [\d.]+ \| [\d.]+ \| \*\*([\d.]+)\*\*",
+             sg["velocity"]["xi_eff"]["1e-02"], 0.03),
+            ("OPEN_ITEMS.md", "cluster buffer xi at eps = 1e-12",
+             r"\| 10⁻¹² \| [\d.]+ \| [\d.]+ \| \*\*([\d.]+)\*\*",
+             sg["velocity"]["xi_eff"]["1e-12"], 0.03),
         ]
     nr = _cal("noise_response.json")
     if nr:

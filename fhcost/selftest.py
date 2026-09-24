@@ -445,6 +445,21 @@ def main() -> int:
                   f"{_V['v_front'][-1]:.2f} (at 1e-12) -- the model's v = "
                   f"{DEFAULT.v:.0f}, v_corr = {DEFAULT.v_corr:.0f}, v_lr = "
                   f"{DEFAULT.v_lr:.0f} bracket these in the right order")
+        if "velocity" in _S and _S["velocity"].get("xi_eff"):
+            _xi = [v for v in _S["velocity"]["xi_eff"].values() if v]
+            check("the cluster buffer xi = 1 is a BOUND, and a conservative one",
+                  max(_xi) < DEFAULT.xi,
+                  f"measured xi = {min(_xi):.2f}-{max(_xi):.2f} from the tail "
+                  f"outside the cone, against the Config default "
+                  f"{DEFAULT.xi:.0f} -- the cluster radius charges "
+                  f"{1 / max(_xi):.1f}-{1 / min(_xi):.1f}x more buffer than "
+                  f"the measured tail needs")
+            check("...and it must be a bound, because the tail is super-exponential",
+                  _xi[0] > _xi[-1],
+                  "the implied xi DRIFTS DOWN as eps falls ("
+                  + ", ".join(f"{k}: {v:.2f}" for k, v in
+                              _S["velocity"]["xi_eff"].items() if v)
+                  + "), so no single xi fits a free-fermion tail")
         check("...but feeding it in over-predicts their measurement, and w = 4 does not",
               _c["free-fermion Heisenberg support"]["ratio"] > 3.0
               and abs(_c["bare observable weight"]["ratio"] - 1.0) < 0.2,

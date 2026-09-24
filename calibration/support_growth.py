@@ -147,6 +147,42 @@ def velocity_scan(L=29, times=(0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0),
         out["v_front"].append(v)
         print(f"  front at {x:<8.0e} v = {v:.3f}" if v else
               f"  front at {x:<8.0e} saturates too early")
+    # ---- the CLUSTER BUFFER: xi ln(1/eps), the other half of review #9 ----
+    # classical.cluster_radius charges v t + xi ln(1/eps) extra sites so that the
+    # tail outside the cone is below eps. xi = 1 is a Config default with nothing
+    # behind it. The same data measure it: buffer = front(eps) - v t.
+    v0 = out["v_exact_max_group"]
+    print(f"\n  cluster buffer, front(eps) - v t, with v = {v0:.0f}:\n")
+    print("     t" + "".join(f"   eps {x:>7.0e}" for x in thresholds))
+    buf = {x: [] for x in thresholds}
+    for r in rows:
+        line = f"  {r['t']:4.1f}"
+        for i, x in enumerate(thresholds):
+            b = r["front"][i] - v0 * r["t"]
+            if r["front"][i] < c - 0.5:
+                buf[x].append(b)
+            line += f"  {b:11.1f}" + ("" if r["front"][i] < c - 0.5 else "*")
+        print(line)
+    print("   (* = front has reached the boundary, excluded)")
+    out["buffer"] = {f"{x:.0e}": (float(np.mean(v)) if v else None)
+                     for x, v in buf.items()}
+    out["xi_eff"] = {f"{x:.0e}": (float(np.mean(v) / np.log(1.0 / x)) if v else None)
+                     for x, v in buf.items()}
+    print(f"\n  {'eps':>10} {'mean buffer':>12} {'ln(1/eps)':>10} {'implied xi':>11}")
+    for x in thresholds:
+        b, xi = out["buffer"][f"{x:.0e}"], out["xi_eff"][f"{x:.0e}"]
+        if b is None:
+            continue
+        print(f"  {x:10.0e} {b:12.2f} {np.log(1/x):10.2f} {xi:11.3f}")
+    xis = [v for v in out["xi_eff"].values() if v]
+    print(f"\n  The buffer is flat in t at fixed eps, so the v t + xi ln(1/eps) "
+          f"SHAPE is right.\n  The implied xi is {min(xis):.2f}-{max(xis):.2f}, "
+          f"against the Config default xi = 1: the cluster\n  radius is charged "
+          f"{1.0 / max(xis):.1f}-{1.0 / min(xis):.1f}x more buffer than the "
+          f"measured tail needs. Conservative,\n  and it drifts DOWN as eps "
+          f"falls because a free-fermion tail is super-exponential,\n  not "
+          f"exponential -- so a single xi is a bound, not a fit.")
+
     print(f"\n  The exact max axial group velocity of -2J(cos kx + cos ky) is "
           f"2J = 2.000,\n  and the 1e-2 front measures "
           f"{out['v_front'][0]:.2f} -- that is the physical cone, and the model's "

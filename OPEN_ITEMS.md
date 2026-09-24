@@ -203,9 +203,28 @@ Lieb-Robinson constant has to cover. So the three numbers are three different
 questions and they bracket the measurement in the right order,
 `1.61 < 2.12 < 3.40 < 4 ≤ 20`. A selftest asserts that ordering.
 
-Measured at `U = 0`; the butterfly velocity at `U = 4` is not constrained by it.
-What remains of #9 is the integration geometry and the cluster-truncation
-matching.
+**And the cluster buffer with it.** `classical.cluster_radius` charges
+`v t + xi ln(1/eps)` so the tail outside the cone is below `eps`, with `xi = 1` a
+Config default that nothing stood behind. The same scan measures it as
+`front(eps) - v t`:
+
+| eps | mean buffer (sites) | ln(1/eps) | implied xi |
+|---|---|---|---|
+| 10⁻² | 1.86 | 4.61 | **0.40** |
+| 10⁻⁴ | 3.50 | 9.21 | 0.38 |
+| 10⁻⁸ | 6.00 | 18.42 | 0.33 |
+| 10⁻¹² | 8.25 | 27.63 | **0.30** |
+
+The buffer is flat in `t` at fixed `eps`, so the `v t + xi ln(1/eps)` *shape* is
+right. The implied `xi` is **0.30–0.40** against the default `1`, so the cluster
+radius is charged **2.5–3.3x** more buffer than the measured tail needs —
+conservative, in the direction that costs the classical arm. And `xi` drifts
+*down* as `eps` falls, because a free-fermion tail is super-exponential rather
+than exponential: a single `xi` is a bound, not a fit, and the model should keep
+treating it as one.
+
+Measured at `U = 0`; neither the butterfly velocity nor the tail shape at `U = 4`
+is constrained by this. What remains of #9 is the integration geometry.
 
 ### O6. The demonstrated-mitigation arm reaches nothing at our step count
 `strategy = "expcal"` costs TFLO+GPR at its measured effective overhead (0.08 —
@@ -642,7 +661,7 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 6 | Pinnacle calibration needs reconstruction | **fixed** — footprint reproduced with no free parameter; single-engine T supply corrected; connectivity flagged as O11 |
 | 7 | FT resource and error accounting incomplete | **fixed** — HWP workspace charged, magic-state error budgeted with per-point factory selection, failure-to-bias factor 2 |
 | 8 | classical band is heuristic, not a ceiling | **partial** — relabelled as capacity, entropy bound fixed, TDVP measured; a validated TN estimate is still missing (O10) |
-| 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured, and the support growth that would have repaired it excluded (O5); the velocity taxonomy measured at U = 0 and confirmed in order (1.61 bulk, 2.12 front, 3.40 tail against v = 2, v_corr = 4, v_lr = 20); integration geometry and cluster matching still open |
+| 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured, and the support growth that would have repaired it excluded (O5); the velocity taxonomy measured at U = 0 and confirmed in order (1.61 bulk, 2.12 front, 3.40 tail against v = 2, v_corr = 4, v_lr = 20); the cluster buffer measured, ξ = 0.30–0.40 against the default 1, so 2.5–3.3× conservative; integration geometry still open |
 | 10 | error components do not combine to the tolerance | open |
 | 11 | implementation and reporting issues | **fixed** — all eleven; headlines now generated from one record |
 
