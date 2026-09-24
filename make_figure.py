@@ -66,17 +66,30 @@ ax.fill_between(n_grid, msk(Y["nisq_pec"]), msk(Y["nisq_pec_mpf"]),
 # does not reach even a 2x2, so the band is drawn off the bottom of the axis and
 # hatched there rather than silently vanishing (review #9).
 Y_FLOOR = 2.5
-_any_off = False
-for _k, _c in (("nisq_pec", C["nisq_pec"]), ("star", C["star"]),
-               ("surface", C["surface"]), ("pinnacle", C["pinnacle"])):
+_ARMS = (("nisq_pec", C["nisq_pec"]), ("star", C["star"]),
+         ("surface", C["surface"]), ("pinnacle", C["pinnacle"]))
+# The off-scale strip is only 0.20 of a decade, and up to four arms were hatched
+# into the same sliver on top of each other -- legible in principle, unreadable
+# in practice (review #9's leftover). The vertical extent down there carries no
+# information (it means "below m = 4", nothing more), so spend it: give each arm
+# that runs off its own LANE. Same information, four times the separation, and
+# no need to lower the axis floor and leave empty space everywhere else.
+_off_arms = [(_k, _c, curves.band_for_plot(*B[_k], Y_FLOOR)) for _k, _c in _ARMS]
+_n_off = sum(1 for _, _, (_, _, o) in _off_arms if o.any())
+_any_off = _n_off > 0
+_lane = 0
+for _k, _c in _ARMS:
     _lo, _hi = B[_k]
     _ld, _hd, _off = curves.band_for_plot(_lo, _hi, Y_FLOOR)
     ax.fill_between(n_grid, _ld, _hd, color=_c, alpha=0.11, lw=0, zorder=2)
     if _off.any():
-        _any_off = True
-        ax.fill_between(n_grid, Y_FLOOR, np.minimum(_hd, curves.M_FLOOR),
-                        where=_off, color=_c, alpha=0.11, lw=0, zorder=2,
+        _f = np.log(curves.M_FLOOR / Y_FLOOR)
+        _b = Y_FLOOR * np.exp(_f * _lane / _n_off)
+        _t = Y_FLOOR * np.exp(_f * (_lane + 1) / _n_off)
+        ax.fill_between(n_grid, _b, np.minimum(_t, _hd), where=_off,
+                        color=_c, alpha=0.20, lw=0, zorder=2,
                         hatch="///", edgecolor=_c)
+        _lane += 1
 ax.axhline(curves.M_FLOOR, color=F.GREY, lw=0.6, ls=(0, (2, 2)), zorder=1)
 ax.text(2.6e8, curves.M_FLOOR * 1.05, r"$m=4$", fontsize=5.4, color=F.GREY,
         va="bottom", ha="right")
@@ -88,7 +101,7 @@ _notes = [r"shading: Trotter \textit{scenario} span, not a confidence interval"
 if _NO_CURVE:
     _notes.append(r"unmitigated: $m<4$ at every $n$")
 if _any_off:
-    _notes.append(r"hatched: bound scenario below $m=4$")
+    _notes.append(r"hatched: bound scenario below $m=4$ (one lane per arm)")
 ax.text(1.35e2, 2.55, "\n".join(_notes), fontsize=4.8, color=F.DARKGREY,
         va="bottom", ha="left", linespacing=1.28,
         bbox=dict(facecolor="white", alpha=0.72, edgecolor="none", pad=0.9))

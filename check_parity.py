@@ -92,6 +92,51 @@ def headless_check(timeout_s: int = 240) -> tuple[list[str], str]:
     return ([] if m.group(1) == "ok" else [m.group(2)]), m.group(2)
 
 
+def field_sweep_check(timeout_s: int = 600) -> tuple[list[str], str]:
+    """Parity over EVERY Config field that changes a probe, not fourteen variants.
+
+    Second-pass #3 left the port "verified, not generated", and the verification
+    ran over a hand-picked variant list. A field the JavaScript silently ignores
+    passes all of them if none happens to touch it. This builds a throwaway copy
+    of the page whose PARITY block is one variant per perturbable field, and
+    makes the browser recompute the lot. Nothing shipped grows: the sweep exists
+    only for the length of this check.
+    """
+    exe = next((shutil.which(b) for b in BROWSERS if shutil.which(b)), None)
+    if exe is None:
+        return [], "SKIPPED (no chromium/chrome on PATH)"
+    import make_record
+    rec = record.build_field_sweep()
+    html = (HERE / "explorer.html").read_text()
+    lit = js_literal("PARITY", html)
+    sweep = make_record.js({"variants": rec["variants"]})
+    # the shipped badge names only the first mismatch, which is useless when the
+    # question is WHICH FIELDS the port ignores. Patch it for the throwaway copy.
+    badge_old = ('el.textContent=`PARITY MISMATCH (${bad.length}) — believe '
+                 'RESULTS.json, not these curves. First: ${bad[0]}`;')
+    badge_new = ('el.textContent=`PARITY MISMATCH (${bad.length}) fields: '
+                 '${[...new Set(bad.map(x=>x.split("/")[0]))].join(" ")}`;')
+    tmp = HERE / ".parity_fields.html"
+    page = html.replace(f"const PARITY = {lit};", f"const PARITY = {sweep};", 1)
+    if badge_old in page:
+        page = page.replace(badge_old, badge_new, 1)
+    tmp.write_text(page)
+    try:
+        out = subprocess.run(
+            [exe, "--headless=new", "--disable-gpu", "--no-sandbox",
+             "--virtual-time-budget=120000", "--dump-dom", f"file://{tmp}"],
+            capture_output=True, text=True, timeout=timeout_s).stdout
+    finally:
+        tmp.unlink(missing_ok=True)
+    m = re.search(r'id="parity" class="badge (ok|bad)">([^<]*)', out)
+    n = len(rec["variants"])
+    if not m:
+        return [f"the explorer did not render a verdict over {n} field variants"], "no verdict"
+    msg = (f"{m.group(2)} over {n} perturbable fields; {len(rec['inert'])} more "
+           f"move no probe ({', '.join(sorted(rec['inert'])[:6])}...)")
+    return ([] if m.group(1) == "ok" else [msg]), msg
+
+
 def main(argv: list[str]) -> int:
     bad = static_check()
     for b in bad:
@@ -102,6 +147,10 @@ def main(argv: list[str]) -> int:
         hb, msg = headless_check()
         print(f"[headless] {msg}")
         bad += hb
+        if "--fields" in argv:
+            fb, fmsg = field_sweep_check()
+            print(f"[fields]   {fmsg}")
+            bad += fb
     print("PARITY OK" if not bad else f"PARITY FAILED ({len(bad)})")
     return 1 if bad else 0
 

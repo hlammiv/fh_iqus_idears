@@ -305,29 +305,42 @@ A fixed step count is a budget for one lattice at one time. It is not a rule, an
 extrapolating it is what produces the absurd reach — so the `k = 4` row is
 evidence about the convention, not a capability claim.
 
-### O7. The ideal p=0 curve should be capped by m_required(t)
-*Queued behind #5.*
+### O7. The ideal p=0 curve is capped by its convergence ceiling — **DONE**
 
-Once the lattice exceeds `m_required(t)` the finite answer already IS the
-infinite answer, so extra sites buy nothing. At fixed `t = 1` that ceiling is
-244 sites — about **730 physical qubits** — while the plotted p = 0 line reaches
-333,333 at `n = 10^6`, a **1370x overshoot**. Past the ceiling the qubits should
-buy time, not lattice.
+Once the lattice exceeds `m_certified(t)` the finite answer already IS the
+infinite answer, so extra sites buy nothing; past that point qubits should buy
+**time**, not lattice. `nisq.converged_cap` is the largest `m` with
+`m <= m_certified(t_max(m))`, and `max_m_ideal` now takes the minimum of that and
+the qubit/clock limit. Ported to the explorer (which needed `lr_error`,
+`m_certified` and `fs_speed` alongside) and verified in the browser.
 
-It does not show up under the default convention because `t_max = sqrt(m)/v_B`
-ties the ceiling to the lattice: `m_req(t_max) ~ 4m` at every size, so the target
-recedes twice as fast as the lattice grows and nothing is ever converged. Within
-that convention the slope-1 line is technically correct — which exposes the worse
-problem: **if nothing is ever converged, the y axis is not measuring a physics
-answer at all**, only the largest finite-lattice calculation that fits.
+**In fixed-t mode it bites.** At `t = 1` the ceiling is **484 sites** while the
+uncapped line reached 333,333 at `n = 10⁶` — a **689×** overshoot. The line now
+flattens there at every larger `n`, which is the correct shape: the answer stops
+improving.
 
-Fix: draw `m_required(t)` as an explicit ceiling (a BAND — it inherits the 11x
-spread from O5, 244 to 2664 at t = 1) and cap the ideal curve by it in fixed-t
-mode; relabel the axis in sqrt(m) mode to say what it measures.
+*(The numbers in the previous version of this item — 244 sites, 1370× — were
+typed before the finite-size criterion was replaced with the factorial
+Lieb-Robinson form, and never followed it. `check_docs.py` now holds these.)*
 
-This is the third distinct place the time-window convention has driven a wrong
+**Under the default convention it is inert, and that is the finding.** With
+`t_max = sqrt(m)/v` the ceiling recedes with the lattice:
+
+| m | 4 | 256 | 65,536 | 4.2 × 10⁶ |
+|---|---|---|---|---|
+| `m_certified(t_max(m)) / m` | 121× | 40× | 30× | 30× |
+
+It falls towards an asymptote near **30** and never reaches 1. So the cap can
+never bind there — not because the calculations are converged but because **none
+of them is**, at any size. Within that convention the slope-1 line is technically
+correct, which exposes the worse problem: the y axis is not measuring a physics
+answer, only the largest finite lattice that fits. A selftest asserts the ratio
+stays above 20, so the claim cannot quietly become false.
+
+This was the third distinct place the time-window convention drove a wrong
 conclusion, after finite-size extrapolation buying nothing and the classical band
-being a hard wall.
+being read as a hard wall. Still not fixed: the axis label in `sqrt(m)` mode
+should say what it measures.
 
 ### O8. ~~The Trotter calibration is U/J = 4 only~~ **CLOSED**
 Calibrated at U/J = 0, 4 and 8. `W_eff` spans **68x** across that range at
@@ -806,10 +819,14 @@ no legend to put that in.
 area of each polygon. The NaN-masked version renders 0 px^2 where the clipped one
 renders 13402.
 
-**Still open from #9:** the hatched strip sits between the axis floor (2.5) and
-`m = 4`, which is only about 13% of a decade -- legible but cramped, and four
-overlapping hatched arms at the bottom of panel (a) are busy. Lowering the axis
-floor would give it room at the cost of empty space everywhere else.
+**Closed from #9:** the hatched strip between the axis floor (2.5) and `m = 4`
+is only 0.20 of a decade, and up to four arms were hatched into it *on top of
+each other* -- legible in principle, unreadable in practice. Lowering the axis
+floor would have bought room at the cost of empty space everywhere else. Instead
+the strip is now divided into **one lane per arm that runs off**: the vertical
+extent down there carries no information beyond "below `m = 4`", so it is spent
+on separation. Same information, four times the room, axis unchanged. The note
+block says "one lane per arm" so the lanes are not read as values.
 
 ### What #8 closed, and what it did not
 
@@ -1045,6 +1062,29 @@ headless Chrome. A 1e-7 nudge to one line of the port trips 209 probes.
 `fhcost/` will make the parity check go red rather than fixing the JavaScript
 automatically. Generating the port from a shared intermediate representation
 would remove the remaining hand-maintenance; it is not worth it yet.
+
+**But the verification itself had a hole, and closing it found a bug.** Parity
+ran over fourteen hand-picked variants. A field the JavaScript silently ignores
+passes all fourteen if none of them happens to touch it — which is not a
+hypothetical: `check_parity.py --fields` now perturbs **every** `Config` field,
+keeps the 52 that move a probe, and makes the browser recompute all of them in a
+throwaway copy of the page (nothing shipped grows). On its first run it failed on
+exactly one field, `simultaneous`, with 34 mismatches.
+
+The JavaScript had `return 2.807033768343811;` commented *"Bonferroni at T = 20,
+matching scipy in Python"*. It was neither: 2.807 is the `T = 10` value and
+Python gives **3.0233** at `T = 20`, so the explorer understated the simultaneous
+confidence factor by 7% and would not have tracked `n_times` in any case. Python
+was right — `selftest` asserts `z > 3.0` there — and the port was never
+exercised. Fixed by porting Wichura's AS241 inverse normal, which matches `scipy`
+to `5e-16` over `T = 1…1000`, so the factor now tracks `n_times` instead of being
+frozen at one value of it.
+
+All 52 fields now agree. The sweep also reports the **29 that move no probe**,
+which is its own finding rather than reassurance: several of them
+(`xi`, `fs_speed`, `v_lr`, `obs_support_sites`) are inert only because the probe
+set does not reach `fhcost/converged.py` at all. That is a stated coverage gap
+now, not a hidden one.
 
 **Also fixed in passing:** one headline line asserted that nothing classical
 converges, on the strength of the finite-size buffer at t = 0 (2 sites) -- which

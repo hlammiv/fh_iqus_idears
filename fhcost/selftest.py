@@ -543,6 +543,31 @@ def main() -> int:
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
+    # ---- O7: the ideal curve is capped by its own convergence ceiling -------
+    _c1 = DEFAULT.but(tmax_mode="const", tmax_const=1.0)
+    _cap1 = nisq.converged_cap(_c1)
+    check("in fixed-t mode the p = 0 line is capped by m_certified, not by n",
+          abs(_cap1 - converged.m_certified(1.0, _c1)) < 1.0
+          and nisq.max_m_ideal(1e6, _c1) == nisq.max_m_ideal(1e8, _c1) == _cap1,
+          f"ceiling {_cap1:.0f} sites at t = 1; the uncapped line reached "
+          f"333,333 at n = 1e6, a {333333 / _cap1:.0f}x overshoot past the point "
+          f"where a bigger lattice answers no new question")
+    check("...and it is INERT under the default time convention, as it must be",
+          nisq.converged_cap(DEFAULT) > 1e8,
+          f"cap {nisq.converged_cap(DEFAULT):.1e} against an ideal reach of "
+          f"{nisq.max_m_ideal(1e8, DEFAULT):.1e} at n = 1e8 -- t_max = sqrt(m)/v "
+          f"ties the ceiling to the lattice, so it never binds")
+    _rat = [(4.0 ** e, converged.m_certified(hubbard.t_max(4.0 ** e, DEFAULT),
+                                             DEFAULT) / 4.0 ** e)
+            for e in (1, 4, 8, 11)]
+    check("which is the real problem: nothing on the default axis is converged",
+          all(r > 20 for _, r in _rat),
+          "m_certified(t_max(m))/m = "
+          + ", ".join(f"m={m:.0f}: {r:.0f}x" for m, r in _rat)
+          + " -- it falls towards an asymptote near 30 and never reaches 1, so "
+          "the y axis measures the largest lattice that fits, not a "
+          "thermodynamic-limit answer")
+
     # ---- O1: c_g and c_rot against their COMPILED circuit -------------------
     from . import compiled as _comp
     _rows = _comp.check_table()

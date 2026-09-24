@@ -72,7 +72,7 @@ import math
 from .budget import Config, DEFAULT
 from .hubbard import (counts, qubits_per_copy, multiproduct_l1,
                       multiproduct_branches, signal_at, eps_absolute,
-                      eps_statistical, conf_z)
+                      eps_statistical, conf_z, t_max)
 
 M_MIN = 4.0      # smallest real lattice is 2x2; m=1 has no hopping term
 
@@ -221,9 +221,43 @@ def max_m(n: float, cfg: Config = DEFAULT, strategy: str = "pec",
     return lo
 
 
+def converged_cap(cfg: Config = DEFAULT, m_hi: float = 1e9) -> float:
+    """Largest m that is not already past its own convergence ceiling (O7).
+
+    Once the lattice exceeds m_certified(t) the finite answer already IS the
+    infinite answer and extra sites buy nothing -- past that point qubits should
+    buy TIME, not lattice. The ceiling is the largest m with
+
+        m <= m_certified(t_max(m))
+
+    In fixed-t mode t does not move, so this is just m_certified(t) and it BITES:
+    at t = 1 it is 484 sites while the p = 0 line reaches 333,333 at n = 1e6.
+    Under the default t_max = sqrt(m)/v it does not bite at all, because the
+    ceiling recedes with the lattice -- m_certified(t_max(m))/m falls from 121 at
+    m = 4 towards an asymptote near 30 and never reaches 1. That is not
+    reassurance: it means nothing on the default axis is ever a converged
+    thermodynamic-limit answer, only the largest finite lattice that fits.
+    """
+    from .converged import m_certified
+    if m_certified(t_max(m_hi, cfg), cfg) >= m_hi:
+        return m_hi
+    lo, hi = M_MIN, m_hi
+    if m_certified(t_max(lo, cfg), cfg) < lo:
+        return 0.0
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if m_certified(t_max(mid, cfg), cfg) >= mid else (lo, mid)
+    return lo
+
+
 def max_m_ideal(n: float, cfg: Config = DEFAULT) -> float:
-    """p = 0 reference: qubit-limited only, plus the week clock on ~T/eps^2 shots."""
-    m = n / (3.0 if cfg.encoding == "compact" else 2.0)
+    """p = 0 reference: qubit-limited, the week clock, and the convergence cap.
+
+    The cap is O7: without it the ideal line keeps climbing past the point where
+    a bigger lattice answers no new question. It is inert under the default time
+    convention and binding in fixed-t mode.
+    """
+    m = min(n / (3.0 if cfg.encoding == "compact" else 2.0), converged_cap(cfg))
     if m < M_MIN:
         return 0.0
     dd = cfg.frac_stat * eps_statistical(cfg, min(m, 1e6)) / conf_z(cfg)

@@ -82,6 +82,14 @@ def claims():
         ("OPEN_ITEMS.md", "compiled c_rot/c_g ratio",
          r"`c_rot/c_g` [|] [*][*]([\d.]+)[*][*] [|]", _ps["c_rot"] / _cg, 0.02),
     ]
+    _c1 = DEFAULT.but(tmax_mode="const", tmax_const=1.0)
+    _cap1 = nisq.converged_cap(_c1)
+    out += [
+        ("OPEN_ITEMS.md", "convergence ceiling at fixed t = 1",
+         r"the ceiling is \*\*(\d+) sites\*\*", _cap1, 0.01),
+        ("OPEN_ITEMS.md", "overshoot of the uncapped ideal line",
+         r"a \*\*(\d+)×\*\* overshoot", 333333.0 / _cap1, 0.02),
+    ]
     sg = _cal("support_growth.json")
     if sg:
         w = sg["deposit"]["w_mean"]

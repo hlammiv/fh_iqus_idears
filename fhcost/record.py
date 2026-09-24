@@ -154,6 +154,98 @@ def reach_probe(n: float, cfg: Config) -> dict:
     }
 
 
+# One alternative per enumerated field, so the sweep below can perturb it.
+ENUM_ALTS = {
+    "tmax_mode": "const", "encoding": "jw", "trotter": "extensive",
+    "damping_model": "support", "pl_model": "willow",
+    "platform": "sc_long_range", "trotter_mode": "fixed_count",
+    "pec_model": "linear", "star_law": "angle", "magic_source": "cultivation",
+    "fs_speed": "correlation", "observable": "local",
+    "signal_regime": "fixed", "signal_bound": "envelope",
+}
+# The error budget must still sum to 1, so these trade against frac_stat.
+FRACS = ("frac_trotter", "frac_finite", "frac_syn", "frac_logical",
+         "frac_magic", "frac_mitig")
+# Fields with no safe generic perturbation, and why. Listed rather than skipped
+# silently: an untested field is exactly what this sweep is for.
+NO_PERTURBATION = {
+    "frac_stat": "the slack the other fractions trade against; perturbed via them",
+}
+
+
+def _perturbation(name: str, value):
+    """A value that differs from the default and is still legal, or None."""
+    if name in NO_PERTURBATION:
+        return None
+    if name in ENUM_ALTS:
+        return ENUM_ALTS[name]
+    if isinstance(value, bool):
+        return not value
+    if name in FRACS:
+        return value + 0.02
+    if isinstance(value, int):
+        return value + 1 if value >= 0 else 1
+    if isinstance(value, float):
+        return value * 1.3 if value else 0.1
+    return None
+
+
+def field_variants(m_probe: float = 16.0, n_probe: float = 1e6) -> dict:
+    """{field: overrides} for every Config field that CHANGES a probe.
+
+    Second-pass #3 left the port "verified, not generated", and the verification
+    ran over fourteen hand-picked variants. A field the port silently ignores
+    would pass all fourteen if none of them touched it. This sweeps every field
+    instead: perturb it, keep it if any Python probe moves, and let the browser
+    recompute the lot. A field that moves Python and not JavaScript is a hole in
+    the port; a field that moves neither is inert and says so.
+    """
+    base = {"c": circuit_probe(m_probe, DEFAULT),
+            "a": arch_probe(m_probe, DEFAULT),
+            "r": reach_probe(n_probe, DEFAULT)}
+    out, inert, unsafe = {}, [], dict(NO_PERTURBATION)
+    for f in fields(DEFAULT):
+        alt = _perturbation(f.name, getattr(DEFAULT, f.name))
+        if alt is None:
+            continue
+        over = {f.name: alt}
+        if f.name in FRACS:
+            over["frac_stat"] = DEFAULT.frac_stat - 0.02
+        try:
+            cfg = DEFAULT.but(**over)
+            got = {"c": circuit_probe(m_probe, cfg),
+                   "a": arch_probe(m_probe, cfg),
+                   "r": reach_probe(n_probe, cfg)}
+        except Exception as e:                      # illegal perturbation
+            unsafe[f.name] = f"{type(e).__name__}: {e}"
+            continue
+        if got != base:
+            out[f.name] = over
+        else:
+            inert.append(f.name)
+    return {"variants": out, "inert": inert, "unsafe": unsafe}
+
+
+def build_field_sweep() -> dict:
+    """A record shaped like build(), but one variant per perturbable field."""
+    fv = field_variants()
+    out = {"model_id": model_id(), "note": "field-sweep parity probe",
+           "config": {f.name: getattr(DEFAULT, f.name) for f in fields(DEFAULT)},
+           "m_probes": list(M_PROBES), "n_probes": list(N_PROBES),
+           "inert": fv["inert"], "unsafe": fv["unsafe"], "variants": {}}
+    for name, over in fv["variants"].items():
+        cfg = DEFAULT.but(**over)
+        b = classical.band(cfg)
+        out["variants"][f"field:{name}"] = {
+            "overrides": over,
+            "circuit": {f"{m:g}": circuit_probe(m, cfg) for m in M_PROBES},
+            "arch":    {f"{m:g}": arch_probe(m, cfg) for m in M_PROBES},
+            "reach":   {f"{n:g}": reach_probe(n, cfg) for n in N_PROBES},
+            "classical_band": [_f(b["band"][0]), _f(b["band"][1])],
+        }
+    return out
+
+
 def build() -> dict:
     out = {
         "model_id": model_id(),
