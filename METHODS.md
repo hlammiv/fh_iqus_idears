@@ -886,7 +886,7 @@ links at U = 0 against the exact free-fermion result:
 |---|---|---|---|---|
 | mean abs. error | 0.100 | 0.085 | 0.078 | **0.077** |
 
-Pooled over t in [0.5, 2] the error is **flat in chi** -- `err ~ chi^-0.12`, so
+Pooled over t in [0.5, 2] the error is **flat in chi** -- `err ~ chi^-0.128`, so
 doubling the bond dimension buys 9%.
 
 **But flatness in chi does not mean tensor networks fail, and the pooled number

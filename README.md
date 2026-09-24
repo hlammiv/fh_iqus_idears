@@ -16,6 +16,7 @@ imported, written, or executed.
 | `make_record.py` | the shared result record → `RESULTS.json`, and stamps every consumer |
 | `check_parity.py` | proves `explorer.html` computes the same model as `fhcost/` |
 | `check_figure.py` | renders scenario bands and measures that they put ink on the page |
+| `check_docs.py` | recomputes every model number quoted in the hand-written prose |
 | `calibration/` | the exact-diagonalisation programs behind the Trotter constants |
 | `check_palette.py` | CVD validation of the figure palette (exit 1 on fail) |
 | `explorer.html` | interactive version, published as an Artifact |
@@ -30,6 +31,7 @@ python3 make_platforms.py        # platforms: connectivity vs clock
 python3 check_palette.py         # CVD validation, exit 1 on fail
 python3 check_parity.py          # Python vs JavaScript, in a headless browser
 python3 check_figure.py          # every claimed band renders visible ink
+python3 check_docs.py            # METHODS/OPEN_ITEMS numbers vs the model
 python3 make_record.py --check   # exit 1 if any generated artefact is stale
 ```
 

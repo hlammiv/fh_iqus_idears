@@ -370,16 +370,18 @@ dependence is **non-monotonic in time**, which the two-point comparison hid:
 
 | t | mean \|C\| | chi=256 | chi=512 | chi=1024 | chi=2048 | slope | reading |
 |---|---|---|---|---|---|---|---|
-| 0.1 | 0.9418 | 7.93e-3 | 7.38e-3 | 7.36e-3 | 7.35e-3 | **-0.03** | floored |
-| 0.3 | 0.5872 | 2.96e-2 | 2.09e-2 | 1.75e-2 | 1.58e-2 | -0.30 | truncation-limited |
-| 0.5 | 0.2429 | 6.36e-2 | 4.78e-2 | 3.31e-2 | 2.56e-2 | **-0.45** | truncation-limited |
-| 0.7 | 0.0933 | 6.91e-2 | 5.74e-2 | 4.13e-2 | 3.26e-2 | -0.37 | truncation-limited |
-| 1.0 | 0.0753 | 5.05e-2 | 4.20e-2 | 3.38e-2 | 2.96e-2 | -0.26 | truncation-limited |
-| 1.5 | 0.0364 | 1.17e-1 | 1.02e-1 | 1.02e-1 | 9.85e-2 | -0.07 | stalling |
-| 2.0 | 0.0344 | 1.72e-1 | 1.47e-1 | 1.44e-1 | 1.57e-1 | **-0.04** | floored |
+| 0.1 | 0.9418 | 7.94e-3 | 7.38e-3 | 7.37e-3 | 7.35e-3 | **-0.03** | floored |
+| 0.3 | 0.5869 | 2.98e-2 | 2.12e-2 | 1.78e-2 | 1.60e-2 | -0.29 | truncation-limited |
+| 0.5 | 0.2423 | 6.43e-2 | 4.84e-2 | 3.37e-2 | 2.62e-2 | **-0.44** | truncation-limited |
+| 0.7 | 0.0931 | 6.93e-2 | 5.76e-2 | 4.15e-2 | 3.28e-2 | -0.37 | truncation-limited |
+| 1.0 | 0.0753 | 5.03e-2 | 4.19e-2 | 3.36e-2 | 2.91e-2 | -0.27 | truncation-limited |
+| 1.5 | 0.0347 | 1.19e-1 | 1.05e-1 | 1.04e-1 | 1.01e-1 | -0.07 | stalling |
+| 2.0 | 0.0411 | 1.63e-1 | 1.38e-1 | 1.38e-1 | 1.51e-1 | **-0.04** | floored |
 
-(slope = d log err / d log chi; dimer links, U = 0, against exact FLO. The same
-script prints the all-neighbour-pairs version, which tells the same story.)
+(slope = d log err / d log chi; dimer links, U = 0, against the deposit's own
+`Exact` rows -- NOT its `FLO` rows, which differ from `Exact` by up to 2.9e-2 at
+t = 2; `free_fermion.py --deposit` shows `Exact` is the exact one. The script
+also prints the all-756-pairs version, which tells the same story.)
 
 The numbers previously stored in `classical.py` **reproduce exactly** from the
 full release, so the extraction was right. The *interpretation* was not. "A
