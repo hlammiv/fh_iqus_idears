@@ -106,6 +106,18 @@ def claims():
          r"the surface code overtakes it at\nn = ([\d.]+)\u00d710\^9",
          curves.crossings("surface", "pinnacle")[-1][0] / 1e9, 0.05),
     ]
+    def _atom_threshold():
+        from fhcost import ftqc as _f
+        na = DEFAULT.but(platform="neutral_atom", encoding="jw",
+                         use_platform_clock=True)
+        lo, hi = 5e-4, 5e-3
+        for _ in range(40):
+            mid = (lo * hi) ** 0.5
+            lo, hi = (mid, hi) if _f.max_m_surface(1e8, na.but(p=mid)) > 0 else (lo, mid)
+        return lo
+    out += [("METHODS.md", "neutral-atom fidelity threshold for a surface arm",
+             r"appears only at \*\*`p \u2272 ([\d.]+)\u00d710\u207b\u00b3`\*\*",
+             _atom_threshold() * 1e3, 0.05)]
     _he = DEFAULT.but(platform="helios", p=7.9e-4, encoding="jw",
                       use_platform_clock=True)
     _mpf4 = DEFAULT.but(trotter_order_k=curves.MPF_ORDER)

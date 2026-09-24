@@ -773,7 +773,7 @@ Not one shared reason, which is the useful part:
 | platform | what actually stops it |
 |---|---|
 | **Helios** | the clock. A good gate — 7.9×10⁻⁴, *better* than the slide's 10⁻³ — on a 55 ms layer. |
-| **neutral atoms** | **fidelity**, not clock. Their measured 5×10⁻³ is half the surface-code threshold, so `p_L(d=41)` is 4.8×10⁻⁸ against 1.0×10⁻²² at 10⁻³ and the footprint explodes. The arm appears at `p ≲ 2×10⁻³` — a falsifiable prediction, and atom fidelities have been improving. |
+| **neutral atoms** | **fidelity**, not clock. Their measured 5×10⁻³ is half the surface-code threshold, so `p_L(d=41)` is 4.8×10⁻⁸ against 1.0×10⁻²² at 10⁻³ and the footprint explodes. The arm appears only at **`p ≲ 1×10⁻³`** — a falsifiable prediction, and atom fidelities have been improving. (It read `2×10⁻³` before `c_rot` was measured; the extra rotations tightened the requirement by a factor of two, which is the prediction moving with the model rather than being restated.) |
 | **superconducting grid** | connectivity: no qLDPC codes, and it pays the swap network. |
 
 ### And the deeper reason transversal FT does not rescue this workload
