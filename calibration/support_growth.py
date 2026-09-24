@@ -94,6 +94,69 @@ def sizes_scan(sizes=((3, 2), (4, 2), (4, 4), (6, 4), (7, 4), (8, 6)),
     return rows
 
 
+VELOCITY_THRESHOLDS = (1e-2, 1e-4, 1e-8, 1e-12)
+
+
+def velocity_scan(L=29, times=(0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0),
+                  thresholds=VELOCITY_THRESHOLDS):
+    """How fast does the operator front move -- and is there ONE answer? (review #9)
+
+    The model carries three velocities for three jobs: v = 2 sets the light cone
+    and t_max, v_corr = 4 the correlation spread, v_lr = 20 the Lieb-Robinson
+    bound. Review #9 called the taxonomy inconsistent. At U = 0 it can simply be
+    measured, on an open lattice big enough that the front does not reach the
+    edge, with the observable at the centre and the Chebyshev radius as the
+    distance (the cone on a square lattice is a square).
+
+    The answer is that the spreading velocity is THRESHOLD-DEPENDENT, which is
+    why one number cannot serve: the exponentially small tail outruns the bulk.
+    """
+    o, idx, dm, D, H, sp = ff.mode_order(L, L)
+    h = ff.hopping_sparse(L, L, idx, periodic=False).toarray()
+    c = L // 2
+    s0, s1 = c + L * c, c + 1 + L * c
+    modes = [idx[(s0, 0)], idx[(s0, 1)], idx[(s1, 0)], idx[(s1, 1)]]
+    site_of = {v: k[0] for k, v in idx.items()}
+    dist = np.array([max(abs(site_of[a] % L - c), abs(site_of[a] // L - c))
+                     for a in range(2 * L * L)], float)
+    ds = sorted(set(dist))
+    rows = []
+    print(f"  {L}x{L} open lattice (half-width {c}), observable at the centre\n")
+    print("     t   mean r" + "".join(f"  front {x:>7.0e}" for x in thresholds))
+    for t in times:
+        R = expm(-1j * h * t)
+        p = np.mean([np.abs(R[q]) ** 2 for q in modes], axis=0)
+        fr = [max([d for d in ds if p[dist == d].sum() > x] or [0.0])
+              for x in thresholds]
+        rows.append({"t": float(t), "mean_r": float(p @ dist),
+                     "front": [float(x) for x in fr]})
+        print(f"  {t:4.1f}  {rows[-1]['mean_r']:7.3f}"
+              + "".join(f"  {x:12.1f}" for x in fr))
+    T = np.array([r["t"] for r in rows])
+    out = {"L": L, "half_width": c, "thresholds": list(thresholds), "rows": rows,
+           "v_exact_max_group": 2.0}
+    Y = np.array([r["mean_r"] for r in rows])
+    out["v_mean"] = float(np.polyfit(T, Y, 1)[0])
+    out["v_front"] = []
+    print()
+    print(f"  {'mean radius':16s} v = {out['v_mean']:.3f}")
+    for i, x in enumerate(thresholds):
+        Y = np.array([r["front"][i] for r in rows])
+        ok = Y < c - 0.5
+        v = float(np.polyfit(T[ok], Y[ok], 1)[0]) if ok.sum() >= 3 else None
+        out["v_front"].append(v)
+        print(f"  front at {x:<8.0e} v = {v:.3f}" if v else
+              f"  front at {x:<8.0e} saturates too early")
+    print(f"\n  The exact max axial group velocity of -2J(cos kx + cos ky) is "
+          f"2J = 2.000,\n  and the 1e-2 front measures "
+          f"{out['v_front'][0]:.2f} -- that is the physical cone, and the model's "
+          f"v = 2.\n  The tail is faster and keeps getting faster as the "
+          f"threshold drops, which is\n  exactly why a Lieb-Robinson constant "
+          f"has to exceed it. The three velocities the\n  model carries are "
+          f"three different questions, and they are ordered correctly.")
+    return out
+
+
 def main(as_json=False):
     ts, w, M = deposit_support()
     w_mean = float(np.trapezoid(w, ts) / (ts[-1] - ts[0]))
@@ -134,12 +197,14 @@ def main(as_json=False):
 
     print("\nWHEN DOES IT SATURATE?  (generic lattices, no flux, U = 0)\n")
     rows = sizes_scan()
+    print("\nHOW FAST DOES THE FRONT MOVE?  (review #9, the velocity taxonomy)\n")
+    vel = velocity_scan()
     if as_json:
         p = HERE / "data" / "support_growth.json"
         p.write_text(json.dumps(
             {"deposit": {"t": ts.tolist(), "w": w.tolist(), "modes": M,
                          "w_mean": w_mean, "t_window": T_WINDOW},
-             "candidates": out, "sizes": rows,
+             "candidates": out, "sizes": rows, "velocity": vel,
              "lambda_observed": LAMBDA_OBSERVED, "gates": THEIR_GATES}, indent=1))
         print(f"\nwrote {p}")
     return out

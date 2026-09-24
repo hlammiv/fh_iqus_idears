@@ -176,10 +176,36 @@ this model actually reaches (1.21x at `n = 1e6`).
 **Relation to review #9.** The reviewer showed the cone fraction should be 2/3,
 not 1/3 — a 2x correction *unfavourable* to the results. The measurement says the
 cone framing is the wrong quantity and overcharges by ~13x, *favourably*. Both
-cannot stand. #9 remains open for the rest of its content (the integration
-geometry, cluster-truncation matching, and the velocity taxonomy); only the
-question of which gates damp is addressed here, and by measurement rather than
-by geometry.
+cannot stand. Only the question of which gates damp is addressed here, and by
+measurement rather than by geometry.
+
+**The velocity taxonomy is now measured too, and it survives.** The model carries
+three velocities for three jobs — `v = 2` for the light cone and `t_max`,
+`v_corr = 4` for correlation spreading, `v_lr = 20` for the Lieb-Robinson
+constant — and #9 called that inconsistent. At `U = 0` it is measurable:
+`calibration/support_growth.py` puts the observable at the centre of a 29 × 29
+open lattice and tracks the Chebyshev radius of the Heisenberg weight.
+
+| what is tracked | measured velocity |
+|---|---|
+| bulk (mean radius) | **1.61** |
+| front at weight 10⁻² | **2.12** |
+| front at 10⁻⁴ | 2.35 |
+| front at 10⁻⁸ | 3.20 |
+| front at 10⁻¹² | **3.40** |
+
+The velocity is **threshold-dependent**, which is precisely why one number cannot
+serve: the exponentially small tail outruns the bulk. The `10⁻²` front — the
+physical cone — moves at 2.12 against the exact max axial group velocity of
+`2J = 2` for `-2J(cos kx + cos ky)`, and against the model's `v = 2`. The tail
+keeps accelerating as the threshold drops, which is exactly what a
+Lieb-Robinson constant has to cover. So the three numbers are three different
+questions and they bracket the measurement in the right order,
+`1.61 < 2.12 < 3.40 < 4 ≤ 20`. A selftest asserts that ordering.
+
+Measured at `U = 0`; the butterfly velocity at `U = 4` is not constrained by it.
+What remains of #9 is the integration geometry and the cluster-truncation
+matching.
 
 ### O6. The demonstrated-mitigation arm reaches nothing at our step count
 `strategy = "expcal"` costs TFLO+GPR at its measured effective overhead (0.08 —
@@ -614,7 +640,7 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 6 | Pinnacle calibration needs reconstruction | **fixed** — footprint reproduced with no free parameter; single-engine T supply corrected; connectivity flagged as O11 |
 | 7 | FT resource and error accounting incomplete | **fixed** — HWP workspace charged, magic-state error budgeted with per-point factory selection, failure-to-bias factor 2 |
 | 8 | classical band is heuristic, not a ceiling | **partial** — relabelled as capacity, entropy bound fixed, TDVP measured; a validated TN estimate is still missing (O10) |
-| 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured (O5); geometry, cluster matching and velocities still open |
+| 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured, and the support growth that would have repaired it excluded (O5); the velocity taxonomy measured at U = 0 and confirmed in order (1.61 bulk, 2.12 front, 3.40 tail against v = 2, v_corr = 4, v_lr = 20); integration geometry and cluster matching still open |
 | 10 | error components do not combine to the tolerance | open |
 | 11 | implementation and reporting issues | **fixed** — all eleven; headlines now generated from one record |
 

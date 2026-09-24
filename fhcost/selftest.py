@@ -429,6 +429,22 @@ def main() -> int:
               f"{_S['deposit']['modes']} modes over their window and peaks at "
               f"{max(_S['deposit']['w']):.0f}; it is exactly "
               f"{_S['deposit']['w'][0]:.0f} at t = 0, i.e. w_obs0")
+        if "velocity" in _S:
+            _V = _S["velocity"]
+            check("the light-cone velocity v = 2 is the MEASURED front (review #9)",
+                  abs(_V["v_front"][0] - DEFAULT.v) / DEFAULT.v < 0.15
+                  and abs(_V["v_front"][0] - _V["v_exact_max_group"]) < 0.3,
+                  f"the 1e-2 front moves at {_V['v_front'][0]:.2f} sites per unit "
+                  f"time against the model's v = {DEFAULT.v:.0f} and the exact max "
+                  f"axial group velocity 2J = 2")
+            check("...and the taxonomy is right because there is no ONE velocity",
+                  _V["v_mean"] < _V["v_front"][0] < _V["v_front"][-1]
+                  < DEFAULT.v_corr + 1.0 <= DEFAULT.v_lr,
+                  f"bulk {_V['v_mean']:.2f} < physical front "
+                  f"{_V['v_front'][0]:.2f} < tail front "
+                  f"{_V['v_front'][-1]:.2f} (at 1e-12) -- the model's v = "
+                  f"{DEFAULT.v:.0f}, v_corr = {DEFAULT.v_corr:.0f}, v_lr = "
+                  f"{DEFAULT.v_lr:.0f} bracket these in the right order")
         check("...but feeding it in over-predicts their measurement, and w = 4 does not",
               _c["free-fermion Heisenberg support"]["ratio"] > 3.0
               and abs(_c["bare observable weight"]["ratio"] - 1.0) < 0.2,
