@@ -402,6 +402,42 @@ def main():
         MPF_BASES = (1, 2, 3, 4, 6, 8, 12, 16)
         OUT_NAME = "data/trotter_cal_fine.json"
         sys.argv = [a for a in sys.argv if a != "--fine"]
+    if "--verify-ref" in sys.argv:
+        # Re-measure the substep convergence of ONE reference, with the corrected
+        # probe. The n = 16 trajectory point was produced before that fix, so its
+        # recorded 2.8e-6 is the COARSE probe's own error, not the reference's --
+        # and what matters for W_eff is not the state-vector norm anyway, it is
+        # the observable. Both are reported.
+        args = [a for a in sys.argv[1:] if not a.startswith("-")]
+        name = args[0] if args else "square4"
+        tau = float(args[1]) if len(args) > 1 else math.sqrt(len(PATCHES[name])) / V_B
+        P = Patch(PATCHES[name])
+        i, j = P.dimers[0]
+        s0 = P._auto_sub(tau)
+        print(f"[{name}] n={P.n} tau={tau:.3f} dim={P.dim:,} "
+              f"krylov={P._auto_krylov()} auto sub={s0}", flush=True)
+        t0 = time.monotonic()
+        a = P.exact(tau, sub=s0)
+        print(f"   reference at sub={s0} done ({time.monotonic()-t0:.0f}s)", flush=True)
+        b = P.exact(tau, sub=2 * s0)
+        ca, cb = P.czz(a, i, j), P.czz(b, i, j)
+        print(f"   ||psi(sub) - psi(2 sub)||   = {np.linalg.norm(a - b):.3e}")
+        print(f"   |C^zz(sub) - C^zz(2 sub)|   = {abs(ca - cb):.3e}")
+        print(f"   C^zz = {ca:.12f} vs {cb:.12f}")
+        outp = pathlib.Path(__file__).parent / "data" / \
+            f"verify_ref_{name}_{tau:g}.json"
+        outp.parent.mkdir(exist_ok=True)
+        outp.write_text(json.dumps(
+            {"patch": name, "n": P.n, "tau": tau, "sub": s0, "sub2": 2 * s0,
+             "krylov": P._auto_krylov(),
+             "substep_convergence": float(np.linalg.norm(a - b)),
+             "czz_convergence": float(abs(ca - cb)),
+             "czz": float(ca),
+             "note": "re-measured with the CORRECTED probe (fine vs 2x fine); "
+                     "supersedes the value recorded at run time"}, indent=1))
+        print(f"wrote {outp}")
+        print("VERIFYREF DONE", flush=True)
+        return
     if "--clamp" in sys.argv:
         args = [a for a in sys.argv[1:] if not a.startswith("-")]
         # a partial run writes its OWN file, exactly as --trajectory does, so a

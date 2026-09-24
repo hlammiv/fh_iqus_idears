@@ -1,0 +1,12 @@
+{
+ "patch": "square4",
+ "n": 16,
+ "tau": 2.0,
+ "sub": 20,
+ "sub2": 40,
+ "krylov": 12,
+ "substep_convergence": 2.776994298044566e-07,
+ "czz_convergence": 5.874613157041964e-10,
+ "czz": -0.12490905041916042,
+ "note": "re-measured with the CORRECTED probe (fine vs 2x fine); supersedes the value recorded at run time"
+}

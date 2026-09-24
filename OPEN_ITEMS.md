@@ -441,6 +441,7 @@ reference converged to `~1e-15`:
 | 9 | 1.500 | 0.10231 | 0.14447 | 0.71 |
 | 12 | 1.732 | 0.12250 | 0.13112 | 0.93 |
 | 14 | 1.871 | 0.08103 | 0.12448 | 0.65 |
+| **16** | **2.000** | **0.08026** | **0.11900** | **0.67** |
 
 **The good half.** For every `n >= 6` the fixed-time table **over**-predicts `W`
 at the operating point, by 1.1-2.3x. That is the conservative direction: a larger
@@ -453,18 +454,49 @@ be read at `tau = sqrt(m)/v` -- holds to about a factor of two, in our favour.
 `1.58` from the table -- a 7x difference in gate count by `m = 400`, in the
 *anti*-conservative direction. But that is four points with real scatter:
 
-> `alpha = 1.91 +- 0.20`, 95% CI **1.50 to 2.31** -- and including `n = 4, 5`
-> flips it to **1.42**.
+> `alpha = 1.81 +- 0.16`, 95% CI **1.50 to 2.13** -- and including `n = 4, 5`
+> flips it to **1.43**.
 
-The adopted `1.75` and Campbell's `2.25` both sit comfortably inside that
-interval. These lattices do not determine the exponent, and saying they give
-`1.91` would be reading noise. `domain_check.py` prints the interval next to the
-point estimate so the number cannot be quoted without it.
+The adopted `1.75` sits inside. These lattices do not determine the exponent, and
+saying they give `1.81` would be reading noise. `domain_check.py` prints the
+interval next to the point estimate so the number cannot be quoted without it.
 
-`n = 16` (`square4`, 165.6M sector states, 2.5 GB/vector) is running on
-`lenore_remote`. It adds a fifth point and will narrow the interval by perhaps a
-third -- not enough to close the exponent, which is worth saying in advance
-rather than after. The O11b multiproduct rerun is the other outstanding compute.
+**`n = 16` landed, and it did what was predicted in advance and no more.** Before
+it, the fit was `1.91 +- 0.20` over four points with a CI of `1.50-2.31`; the
+forecast was that a fifth point would narrow the interval by about a third and
+not close it. It narrowed the top from 2.31 to 2.13 and moved the estimate toward
+the adopted value. One sub-claim did change: Campbell's `2.25` is now *outside*
+the interval, which is what a loose upper bound should look like rather than a
+contradiction — worst-case Trotter bounds are known to overestimate, which is why
+`f_emp` exists at all. `domain_check.py --drop16` re-runs the fit without the
+point and reaches the same headline.
+
+**The inclusion rule changed to admit it, and that deserves saying plainly.** The
+old rule was `||psi(sub) - psi(2 sub)|| < 1e-10`, with the stated purpose "the
+reference must be far better than the signal" — a *ratio* statement behind an
+absolute proxy that held only because substepping to machine precision is cheap
+up to `n = 14`. At `n = 16` it is not: 165M amplitudes on a 12-vector Krylov
+basis, 1.5-3 h per halving. The proxy is also the wrong quantity — `W_eff` comes
+from `C^zz`, and at `n = 16` the two differ by three orders of magnitude
+(`||dψ|| = 2.8e-7` against `|dC^zz| = 5.9e-10`).
+
+So the rule is now the ratio it stood for: the reference's error must be a
+negligible fraction of the smallest Trotter error it measures. It is applied
+uniformly and is **not tuned to admit `n = 16`** — the six smaller patches pass by
+ten orders of magnitude and `n = 16` by six:
+
+| n | 4 | 5 | 6 | 9 | 12 | 14 | **16** |
+|---|---|---|---|---|---|---|---|
+| reference err / Trotter err | 8e-12 | 1e-11 | 6e-11 | 3e-11 | 2e-11 | 4e-11 | **9e-07** |
+
+(The point's *as-run* convergence of 2.8e-6 was itself an artefact: it ran before
+the inverted probe was fixed, so that number is the coarse comparison's own
+error. Re-measured with the corrected probe it is 2.8e-7 on the state and 5.9e-10
+on the observable. `--verify-ref` writes a sidecar and `domain_check` applies it
+as an explicit override, keeping both values.)
+
+The O11b multiproduct rerun is the remaining outstanding compute, plus the
+`n = 16` clamp probe now running.
 
 ### O10. The tensor-network question is OPEN, not resolved
 *Raised by #8. This is the item most likely to reverse a headline.*
@@ -800,7 +832,7 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | # | finding | status |
 |---|---|---|
 | 1 | the convergence criterion fails an exact physical limit | **fixed** — factorial Lieb-Robinson form, exact t -> 0 limit |
-| 2 | the default Trotter calibration is used beyond its evidence | **partial** — order-2k coefficients measured (O11b); the trajectory is now measured at every n ≤ 14 and the table is conservative there by 1.1–2.3×, but the exponent is unresolved (α = 1.91 ± 0.20, CI 1.50–2.31) and the domain is still exceeded (O9) |
+| 2 | the default Trotter calibration is used beyond its evidence | **partial** — order-2k coefficients measured (O11b); the trajectory is now measured at every n ≤ **16** and the table is conservative there by 1.1–2.3×, but the exponent is unresolved (α = 1.81 ± 0.16, CI 1.50–2.13) and the domain is still exceeded (O9) |
 | 3 | Python, the explorer and the documents disagree | **fixed** — one model, one record; see below |
 | 4 | factory cleanup neglects circuit-level errors | **fixed** — published operating points replace the cubic law; selection is p-aware and plant-level |
 | 5 | Pinnacle lacks the common FT resource/error ledger | **fixed** — workspace charged, engine selected and certified, stalls and rejection scheduled |

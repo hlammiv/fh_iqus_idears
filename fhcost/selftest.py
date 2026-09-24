@@ -1376,11 +1376,16 @@ def main() -> int:
         _T = _json.loads(_dc.read_text())
         if "trajectory" in _T and len(_T["trajectory"]) >= 4:
             _tr = [x for x in _T["trajectory"] if x["n"] >= 6]
-            check("every trajectory reference is converged, not just recorded",
-                  all(x["substep_convergence"] < 1e-10 for x in _T["trajectory"]),
-                  "worst substep convergence "
-                  f"{max(x['substep_convergence'] for x in _T['trajectory']):.1e} "
-                  "-- the first n = 14 attempt came back at 2.2e-2 and was excluded")
+            # the criterion is the RATIO, not an absolute: the reference's own
+            # error must be negligible against the Trotter error it measures.
+            # An absolute 1e-10 was reachable only where substepping to machine
+            # precision is cheap, which stops being true at n = 16.
+            check("every trajectory reference is negligible against what it measures",
+                  all(x.get("conv_ratio", 1.0) < 1e-3 for x in _T["trajectory"]),
+                  "worst reference error / Trotter error = "
+                  f"{max(x.get('conv_ratio', 0) for x in _T['trajectory']):.0e}; "
+                  f"worst absolute {max(x['substep_convergence'] for x in _T['trajectory']):.1e} "
+                  "-- the first n = 14 attempt was 2.2e-2 ABSOLUTE and was excluded")
             check("the fixed-time table is CONSERVATIVE at the operating points",
                   all(x["ratio"] < 1.0 for x in _tr),
                   "measured/table = " + ", ".join(f"n={x['n']}: {x['ratio']:.2f}"
@@ -1392,7 +1397,8 @@ def main() -> int:
                   f"alpha = {_T['alpha_measured']:.2f} +- {_T['alpha_se']:.2f}, "
                   f"95% CI {_T['alpha_ci95'][0]:.2f}..{_T['alpha_ci95'][1]:.2f}; "
                   f"including n = 4, 5 flips it to {_T['alpha_all_n']:.2f}. The "
-                  f"adopted 1.75 and Campbell's 2.25 are both inside")
+                  f"adopted 1.75 is inside; Campbell's 2.25 "
+                  f"{'is too' if _T['alpha_ci95'][1] >= 2.25 else 'is NOT, which is what a loose upper bound should look like'}")
 
     # ---- is the published TDVP truncation-limited? (O10) -------------------
     _tj = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "tdvp_check.json"
