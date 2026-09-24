@@ -179,8 +179,17 @@ class Config:
     # ---- reconciliation knobs: every assumption that differs from
     # ---- an independent parallel resource model. See fhcost/presets.py.
     trotter_mode: str = "bound"   # "bound" = Campbell commutator bound (ours)
-                                  # "fixed_density" = r = steps_per_tau * t (theirs)
+                                  # "fixed_density" = r = steps_per_tau * t -- the
+                                  #   SLIDE's convention, not the experiment's
+                                  # "fixed_count" = r = steps_fixed, what the
+                                  #   experiment actually ran: "we execute k = 4
+                                  #   second-order Trotter steps ... up to time
+                                  #   t = 2" (arXiv:2510.26300 Sec. C). Their
+                                  #   circuit depth is therefore the SAME at every
+                                  #   reported time, which is why their measured
+                                  #   attenuation does not grow with t.
     steps_per_tau: float = 4.0    # only used by "fixed_density"
+    steps_fixed: float = 4.0      # only used by "fixed_count"
     pec_model: str = "exact"      # "exact"  = gamma = (15+14p)/(15-16p) per gate, from the
                                   #            signed Pauli inverse of the depolarizing
                                   #            channel (verified against its Pauli transfer

@@ -82,10 +82,39 @@ the same kind of gap as the factory ladder and would be closed by the architects
 publishing a cleaner engine. The part about the code family is real but
 non-binding, and is now a flag rather than a docstring.
 
-### O4. The ZNE response model is unvalidated
+### O4. The ZNE response model is unvalidated — and their data CANNOT validate it
 Every ZNE conclusion rests on `s(lambda) = s(0) exp(-lambda Lambda)`. A response
-with less curvature raises every bias ceiling. Measuring the real noise response
-of a small compiled Hubbard circuit would settle it.
+with less curvature raises every bias ceiling.
+
+The obvious external test is the published hardware data: twenty evolution times
+on a real 56-qubit machine against an exact reference. `calibration/
+noise_response.py` runs it, and the answer is that **the dataset is structurally
+incapable of testing the response shape**, for a reason worth writing down.
+
+**Their circuit does not get deeper with time.** Sec. C: *"We execute k = 4
+second-order Trotter steps ... and time-evolve the initial state up to time
+t = 2."* A fixed **count**, not a step density — the step size grows with `t`
+and the gate count does not. So the twenty reported times are twenty *repeats of
+one noise strength*, not a scan over it, and no amount of statistics constrains
+the curvature of `s(lambda)` from them.
+
+What the data do give is that one point, well measured. On the dimer links, in
+the six times where the exact signal is above 0.1 and the ratio is
+well-conditioned:
+
+- best-conditioned point, `t = 0.1`: attenuation `0.8096 ± 0.0039`, **`Lambda = 0.211`**
+- pooled over the six: `Lambda = 0.15`, attenuation spread `±0.12`
+
+The spread is **7x** the quoted shot errors and the fitted trend in `t` is
+*negative* — less damping at longer times, which no noise process does. That
+residual is Trotter error: their circuit carries it, and no noiseless Trotterised
+series was deposited to divide it out. The `t = 0.1` point is where the step size
+is smallest and therefore where that contamination is smallest, which is why it
+is the one to anchor on — and it lands on the `0.20` the model already uses.
+
+**What would settle it** is unchanged in kind but now specific: noise-amplified
+runs of the *same* circuit at several gains, which is what a ZNE experiment
+produces and what this deposit does not contain.
 
 ### O5. Which gates damp the observable — measured, but the scaling is not
 *Raised while working #4. Partially supersedes review #9.*
@@ -161,10 +190,27 @@ experiment's fixed step density `r = 4 tau` and it immediately reaches `m = 20`
 at `n = 1e6`.
 
 So the whole distance between this model and a real 56-qubit experiment is the
-**Trotter step count** (134 vs 4 at m=4), not the mitigation scheme, not the
-channel conventions, and not the damping geometry. That makes review #5 — which
-asks for an actual error bound behind the step count — the highest-value item
-remaining.
+**Trotter step count**, not the mitigation scheme, not the channel conventions,
+and not the damping geometry. That makes review #5 — which asks for an actual
+error bound behind the step count — the highest-value item remaining.
+
+**And the experiment's step rule is worse than "r = 4 tau" — it is `k = 4`, full
+stop.** The paper is explicit (Sec. C): four second-order steps for the whole
+evolution to `t = 2`, so the step size grows with the time and the depth does
+not. `trotter_mode = "fixed_count"` implements what they actually ran. Under it
+the demonstrated arm does not reach `m = 20`, it reaches `m = 3.3e5` at
+`n = 1e6` — which is the point. Both fixed conventions buy reach by abandoning
+accuracy, and the amount is now computed rather than asserted:
+
+| step rule | m reached at n = 1e6 | implied Trotter error vs its own budget |
+|---|---|---|
+| model's own, error-controlled | 0 | within budget by construction |
+| slide's `r = 4 tau` | 20 | **25x** over |
+| experiment's `k = 4` | 3.3e5 | **2.2e8x** over |
+
+A fixed step count is a budget for one lattice at one time. It is not a rule, and
+extrapolating it is what produces the absurd reach — so the `k = 4` row is
+evidence about the convention, not a capability claim.
 
 ### O7. The ideal p=0 curve should be capped by m_required(t)
 *Queued behind #5.*

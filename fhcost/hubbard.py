@@ -536,8 +536,18 @@ def trotter_steps(m: float, cfg: Config = DEFAULT, eps_trot: float | None = None
     if cfg.trotter_mode == "fixed_density":
         # A step-count CONVENTION, not an error model, so it outranks cfg.trotter:
         # r = ceil(4*tau) regardless of how the error would otherwise be estimated.
-        # Not calibrated to the accuracy target; treat it as a floor.
+        # Not calibrated to the accuracy target; treat it as a floor. This is the
+        # SLIDE's convention. It is NOT the experiment's -- see "fixed_count".
         return max(1.0, math.ceil(cfg.steps_per_tau * t))
+    if cfg.trotter_mode == "fixed_count":
+        # What the experiment actually did: "We execute k = 4 second-order
+        # Trotter steps ... and time-evolve the initial state up to time t = 2"
+        # (arXiv:2510.26300 Sec. C). A fixed COUNT, not a density -- so their
+        # circuit has the same depth at every time they report, which is why
+        # their measured attenuation does not grow with t. At tau = 2 this is
+        # half the steps that r = 4 tau would charge, and at tau = 0.5 it is
+        # four times as many.
+        return max(1.0, float(cfg.steps_fixed))
     if cfg.trotter == "measured":
         # W_eff is a property of the OBSERVABLE, not the lattice, so no factor of m
         k = max(1, int(cfg.trotter_order_k))

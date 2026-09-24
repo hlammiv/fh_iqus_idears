@@ -48,6 +48,10 @@ VARIANTS = {
     "willow":       {"pl_model": "willow"},
     "sig_fixed":    {"signal_regime": "fixed"},
     "budget_day":   {"budget_s": 86400.0},
+    # the two step-count CONVENTIONS, so the port covers the branches that are
+    # not the error model: the slide's density and the experiment's fixed count
+    "steps_4tau":   {"trotter_mode": "fixed_density"},
+    "steps_k4":     {"trotter_mode": "fixed_count"},
     # the independent parallel model's declared assumption set, as a whole. If the
     # explorer's "alt model" preset ever drifts from fhcost.presets, this catches it.
     "arch_comparison": None,        # filled in below from the preset

@@ -263,7 +263,12 @@ if __name__ == "__main__":
 EXPERIMENT = {
     "m": 28.0, "t": 2.0, "u_over_j": 0.0,
     "two_qubit_gates": 2415.0,       # their compiled circuit
-    "trotter_steps": 4.0,            # r = 4 tau at tau = 2, their step density
+    "trotter_steps": 4.0,            # k = 4 second-order steps for the WHOLE
+                                     # evolution to t = 2 -- a fixed count, not a
+                                     # density (arXiv:2510.26300 Sec. C). Their
+                                     # depth is therefore the same at every
+                                     # reported time, which is why the measured
+                                     # attenuation does not grow with t.
     "lambda_observed": 0.200,        # raw vs exact (FLO is exact at U = 0)
     "p_two_qubit": 1.0e-3,           # their quoted figure
     "source": "arXiv:2510.26300 / Zenodo 17799843",

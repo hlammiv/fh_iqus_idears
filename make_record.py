@@ -35,7 +35,8 @@ MD_END   = "<!-- END GENERATED -->"
 # check meaningful, since a single operating point is easy to match by accident.
 JS_VARIANTS = ("default", "p_1e-4", "eps_0.01", "tmax_const", "mpf_k3",
                "trotter_bound", "u8", "u0", "arch_comparison",
-               "helios", "neutral_atom", "two_layer_sc")
+               "helios", "neutral_atom", "two_layer_sc",
+               "steps_4tau", "steps_k4")
 
 
 def js(x) -> str:

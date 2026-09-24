@@ -499,6 +499,48 @@ def main() -> int:
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
+    # ---- O4/O6: what their step rule is, and what their data can test -----
+    _EXPT = nisq.EXPERIMENT
+    _fc = DEFAULT.but(trotter_mode="fixed_count")
+    check("the experiment's step rule is a fixed COUNT, not a density",
+          hubbard.trotter_steps(4.0, _fc) == hubbard.trotter_steps(400.0, _fc)
+          == _EXPT["trotter_steps"],
+          f"k = {_EXPT['trotter_steps']:.0f} steps for the whole evolution to "
+          f"t = 2 (Sec. C), so the depth does not grow with t -- "
+          f"r = 4 tau would charge 8 there and 2 at tau = 0.5")
+    _pairs = []
+    for _nm, _md in (("slide r = 4 tau", "fixed_density"),
+                     ("experiment k = 4", "fixed_count")):
+        _c = DEFAULT.but(damping_model="support", trotter_mode=_md)
+        _m = nisq.max_m(1e6, _c, "expcal")
+        _t = hubbard.t_max(_m, _c)
+        _e = (hubbard.w_measured(_t, _c.U_over_J) * _t ** 3
+              / hubbard.trotter_steps(_m, _c) ** 2)
+        _pairs.append((_nm, _m, _e / (_c.frac_trotter * hubbard.eps_absolute(_c, _m))))
+    check("both fixed step rules buy their reach by abandoning accuracy",
+          all(x[2] > 10.0 for x in _pairs) and _pairs[1][2] > 1e6,
+          "; ".join(f"{n}: reaches m = {m:.0f} with a Trotter error {o:.1e}x its "
+                    f"own budget" for n, m, o in _pairs)
+          + " -- the k = 4 row is evidence about the convention, not a capability")
+    _nr = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "noise_response.json"
+    if _nr.exists():
+        import json as _js
+        _N = _js.loads(_nr.read_text())
+        check("their hardware data pin Lambda, at ONE noise strength (O4)",
+              abs(_N["lambda_best_point"] - 0.20) < 0.05
+              and _N["t_best"] <= 0.2,
+              f"best-conditioned point t = {_N['t_best']:.2f} gives Lambda = "
+              f"{_N['lambda_best_point']:.3f} against the anchored 0.20; pooled "
+              f"over {_N['n_conditioned']} times, {_N['lambda_mean']:.2f} "
+              f"+-{_N['attenuation_sd']:.2f} in attenuation")
+        check("...so the response SHAPE is untestable from them, not merely untested",
+              abs(_N["trend_slope"]) > 0.1 and _N["trend_slope"] < 0,
+              f"the fitted trend in t is {_N['trend_slope']:+.2f} -- NEGATIVE, "
+              f"less damping at longer times, which no noise process does. The "
+              f"depth is constant (k = 4), so these are "
+              f"{_N['n_conditioned']} repeats of one lambda and the scatter is "
+              f"Trotter error")
+
     # ---- O3: what actually stops the Pinnacle arm -------------------------
     _cc = ftqc.pinnacle_ceiling_cause(PIN)
     check("the Pinnacle arm has a hard m ceiling at ANY budget",
