@@ -750,8 +750,115 @@ def pinnacle_point(m: float, cfg: Config = DEFAULT) -> dict | None:
                 "stalled": eng["cycles"] > dt,
                 "magic_limited": cyc_magic > cyc_proc,
                 "workspace": hwp_workspace(m, cfg),
+                # O3: the published family has five codes. Once the LAST one is
+                # the one selected, a larger budget cannot buy a larger code and
+                # the curve stops responding to n -- that is the table running
+                # out, not physics. Flagged rather than left in a docstring.
+                "family_exhausted": d == GB_CODES[-1][2],
                 "t_shot": cyc_tot * t_round_s(cfg)}
     return None
+
+
+def pinnacle_m_ceiling(cfg: Config = DEFAULT, m_hi: float = 1e5) -> float:
+    """Largest m ANY published GB code can carry, at any budget (O3).
+
+    Not a qubit or clock limit: above this, every row of Table I fails the error
+    budget and pinnacle_point returns None, so the arm does not merely flatten,
+    it stops existing. Bisected rather than swept because the predicate is
+    monotone in m.
+    """
+    lo, hi = M_MIN, m_hi
+    if pinnacle_point(lo, cfg) is None:
+        return 0.0
+    if pinnacle_point(hi, cfg) is not None:
+        return hi
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        if pinnacle_point(mid, cfg) is None:
+            hi = mid
+        else:
+            lo = mid
+    return lo
+
+
+def pinnacle_required_distance(m: float, cfg: Config = DEFAULT,
+                               k: int = None) -> float:
+    """Code distance the error budget demands at this m, published or not.
+
+    Inverts the fitted p_L = (A/k)(p/B)^(d/2 + 1/2) at the largest published k,
+    so it says how far past Table I a given lattice would push the family. It
+    invents no code and is never used to cost anything -- it only measures the
+    size of the gap that O3 is about.
+    """
+    if k is None:
+        k = GB_CODES[-1][1]
+    n_code, _k, d_ref, dt_ref, _n_pb = GB_CODES[-1]
+    q_L = 2.0 * m + cfg.n_ancilla + hwp_workspace(m, cfg)
+    eps_L = cfg.frac_logical * eps_absolute(cfg, m)
+    n_t, d_t = t_counts(m, cfg)
+    l_cycles = max(float(d_t), 1.0)                  # optimistic: depth only
+    need = eps_L / max(2.0 * q_L * l_cycles, 1e-300)
+    if need <= 0:
+        return float("inf")
+    r = need * k / PIN_A
+    if r <= 0 or cfg.p >= PIN_B:
+        return float("inf")
+    return 2.0 * (math.log(r) / math.log(cfg.p / PIN_B) - 0.5)
+
+
+def pinnacle_ceiling_cause(cfg: Config = DEFAULT) -> dict:
+    """WHAT stops the Pinnacle arm at its m ceiling -- the code, or the magic? (O3)
+
+    O3 said the code family: five generalised bicycle codes topping out at
+    d = 24, so "past n ~ 1e10 the model is pinned at that code and the curve
+    saturates artificially". Asking the model which branch actually refuses says
+    otherwise. Just above the ceiling the required T-state error drops below
+    1e-11, the cleanest engine PIN_ENGINE_TABLE publishes, and select_engine
+    returns None before any code is even tried.
+
+    The GB family is never the binding constraint in this model's range. It IS
+    fully consumed -- the largest code is the one selected from n ~ 1e6 up, so
+    there is no headroom left in it -- but that is a different statement, and the
+    curve does not flatten because of it.
+    """
+    m_c = pinnacle_m_ceiling(cfg)
+    just_over = m_c * 1.01
+    n_t, _d_t = t_counts(just_over, cfg)
+    p_target = cfg.frac_magic * eps_absolute(cfg, just_over) / (2.0 * max(n_t, 1.0))
+    eng = select_engine(p_target, cfg)
+    best = min(r[1] for r in PIN_ENGINE_TABLE)
+    return {"m_ceiling": m_c,
+            "p_target_just_over": p_target,
+            "cleanest_engine_p_out": best,
+            "cause": "magic engine" if eng is None else "code family",
+            "d_selected_at_ceiling": (pinnacle_point(m_c * 0.99, cfg) or {}).get("d"),
+            "d_max_published": GB_CODES[-1][2]}
+
+
+def pinnacle_family_limit(cfg: Config = DEFAULT, m_hi: float = 1e6) -> dict:
+    """Where the published code table stops being the binding constraint (O3).
+
+    Sweeps n and reports the first budget at which the largest published code is
+    the one selected -- i.e. where the table runs out of headroom, not where the
+    curve visibly flattens. Those are different budgets, and O3 quoted the second.
+    """
+    out = {"n_first_exhausted": None, "m_at_exhaustion": None,
+           "d_max": GB_CODES[-1][2], "n_codes": len(GB_CODES),
+           "m_ceiling": pinnacle_m_ceiling(cfg)}
+    out["d_required_at_ceiling"] = pinnacle_required_distance(
+        out["m_ceiling"] * 1.2, cfg)
+    for e in range(3, 17):
+        n = 10.0 ** e
+        m = max_m_pinnacle(n, cfg, m_hi)
+        if m <= 0:
+            continue
+        pt = pinnacle_point(m, cfg)
+        if pt and pt["family_exhausted"]:
+            out["n_first_exhausted"] = n
+            out["m_at_exhaustion"] = m
+            break
+        out["m_last_ok"], out["n_last_ok"] = m, n
+    return out
 
 
 def ledger_comparison(m: float, cfg: Config = DEFAULT) -> list[tuple]:
@@ -795,11 +902,14 @@ def ledger_comparison(m: float, cfg: Config = DEFAULT) -> list[tuple]:
 def max_m_pinnacle(n: float, cfg: Config = DEFAULT, m_hi: float = 1e6) -> float:
     """Largest m in a week.
 
-    CAVEAT: their published family has only five codes, topping out at d = 24.
-    Past n ~ 1e10 the model is pinned at that code and the curve saturates
-    artificially (m = 6178 at both n = 1e11 and 1e13). That is this model
-    running out of table rows, not physics -- real GB families extend further.
-    The plotted range (n <= 1e8) is well inside the valid region.
+    CEILING (O3): there is a hard m ~ 610 above which pinnacle_point returns
+    None at ANY budget, so this saturates. It is NOT the code family, which is
+    what O3 used to say: just above the ceiling the required T-state error is
+    9.9e-12 against the cleanest published engine's 1e-11, and select_engine
+    refuses before a code is tried -- see pinnacle_ceiling_cause. Raising
+    pin_engines does not move it, because the wall is T-state quality rather
+    than throughput. The code family IS fully consumed from n ~ 1e6 up
+    (`family_exhausted` on every point), which means no headroom, not a limit.
     """
     def ok(m):
         n_tot = n_shots_total(cfg, m)

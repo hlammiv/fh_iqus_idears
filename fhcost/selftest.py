@@ -499,6 +499,37 @@ def main() -> int:
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
+    # ---- O3: what actually stops the Pinnacle arm -------------------------
+    _cc = ftqc.pinnacle_ceiling_cause(PIN)
+    check("the Pinnacle arm has a hard m ceiling at ANY budget",
+          100.0 < _cc["m_ceiling"] < 5000.0
+          and ftqc.pinnacle_point(_cc["m_ceiling"] * 1.05, PIN) is None,
+          f"m = {_cc['m_ceiling']:.0f}; above it pinnacle_point returns None, so "
+          f"the arm stops existing rather than flattening")
+    check("and the ceiling is the MAGIC ENGINE, not the code family (O3)",
+          _cc["cause"] == "magic engine"
+          and _cc["p_target_just_over"] < _cc["cleanest_engine_p_out"],
+          f"just over the ceiling the T-state target is "
+          f"{_cc['p_target_just_over']:.1e} against the cleanest published "
+          f"engine's {_cc['cleanest_engine_p_out']:.0e} -- select_engine refuses "
+          f"before a code is tried. O3 used to blame the d = 24 code")
+    check("...which is why more engines do not move it -- quality, not throughput",
+          abs(ftqc.pinnacle_m_ceiling(PIN.but(pin_engines=16))
+              / _cc["m_ceiling"] - 1.0) < 1e-3,
+          f"1 engine: {_cc['m_ceiling']:.1f}, 16 engines: "
+          f"{ftqc.pinnacle_m_ceiling(PIN.but(pin_engines=16)):.1f}")
+    check("the code family IS fully consumed, from n ~ 1e6 -- no headroom left",
+          ftqc.pinnacle_family_limit(PIN)["n_first_exhausted"] <= 1e6
+          and _cc["d_selected_at_ceiling"] == _cc["d_max_published"],
+          f"the largest published code (d = {_cc['d_max_published']}) is the one "
+          f"selected from n = "
+          f"{ftqc.pinnacle_family_limit(PIN)['n_first_exhausted']:.0e} up; O3 said "
+          f"1e10 and called the plotted range comfortably inside")
+    check("the surface arm has no such wall -- its ladder cascades further",
+          ftqc.surface_point(3000.0, fow) is not None,
+          "surface_point is still defined at m = 3000, five times the Pinnacle "
+          "ceiling")
+
     check("engine count has an optimum -- engines cost 4410 qubits each",
           ftqc.max_m_pinnacle(1e6, PIN.but(pin_engines=16))
           > ftqc.max_m_pinnacle(1e6, PIN.but(pin_engines=64)))

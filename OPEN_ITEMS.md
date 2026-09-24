@@ -52,10 +52,35 @@ Remaining caveats:
 4. Do **not** use TDVP as ground truth for the residual: even chi=2048 gives
    0.125 at U=0 against 0.043 exact, a 3x overestimate.
 
-### O3. Pinnacle code family exhausts above n ~ 1e10
-Only five published generalised bicycle codes, topping out at `d = 24`, so the
-curve saturates artificially beyond that. Model limitation, not physics. The
-plotted range (`n <= 1e8`) is inside the valid region.
+### O3. The Pinnacle arm has a hard ceiling — and it is the MAGIC, not the code
+*This item said the wrong thing. Asking the model which branch refuses corrects it.*
+
+The claim was: only five published generalised bicycle codes, topping out at
+`d = 24`, so the curve saturates artificially past `n ~ 1e10`, and the plotted
+range is comfortably inside the valid region. Two of those three are wrong.
+
+**The ceiling is `m ≈ 610`, at ANY budget, and it is the magic engine.** Above it
+`pinnacle_point` returns `None` — the arm does not flatten, it stops existing.
+`ftqc.pinnacle_ceiling_cause` asks which branch refuses: just above the ceiling
+the required T-state error is `9.9e-12`, and the cleanest engine
+`PIN_ENGINE_TABLE` publishes is `1e-11`. `select_engine` returns `None` **before
+any code is tried**. Raising `pin_engines` from 1 to 16 does not move the ceiling
+by one part in 10⁴, which is the same statement from the other side: the problem
+is T-state *quality*, not throughput. The surface arm has no such wall, because
+the Litinski ladder cascades to far lower `p_out`.
+
+**The code family is fully consumed from `n ~ 1e6`, not `1e10`.** The largest
+code is the one selected at every plotted point from a million qubits up
+(`family_exhausted` is now a field on every `pinnacle_point`). So the reassurance
+that the plotted range sits inside the valid region was false — it sits on the
+last row of the table. The *values* there are still sound, because `d = 24` does
+meet the error budget; what does not exist is headroom. If anything tightened —
+a longer evolution, a smaller tolerance, a worse `p` — there is no next code.
+
+So O3 splits in two. The part that limits the curve is the engine table, which is
+the same kind of gap as the factory ladder and would be closed by the architects
+publishing a cleaner engine. The part about the code family is real but
+non-binding, and is now a flag rather than a docstring.
 
 ### O4. The ZNE response model is unvalidated
 Every ZNE conclusion rests on `s(lambda) = s(0) exp(-lambda Lambda)`. A response
