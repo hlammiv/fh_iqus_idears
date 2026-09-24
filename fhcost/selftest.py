@@ -1379,6 +1379,29 @@ def main() -> int:
               f"{1 - _T['0.1']['2048'] / _T['0.1']['256']:.0%} of a "
               f"{_T['0.1']['2048']:.1e} error on a barely entangled state; the "
               f"deposit varies chi and never dt, so it cannot say which term it is")
+        _lr = _T.get("late_residual") if isinstance(_T, dict) else None
+        if _lr is None:
+            import json as _j2
+            _lr = _j2.loads(_tj.read_text()).get("late_residual")
+        if _lr:
+            check("the fitted late-time residual is checked against EXACT at U = 0",
+                  abs(_lr["exact_mean"] - DEFAULT.s_res_min) / _lr["exact_mean"] < 0.15
+                  and DEFAULT.s_res_min < _lr["exact_mean"],
+                  f"exact mean |C| over t in [1,2] is {_lr['exact_mean']:.4f}; the "
+                  f"model carries s_res_min = {DEFAULT.s_res_min}, "
+                  f"{1 - DEFAULT.s_res_min / _lr['exact_mean']:.0%} BELOW it -- a "
+                  f"smaller signal costs more shots, so the fit is conservative")
+            check("...and a single scalar really is coarse, as O2 says",
+                  _lr["swing"] > 0.3,
+                  f"the exact residual swings {_lr['swing']:+.0%} about its mean "
+                  f"({_lr['exact_min']:.4f} at t = {_lr['t_min']:.1f} to "
+                  f"{_lr['exact_max']:.4f}), decaying to a minimum and reviving")
+            check("TDVP must NOT be used as ground truth for the residual",
+                  _lr["tdvp_over"] > 2.0 and _lr["tdvp_monotone_up"]
+                  and not _lr["exact_monotone_up"],
+                  f"chi = 2048 averages {_lr['tdvp_mean']:.4f}, "
+                  f"{_lr['tdvp_over']:.1f}x exact, and rises MONOTONICALLY where "
+                  f"the exact answer decays and revives -- it manufactures signal")
         check("at late times the published error EXCEEDS the signal",
               all(_T[f"{t}"][str(2048)] > _T[f"{t}"]["signal"]
                   for t in (1.5, 2.0)),

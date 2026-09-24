@@ -86,19 +86,37 @@ Fitted to Zenodo 17799843 (dimer-link C^zz, TFLO+GPR, both U). The decay is
 1.98 +- 0.05). `s_short = 1.000 +- 0.004` confirms the triplet algebra.
 The placeholder `s_res_slope = 0.10` was **5x too large** (fitted 0.021).
 
+**Caveats 2-4 are now MEASURED against the exact answer at U = 0** — possible
+only since `free_fermion.py` started reproducing the deposit, and run by
+`calibration/tdvp_check.py`:
+
+| t | 1.0 | 1.2 | 1.4 | **1.6** | 1.8 | 2.0 |
+|---|---|---|---|---|---|---|
+| exact mean \|C\| | 0.0753 | 0.0630 | 0.0421 | **0.0309** | 0.0343 | 0.0411 |
+| TDVP χ = 2048 | 0.1005 | 0.1102 | 0.1229 | 0.1379 | 0.1582 | 0.1782 |
+
 Remaining caveats:
 1. **Only two U values.** `s_res_slope` and `t_melt_slope` are a two-point
    interpolation with zero constraint on curvature. No basis for extrapolating
-   beyond U/J = 4; the linear form is an assumption.
-2. **`s_res` is not a real plateau.** |C| oscillates with period ~1.0-1.1 J^-1 and
-   an amplitude comparable to the residual itself (U=0: |C| spans 0.021-0.077
-   over t in [1,2], a +-50% swing about 0.043). A single scalar is a coarse
-   summary; the honest form is Gaussian decay plus a damped revival.
-3. **No per-link exact reference at U=4** in the deposit, so `s_res(U=4)` rests on
-   mitigated data validated only globally (via n_triplets vs Majorana
-   propagation, which agree to ~3%).
-4. Do **not** use TDVP as ground truth for the residual: even chi=2048 gives
-   0.125 at U=0 against 0.043 exact, a 3x overestimate.
+   beyond U/J = 4; the linear form is an assumption. *(Unchanged — the deposit
+   has no third U.)*
+2. **`s_res` is not a real plateau — confirmed exactly.** The exact residual
+   averages **0.0467** over `t ∈ [1, 2]` and swings **±47%** about it, decaying to
+   a minimum of 0.0309 at `t = 1.6` and reviving to 0.0411. A single scalar is a
+   coarse summary; the honest form is Gaussian decay plus a damped revival. The
+   model's fitted `s_res_min = 0.043` sits **8% below** the exact mean, which is
+   the conservative side: a smaller signal buys more shots.
+3. **No per-link exact reference at U=4** — *verified, not assumed*: the `U_4`
+   deposit's `exact` group carries only Majorana propagation, and only for `Z`,
+   `doublon_sum` and `triplet_density`. There is no
+   `spin_correlator_neighbours` row to check `s_res(U=4)` against, so it still
+   rests on mitigated data validated globally (n_triplets vs Majorana
+   propagation, ~3%).
+4. **Do not use TDVP as ground truth for the residual**, and the reason is worse
+   than an error bar. At χ = 2048 it averages **0.134, 2.9× the exact residual**,
+   and it rises **monotonically** across the window where the exact answer decays
+   to a minimum and revives. It does not merely have an error there — it
+   manufactures signal. Three selftest checks hold this.
 
 ### O3. The Pinnacle arm has a hard ceiling — and it is the MAGIC, not the code
 *This item said the wrong thing. Asking the model which branch refuses corrects it.*

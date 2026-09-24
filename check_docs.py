@@ -126,6 +126,17 @@ def claims():
             ("OPEN_ITEMS.md", "trajectory alpha including n = 4, 5",
              r"flips it to \*\*([\d.]+)\*\*", dc["alpha_all_n"], 0.02),
         ]
+    _lrj = (_cal("tdvp_check.json") or {}).get("late_residual")
+    if _lrj:
+        out += [
+            ("OPEN_ITEMS.md", "exact late-time residual mean",
+             r"averages \*\*([\d.]+)\*\* over `t . \[1, 2\]`",
+             _lrj["exact_mean"], 0.02),
+            ("OPEN_ITEMS.md", "exact residual swing",
+             r"swings \*\*.([\d.]+)%\*\* about it", _lrj["swing"] * 100, 0.03),
+            ("OPEN_ITEMS.md", "TDVP overestimate of the residual",
+             r"([\d.]+). the exact residual\*\*", _lrj["tdvp_over"], 0.03),
+        ]
     tc = _cal("tdvp_check.json")
     if tc:
         d = tc["dimer"]

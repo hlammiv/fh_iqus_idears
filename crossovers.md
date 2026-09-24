@@ -1,6 +1,6 @@
 # Crossovers and sensitivity
 
-Model `01d5ba36ea37` -- the same fingerprint the figure and `explorer.html`
+Model `492008275f17` -- the same fingerprint the figure and `explorer.html`
 carry. Differing ids mean differing models; do not compare across them.
 
 All entries are `m` at `n = 10^6` unless the column says otherwise, for one
