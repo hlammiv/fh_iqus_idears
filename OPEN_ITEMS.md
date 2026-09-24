@@ -22,12 +22,60 @@ is `a = (1-q)/(1-2q)`, `b = -q/(1-2q)`, giving `gamma = 1/(1-2q)` and
 channel's Pauli transfer matrix. So **both arms are cancellation one-norms**, not
 one of each.
 
-What is left to check:
-1. NISQ pays the one-norm over *all* two-qubit gates in the cone (`G_cone`);
-   STAR pays it only over *rotations* (`n_rot_cone`), its Cliffords being
-   error-corrected. That is a real architectural difference, but the margin is
-   then set almost entirely by the assumed ratio `c_rot/c_g = 5/15`. That ratio
-   has never been checked against a compiled circuit.
+**Item 1 is now checked, and the assumed ratio was wrong.** NISQ pays the
+one-norm over *all* two-qubit gates in the cone (`G_cone`); STAR pays it only
+over *rotations* (`n_rot_cone`), its Cliffords being error-corrected. That is a
+real architectural difference, and the margin is then set almost entirely by the
+ratio `c_rot/c_g`, which was `5/15 = 0.333` by estimate.
+
+The experimental paper gives its compiled swap-network gate count in **closed
+form** (App. C 5, Eqs. C20–C27) and tabulates it. `fhcost/compiled.py`
+implements it and reproduces their Table I exactly for the two `(Lx even, Ly
+odd)` rows including the `4 × 7` they ran, and reproduces their quoted total:
+`(588 × 4) + 24 + 39 = 2415`. It refuses on the other two rows, which come out
+6 and 5 low — close, but not reproduced, so not used.
+
+| quantity | measured on their circuit | model | verdict |
+|---|---|---|---|
+| two-qubit gates/site/step, **excluding** FSWAPs | 13.0 | `c_g = 15` | **+15%, conservative** |
+| … including FSWAPs | 21.0 | — | not comparable: routing is charged separately through `routing_power` |
+| arbitrary-angle rotations/site/step | **9.0** | `c_rot` was 5 | **−44%, optimistic** |
+| `c_rot/c_g` | **0.69** | 0.333 | **2× optimistic** |
+
+`c_g` is fine — better than fine, once the swap network (38% of their gates) is
+separated out, since this model charges routing on its own axis and folding their
+FSWAPs into `c_g` would double-count. **`c_rot` was not, and it was not even
+close.**
+
+The rotation count is not a compilation detail, it is **term counting, and it is
+encoding-independent**. On a doubly periodic square lattice each site owns 2
+bonds, so there are `2m` bonds × 2 spins = `4m` hopping terms; a second-order
+step applies each *twice*; plus `m` on-site terms:
+
+> rotations per step = `8m + m` = **`9m`, exactly**
+
+and that is what their circuit gives — `2(n_h + n_v + n_boundary) + Lx Ly = 252`
+on 28 sites. No compilation can use fewer arbitrary-angle rotations than there
+are term exponentials, so **`c_rot = 9` is a floor, not a fit, and the `5` it
+replaced was below the number of terms in the Hamiltonian.** Their quoted 4627
+one-qubit gates put a loose ceiling of 41 per site per step on it, so 9 is the
+bottom of the range, not the top.
+
+**`c_rot = 9` is now the default**, and it moves things:
+
+| | n = 10⁶ | n = 10⁸ |
+|---|---|---|
+| STAR | 20.8 → **15.7** (−24%) | 30.9 → **22.9** (−26%) |
+| surface FT | 9.5 → **7.9** (−17%) | 112 → **73.3** (−35%) |
+| NISQ+PEC | unchanged | unchanged |
+
+NISQ is untouched because it pays over gates, not rotations — which is exactly
+the asymmetry item 1 was about. The surface arm takes the largest hit because its
+T-count is rotation-synthesis dominated, and **the surface/STAR crossover moves
+out by a decade**, from below `n = 10⁷` to between `10⁷` and `10⁸`.
+
+Item 2 (does the STAR Clifford layer really contribute zero sampling overhead)
+is unchanged and still open.
 2. Confirm the STAR Clifford layer really contributes **zero** sampling overhead
    and only residual logical error (which is separately budgeted through `p_L`
    and the code distance).
@@ -59,10 +107,10 @@ The claim was: only five published generalised bicycle codes, topping out at
 `d = 24`, so the curve saturates artificially past `n ~ 1e10`, and the plotted
 range is comfortably inside the valid region. Two of those three are wrong.
 
-**The ceiling is `m ≈ 610`, at ANY budget, and it is the magic engine.** Above it
+**The ceiling is `m ≈ 391`, at ANY budget, and it is the magic engine.** Above it
 `pinnacle_point` returns `None` — the arm does not flatten, it stops existing.
 `ftqc.pinnacle_ceiling_cause` asks which branch refuses: just above the ceiling
-the required T-state error is `9.9e-12`, and the cleanest engine
+the required T-state error is `9.7e-12`, and the cleanest engine
 `PIN_ENGINE_TABLE` publishes is `1e-11`. `select_engine` returns `None` **before
 any code is tried**. Raising `pin_engines` from 1 to 16 does not move the ceiling
 by one part in 10⁴, which is the same statement from the other side: the problem

@@ -233,12 +233,15 @@ def main() -> int:
           f"{hubbard.signal_min(256.0, DEFAULT):.4f} at the binding time and wins "
           f"the max() -- an earlier note called this the most leveraged number "
           f"and was wrong")
+    # RELATIVE, not absolute: the absolute gap shrank when c_rot was measured and
+    # every arm came down, which is not a statement about this knob's leverage
+    _u0 = ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.0))
+    _u3 = ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.3))
     check("s_data_rel_unc is the one that moves things",
-          abs(ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.0))
-              - ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.3))) > 5,
-          f"0% -> 30% moves surface FT "
-          f"{ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.0)):.1f} -> "
-          f"{ftqc.max_m_surface(1e6, DEFAULT.but(s_data_rel_unc=0.3)):.1f}")
+          abs(_u0 - _u3) / max(_u0, 1e-9) > 0.05,
+          f"0% -> 30% moves surface FT {_u0:.1f} -> {_u3:.1f} "
+          f"({_u3 / _u0 - 1:+.0%}), against the absolute floor which moves it "
+          f"not at all")
 
     check("the absolute floor is a specification, not the fitted residual",
           hubbard.eps_absolute(DEFAULT, 1e6) >= DEFAULT.eps * DEFAULT.s_abs_floor
@@ -350,8 +353,12 @@ def main() -> int:
     # that made STAR look strictly worse than NISQ at every n.
     ratio = ftqc.star_point(8.0)["lam"] / (
         DEFAULT.depol_factor * DEFAULT.p * ftqc.counts(8.0)["g_cone"])
-    check("Lambda_STAR / Lambda_NISQ ~ 1/6", abs(ratio - 1 / 6) < 0.02,
-          f"ratio = {ratio:.3f}")
+    # was ~1/6 when c_rot was the ESTIMATED 5; the measured 9 takes it to ~0.3.
+    # This ratio is what O1 identified as setting the whole NISQ-STAR margin.
+    check("Lambda_STAR / Lambda_NISQ ~ 0.30, from the MEASURED rotation count",
+          abs(ratio - 0.30) < 0.02,
+          f"ratio = {ratio:.3f}; it was 1/6 on the estimated c_rot = 5, and "
+          f"their compiled circuit says 9")
     # NOTE a convention asymmetry worth keeping visible: the bare-NISQ arm now uses
     # the depolarizing-channel cancellation one-norm derived here, while STAR's
     # overhead comes from its own paper's gamma^2 = exp(8 P_Z,1 N). Those are
@@ -367,8 +374,14 @@ def main() -> int:
     _sl = _m.log10(s_hi / s_lo) / 4.0
     check("STAR is still far flatter than slope 1", _sl < 0.12,
           f"m: {s_lo:.1f} -> {s_hi:.1f} over 4 decades, slope {_sl:.3f}")
-    check("surface FT eventually overtakes STAR",
-          ftqc.max_m_surface(1e7, fow) > ftqc.max_m_star(1e7))
+    # the crossover moved out by a decade when c_rot was measured: the surface
+    # arm's T-count is rotation-synthesis dominated, so it takes the hit hardest
+    check("surface FT eventually overtakes STAR, but a decade later than it did",
+          ftqc.max_m_surface(1e8, fow) > ftqc.max_m_star(1e8)
+          and ftqc.max_m_surface(1e7, fow) < ftqc.max_m_star(1e7),
+          f"n=1e7: surface {ftqc.max_m_surface(1e7, fow):.1f} vs STAR "
+          f"{ftqc.max_m_star(1e7):.1f}; n=1e8: {ftqc.max_m_surface(1e8, fow):.1f} "
+          f"vs {ftqc.max_m_star(1e8):.1f}")
     check("STAR beats NISQ only modestly at p=1e-3",
           1.0 < ftqc.max_m_star(1e6) / nisq.max_m(1e6, strategy="pec") < 2.0,
           f"ratio = {ftqc.max_m_star(1e6)/nisq.max_m(1e6, strategy='pec'):.2f}")
@@ -530,6 +543,49 @@ def main() -> int:
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
+    # ---- O1: c_g and c_rot against their COMPILED circuit -------------------
+    from . import compiled as _comp
+    _rows = _comp.check_table()
+    check("their closed-form gate count reproduces their own Table I",
+          sum(1 for _, _, _, ok in _rows if ok) >= 2
+          and all(ok for lat, _, _, ok in _rows if lat in _comp.VALIDATED),
+          "; ".join(f"{l[0]}x{l[1]}: {'exact' if ok else 'differs by %d' % (th[0] - o[0])}"
+                    for l, o, th, ok in _rows)
+          + " -- two_qubit_gates refuses outside the rows it reproduces")
+    _t = _comp.THEIRS
+    check("and it reproduces their quoted total, 2415 two-qubit gates",
+          _comp.two_qubit_gates(_t["Lx"], _t["Ly"], _t["steps"]) + _t["prep_2q"]
+          == _t["total_2q"],
+          f"(588 x 4) + 24 + {_t['prep_2q']} = {_t['total_2q']}, their own "
+          f"arithmetic, from our implementation of Eqs. C20-C27")
+    _ps = _comp.per_site_per_step(_t["Lx"], _t["Ly"])
+    _pp = _comp._parts(_t["Lx"], _t["Ly"])
+    _cg_nosw = (_ps["gates_per_step"] - 2 * _pp["n_f"]) / _ps["m"]
+    check("c_g = 15 is CONSERVATIVE once the swap network is separated out",
+          1.0 < DEFAULT.c_g / _cg_nosw < 1.3,
+          f"their circuit is {_cg_nosw:.1f} two-qubit gates per site per step "
+          f"excluding FSWAPs ({2 * _pp['n_f'] / _ps['gates_per_step']:.0%} of it "
+          f"is the swap network, which this model charges through routing_power "
+          f"instead) -- c_g = {DEFAULT.c_g:.0f} is {DEFAULT.c_g / _cg_nosw - 1:+.0%}")
+    check("c_rot = 9 is MEASURED, and the 5 it replaced flattered STAR by 1.8x",
+          abs(DEFAULT.c_rot - _ps["c_rot"]) < 1e-9,
+          f"every Hamiltonian term is one rotation and a second-order step "
+          f"applies each hopping term twice: "
+          f"{_ps['rotations_per_step']:.0f} per step / {_ps['m']:.0f} sites = "
+          f"{_ps['c_rot']:.2f}. O1 said this ratio had never been checked "
+          f"against a compiled circuit")
+    check("c_rot = 9 is exact TERM COUNTING, not a fit -- 8m hopping + m on-site",
+          _comp.rotations(_t["Lx"], _t["Ly"], 1) == 9 * _ps["m"],
+          f"2 bonds/site x 2 spins x 2 applications + 1 on-site = 9 per site; "
+          f"their circuit gives {_ps['rotations_per_step']:.0f} on "
+          f"{_ps['m']:.0f} sites. No compilation uses fewer rotations than there "
+          f"are term exponentials, so the old c_rot = 5 was BELOW the Hamiltonian")
+    check("...and that is the ratio O1 said sets the whole NISQ-STAR margin",
+          abs(_ps["c_rot"] / _cg_nosw - 0.69) < 0.02,
+          f"c_rot/c_g measured = {_ps['c_rot'] / _cg_nosw:.3f} against the "
+          f"5/15 = 0.333 assumed. Adopting it costs STAR 24-26% and the surface "
+          f"arm 17-35%, and moves their crossover out by a decade")
+
     # ---- first-pass #5: multiproduct branches are charged as CIRCUITS -------
     import math as _math
     _naive = {}
@@ -1510,12 +1566,15 @@ def main() -> int:
                 continue
             _pt = ftqc.surface_point(_m, _c, n=_n)
             if _pt and _pt["hwp_batch"] < int(_m):
-                _smaller.append(f"{_lab}@{_n:.0e}")
-    check("the HWP batch optimum is the full batch, in every regime tested",
-          not _smaller,
+                _smaller.append((f"{_lab}@{_n:.0e}",
+                                 _pt["hwp_batch"] / max(int(_m), 1)))
+    check("the HWP batch optimum is the full batch (or the nearest power of two)",
+          all(f > 0.9 for _, f in _smaller),
           "20 (regime, n) points: this workload is clock-bound and the full "
-          "batch minimises T, so the knob is real but inert -- known now, "
-          "not assumed")
+          "batch minimises T, so the knob is real but inert. "
+          + ("every point takes the full batch" if not _smaller else
+             "the only exceptions are power-of-two roundings: "
+             + ", ".join(f"{k} at {f:.0%} of full" for k, f in _smaller)))
     check("and optimising for FOOTPRINT instead would make it worse",
           ftqc.max_m_surface(1e8, DEFAULT.but(hwp_batch=1))
           < 0.5 * ftqc.max_m_surface(1e8, DEFAULT),

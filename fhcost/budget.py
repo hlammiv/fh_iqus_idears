@@ -77,8 +77,20 @@ class Config:
                                   # pi/8 Pauli-PRODUCT rotations whose cost does not
                                   # depend on Pauli weight, so paying 1.5 qubits/mode
                                   # for locality buys nothing there.
-    c_g: float = 15.0             # 2q gates / site / step
-    c_rot: float = 5.0            # rotations / site / step
+    c_g: float = 15.0             # 2q gates / site / step. MEASURED on their
+                                  # compiled circuit as 13.0 once the swap
+                                  # network is separated out (this model charges
+                                  # routing through routing_power, so folding
+                                  # their FSWAPs in here would double-count);
+                                  # 15 is 15% conservative. fhcost/compiled.py.
+    c_rot: float = 9.0            # arbitrary-angle rotations / site / step.
+                                  # MEASURED, and it used to be 5. Every
+                                  # Hamiltonian term is one rotation and a
+                                  # second-order step applies every hopping term
+                                  # TWICE: 2(n_h + n_v + n_boundary) + Lx Ly =
+                                  # 252 per step on their 4x7 = 9.00 per site.
+                                  # This is the ratio O1 said was never checked,
+                                  # and 5 flattered STAR by 2x.
     c_w: float = 1.0              # Trotter commutator prefactor
     trotter: str = "measured"     # "measured" | "extensive" | "lightcone" | "empirical"
                                   # "measured" uses W_MEASURED below: exact-diagonalisation

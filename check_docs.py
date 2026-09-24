@@ -56,7 +56,7 @@ def claims():
         ("OPEN_ITEMS.md", "cone-model overcharge (O5)",
          r"an \*\*([\d.]+)x overcharge\*\*", dec["overcharge"], 0.02),
         ("OPEN_ITEMS.md", "Pinnacle m ceiling (O3)",
-         r"The ceiling is `m ≈ (\d+)`", ftqc.pinnacle_m_ceiling(PIN), 0.02),
+         r"The ceiling is `m . (\d+)`", ftqc.pinnacle_m_ceiling(PIN), 0.02),
         ("OPEN_ITEMS.md", "cleanest published engine p_out (O3)",
          r"`PIN_ENGINE_TABLE` publishes is `1e-(\d+)`",
          -__import__("math").log10(min(r[1] for r in ftqc.PIN_ENGINE_TABLE)), 0.01),
@@ -68,6 +68,19 @@ def claims():
          classical.FREE_FERMION["deposit_abs_err"] * 1e10, 0.05),
         ("METHODS.md", "pooled TDVP slope",
          r"`err ~ chi\^-([\d.]+)`", abs(classical.TDVP_SLOPE), 0.02),
+    ]
+    from fhcost import compiled as comp
+    _t = comp.THEIRS
+    _ps = comp.per_site_per_step(_t["Lx"], _t["Ly"])
+    _pp = comp._parts(_t["Lx"], _t["Ly"])
+    _cg = (_ps["gates_per_step"] - 2 * _pp["n_f"]) / _ps["m"]
+    out += [
+        ("OPEN_ITEMS.md", "compiled 2q gates/site/step excluding FSWAPs",
+         r"excluding[*][*] FSWAPs [|] ([\d.]+) [|]", _cg, 0.02),
+        ("OPEN_ITEMS.md", "compiled rotations/site/step",
+         r"rotations/site/step [|] [*][*]([\d.]+)[*][*] [|]", _ps["c_rot"], 0.02),
+        ("OPEN_ITEMS.md", "compiled c_rot/c_g ratio",
+         r"`c_rot/c_g` [|] [*][*]([\d.]+)[*][*] [|]", _ps["c_rot"] / _cg, 0.02),
     ]
     sg = _cal("support_growth.json")
     if sg:
