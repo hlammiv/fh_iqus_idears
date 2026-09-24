@@ -657,7 +657,7 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 2 | ZNE feasibility omits residual bias | **fixed** — bias-limited, not variance-limited |
 | 3 | gatewise PEC overhead uses the wrong coefficient | **fixed** — attenuation separated from one-norm |
 | 4 | mitigation theorem is overstated | **fixed** — citation corrected, claims downgraded, demonstrated arm added |
-| 5 | multiproduct gains lack an error bound | **partial** — Trotter error calibrated by exact diagonalisation (alpha 9/4 -> 7/4); branch-cost accounting still open |
+| 5 | multiproduct gains lack an error bound | **partial** — branch-cost accounting is DONE and the status row saying otherwise was stale: each branch is charged as its own circuit at `k_i` × the gates on both the NISQ and the FT side, and charging only `‖c‖₁²` would understate the cost by 405× at order 4 and 654× at order 8. Convergence orders measured (3.98–4.64, 6.01–6.45, 7.66–9.08). What is still missing is a *bound* rather than a validated empirical law — the same status as the second-order calibration |
 | 6 | Pinnacle calibration needs reconstruction | **fixed** — footprint reproduced with no free parameter; single-engine T supply corrected; connectivity flagged as O11 |
 | 7 | FT resource and error accounting incomplete | **fixed** — HWP workspace charged, magic-state error budgeted with per-point factory selection, failure-to-bias factor 2 |
 | 8 | classical band is heuristic, not a ceiling | **partial** — relabelled as capacity, entropy bound fixed, TDVP measured; a validated TN estimate is still missing (O10) |

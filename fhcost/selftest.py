@@ -530,6 +530,33 @@ def main() -> int:
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
+    # ---- first-pass #5: multiproduct branches are charged as CIRCUITS -------
+    import math as _math
+    _naive = {}
+    for _k in (1, 2, 4):
+        _c = DEFAULT.but(trotter_order_k=_k)
+        _cc = hubbard.counts(16.0, _c)
+        _l1 = hubbard.multiproduct_l1(_k)
+        _d = _c.frac_stat * hubbard.eps_statistical(_c, 16.0) / nisq.conf_z(_c)
+        _v = nisq.cost_factor("pec", nisq.lambda_of(16.0, _c),
+                              nisq.log_gamma_sq(16.0, _c))
+        _naive[_k] = (nisq.time_required(16.0, _c, "pec"),
+                      _c.n_times * _l1 * _l1 * _v * _cc["t_circuit"] / _d ** 2)
+    check("multiproduct branches are charged as separate CIRCUITS, not a 1-norm",
+          _naive[1][0] / _naive[1][1] == 1.0
+          and all(_naive[k][0] / _naive[k][1] > 100 for k in (2, 4)),
+          "charging only ||c||_1^2 would understate the cost by "
+          + ", ".join(f"k={k}: {_naive[k][0] / _naive[k][1]:.0f}x"
+                      for k in (2, 4))
+          + " -- branch i runs at k_i x the gates and PEC is exponential in that")
+    check("and the fault-tolerant arms charge them too, not only NISQ",
+          ftqc.max_m_surface(1e8, DEFAULT.but(trotter_order_k=4))
+          < ftqc.max_m_surface(1e8, DEFAULT),
+          f"surface at n=1e8: {ftqc.max_m_surface(1e8, DEFAULT):.0f} at k=1 vs "
+          f"{ftqc.max_m_surface(1e8, DEFAULT.but(trotter_order_k=4)):.0f} at k=4 "
+          f"-- the extra branches cost more than the depth saving there, which "
+          f"is the arm-dependent optimum")
+
     # ---- O4/O6: what their step rule is, and what their data can test -----
     _EXPT = nisq.EXPERIMENT
     _fc = DEFAULT.but(trotter_mode="fixed_count")
