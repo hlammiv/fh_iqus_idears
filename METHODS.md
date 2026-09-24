@@ -198,16 +198,45 @@ is now labelled "PEC (as implemented)".
 The cone model charges every gate in the causal cone. Measured against the
 Phasecraft/Quantinuum circuit — 2415 two-qubit gates, their own quoted
 `p = 1e-3`, raw against exact (FLO is exact at U=0) — the observed attenuation is
-`Lambda = 0.20`, against **2.58** from the cone model. A **12.9x overcharge**.
+`Lambda = 0.20` against **1.76** from the cone model: an **8.8× overcharge**.
+
+*(An earlier version of this section said 2.58 and 12.9×. That was the per-gate
+rate with the cone fraction left out — i.e. charging every gate in the circuit,
+which is not what the cone model does. The cone model applies a time-averaged
+fraction of 0.683, and 1.76 is its actual prediction. `nisq.experiment_
+decomposition` now generates all of these so the prose cannot drift again.)*
 
 The mechanism was checked on their data rather than assumed:
 `Lambda(ZZ)/Lambda(Z) = 1.91`, where damping proportional to operator weight
 predicts 2 and uniform-per-gate predicts 1. A depolarizing error damps the
 observable only where the Heisenberg-evolved operator has support.
 `damping_model = "support"` implements `w_obs/q` and reproduces the measurement
-to 8%. It is **not** the default: one measurement fixes the value at one
-operating point, not the scaling, and `support_growth = 0` cannot hold at long
-times. See `OPEN_ITEMS.md` O5, and note this partially supersedes review #9.
+to 8%. It is **not** the default. See `OPEN_ITEMS.md` O5, and note this partially
+supersedes review #9.
+
+**The scaling is now measured too, and it kills the obvious repair.** O5's
+objection to `support_growth = 0` was that the operator must eventually fill the
+lattice. At `U = 0` that is a calculation, not a worry, and
+`calibration/support_growth.py` does it on the same 7 × 4 instance: the effective
+support — the inverse participation ratio of the Heisenberg-evolved operator's
+single-particle weight, exactly 4 at `t = 0` — reaches half the register by
+`t = 0.7` and averages **25.7 of 56 modes** over their evolution window. The
+support genuinely fills the lattice.
+
+Feeding *that* into the damping model does not repair it, it breaks it:
+
+| damping fraction from | fraction | predicted Λ | vs measured 0.200 |
+|---|---|---|---|
+| cone, time-averaged | 0.683 | 1.76 | **8.8×** |
+| measured Heisenberg support | 0.459 | 1.18 | **5.9×** |
+| bare observable weight, `w = 4` | 0.071 | 0.184 | **0.9×** |
+
+So damping does not track the support even though the support spreads. Their own
+weight test says it from the other side: `Λ(ZZ)/Λ(Z) = 1.91` tracks the *bare*
+weights 2 and 1, which an operator spread over 26 modes could not do.
+`support_growth = 0` is therefore no longer an unconstrained fit — it is the only
+one of the three candidates the measurement leaves standing. The default stays
+`cone` regardless, so no headline moves; what changes is that the hole is closed.
 
 ### The 160-shot tension, resolved
 
@@ -217,11 +246,16 @@ actual circuit (m = 28, t = 2):
 
 | factor | ratio |
 |---|---|
-| Trotter step count — 417 here vs **4** there | **104x** |
-| per-gate attenuation — 1.067 vs measured 0.083 per pG | **12.9x** |
+| Trotter step count — 11.4 here vs **4** there | **2.8x** |
+| per-gate attenuation, cone fraction included — 7.28e-4 vs 8.28e-5 | **8.8x** |
 | per-step gate count — 420 here vs 604 there | 0.70x (ours optimistic) |
-| cone fraction | 0.33x |
-| **net overestimate of Lambda** | **311x** |
+| **net overestimate of Lambda** | **17.4x** |
+
+*(Also regenerated. The old table read 417 steps, 104x and a net 311x; the step
+count fell to 11.4 when the Trotter coefficients were refitted and the hand-typed
+row never followed. The cone fraction is no longer a separate row because it is
+inside the per-gate ratio — listing it twice was the double count that produced
+the 2.58.)*
 
 Two by-products. `c_g = 15` gets its first external check: their compiled circuit
 is 21.6 two-qubit gates per site per step, so ours is 30% optimistic but the right

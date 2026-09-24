@@ -188,7 +188,10 @@ def evolve(Lx, Ly, t_final, dt, chi, U=0.0, svd_min=1e-14, flux_y=0.0,
     t0 = time.time()
     for _ in range(n):
         eng.run()
-    return psi, dimers, max(psi.chi), time.time() - t0
+    # the discarded weight: if this is tiny and the error is not, the floor is
+    # NOT truncation of the state, and the two-site tangent space is the suspect
+    eps = float(getattr(getattr(eng, "trunc_err", None), "eps", float("nan")))
+    return psi, dimers, max(psi.chi), time.time() - t0, eps
 
 
 def scan(Lx, Ly, times, dts, chis, U=0.0, flux_y=None, state="triplet"):
@@ -200,19 +203,19 @@ def scan(Lx, Ly, times, dts, chis, U=0.0, flux_y=None, state="triplet"):
                               state=state) if U == 0 else None)
         for chi in chis:
             for dt in dts:
-                psi, links_, chi_used, secs = evolve(Lx, Ly, t, dt, chi, U,
-                                                     flux_y=flux, cover=cover,
-                                                     state=state)
+                psi, links_, chi_used, secs, eps = evolve(
+                    Lx, Ly, t, dt, chi, U, flux_y=flux, cover=cover, state=state)
                 got = czz_mps(psi, links_)
                 err = (float(np.mean([abs(a - b) for a, b in zip(got, ref)]))
                        if ref is not None else float("nan"))
                 rows.append({"Lx": Lx, "Ly": Ly, "t": t, "dt": dt, "chi": chi,
                              "chi_used": chi_used, "U": U, "flux_y": flux,
-                             "state": state,
+                             "state": state, "trunc_eps": eps,
                              "mean_abs_err": err, "czz_0": got[0],
                              "seconds": secs})
                 print(f"  t={t:4.2f} chi={chi:5d} (used {chi_used:5d}) "
-                      f"dt={dt:7.4f}  err {err:.4e}  [{secs:7.1f} s]")
+                      f"dt={dt:7.4f}  err {err:.4e}  discarded {eps:.2e}"
+                      f"  [{secs:7.1f} s]")
     return rows
 
 

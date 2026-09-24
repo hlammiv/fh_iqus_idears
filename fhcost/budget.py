@@ -98,19 +98,26 @@ class Config:
     #   "support" -- only gates whose qubits overlap the Heisenberg-evolved
     #                observable's SUPPORT. Measured: on the Phasecraft/Quantinuum
     #                circuit (2415 two-qubit gates, their quoted p = 1e-3) the
-    #                observed attenuation is Lambda = 0.20, against 2.58 from the
-    #                cone model -- a 12.9x overcharge. The mechanism was checked
+    #                observed attenuation is Lambda = 0.20, against 1.76 from the
+    #                cone model -- an 8.8x overcharge (nisq.experiment_
+    #                decomposition generates it; the 2.58 this comment used to
+    #                quote left the cone fraction out). The mechanism was checked
     #                by a weight test on their own data: Lambda(ZZ)/Lambda(Z) =
     #                1.91, where damping-proportional-to-operator-weight predicts
     #                2 and uniform-per-gate predicts 1.
     damping_model: str = "cone"   # "cone" | "support"  -- see OPEN_ITEMS.md O5
     w_obs0: float = 4.0           # qubits in the observable's support
                                   # (C^zz on nearest neighbours: 2 sites x 2 spins)
-    support_growth: float = 0.0   # extra support per gate layer. FITTED to a SINGLE
-                                  # circuit and consistent with zero there; the true
-                                  # value cannot be zero at long times, when the
-                                  # operator must eventually fill the lattice. This is
-                                  # the least-constrained input in the model.
+    support_growth: float = 0.0   # extra support per gate layer. Zero is not a
+                                  # guess any more: calibration/support_growth.py
+                                  # computes the Heisenberg support exactly at
+                                  # U = 0 on their own instance -- it DOES fill the
+                                  # lattice, half the register by t = 0.7 -- and
+                                  # feeding that in over-predicts their measured
+                                  # attenuation by 5.9x where w = 4 reproduces it.
+                                  # Damping tracks the BARE weight, which is also
+                                  # what their Lambda(ZZ)/Lambda(Z) = 1.91 says.
+                                  # Only checked at U = 0; see OPEN_ITEMS.md O5.
     lightcone_frac: float = 1.0 / 3.0   # "cone" model only
     depol_factor: float = 16.0 / 15.0   # ATTENUATION only: a non-identity Pauli is damped
                                   # by (1 - 16p/15) per 2-qubit depolarizing gate (7 of the

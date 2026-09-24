@@ -147,9 +147,8 @@ class Patch:
         KRYLOV_BUDGET_GB and the substep count raised to compensate -- accuracy
         comes from substepping, memory from the cap.
         """
-        vec_gb = self.dim * 16 / 2 ** 30
         if krylov is None:
-            krylov = int(max(8, min(40, KRYLOV_BUDGET_GB / max(vec_gb, 1e-9))))
+            krylov = self._auto_krylov()
         # A Krylov space of dimension k resolves exp(-iHt) only while
         # ||H|| dt <~ k/3. Capping k for memory therefore REQUIRES more substeps,
         # and the first version of this did not: at n = 14 the cap took k to 8,
@@ -157,13 +156,24 @@ class Patch:
         # every smaller patch was at 1e-15. Scale the substep by the spectral
         # radius, not by tau alone.
         if sub is None:
-            nrm = self._hnorm()
-            sub = max(1, int(np.ceil(tau * 4)),
-                      int(np.ceil(3.0 * tau * nrm / max(krylov, 1))))
+            sub = self._auto_sub(tau, krylov)
         P = self.psi0.copy()
         for _ in range(sub):
             P = self._expv(P, tau / sub, krylov)
         return P
+
+    def _auto_krylov(self):
+        vec_gb = self.dim * 16 / 2 ** 30
+        return int(max(8, min(40, KRYLOV_BUDGET_GB / max(vec_gb, 1e-9))))
+
+    def _auto_sub(self, tau, krylov=None):
+        """Substeps the exact propagator uses. A Krylov space of dimension k
+        resolves exp(-i H t) only while ||H|| dt <~ k/3, so capping k for memory
+        REQUIRES more substeps -- which is why this is scaled by the spectral
+        radius and not by tau alone."""
+        k = self._auto_krylov() if krylov is None else krylov
+        return max(1, int(np.ceil(tau * 4)),
+                   int(np.ceil(3.0 * tau * self._hnorm() / max(k, 1))))
 
     def _hnorm(self):
         """Cheap upper bound on ||H||: hopping bandwidth plus the on-site term."""
@@ -287,7 +297,12 @@ def trajectory(only=None, out="data/trotter_traj.json"):
         i, j = P.dimers[0]
         t0 = time.monotonic()
         ex = P.exact(tau)
-        ex2 = P.exact(tau, sub=max(2, int(np.ceil(tau * 8))))
+        # HALVE the substep -- do not pick a fixed number. The old probe used
+        # ceil(8 tau), which happened to be finer than the automatic substep up
+        # to n = 14 and COARSER at n = 16, where the spectral-radius term takes
+        # the automatic value past it. It then reported the probe's own error as
+        # the reference's: 2.8e-6 at n = 16, against ~1e-15 everywhere else.
+        ex2 = P.exact(tau, sub=2 * P._auto_sub(tau))
         conv = float(np.linalg.norm(ex - ex2))
         cz_ex = P.czz(ex, i, j)
         print(f"[{name}] n={P.n} tau={tau:.3f} dim={P.dim:,} "
@@ -347,8 +362,7 @@ def clamp_probe(patches=("rectangle3x4", "rectangle2x7"), out="data/clamp_probe.
         for tau in CLAMP_TAUS:
             t0 = time.monotonic()
             ex = P.exact(tau)
-            conv = float(np.linalg.norm(ex - P.exact(tau, sub=None if False else
-                                                     int(np.ceil(6.0 * tau * P._hnorm() / 8)))))
+            conv = float(np.linalg.norm(ex - P.exact(tau, sub=2 * P._auto_sub(tau))))
             cz = P.czz(ex, i, j)
             best = []
             for r in (8, 12, 16, 24, 32, 48, 64):

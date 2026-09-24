@@ -255,3 +255,58 @@ if __name__ == "__main__":
         mp = max_m(n, strategy="pec")
         lam = DEFAULT.p * counts(max(mp, 1.0))["g_cone"]
         print(f"{n:>10.0e} {mi:>10.4g} {m0:>10.3g} {mz:>10.3g} {mp:>10.3g} {lam:>11.2f}")
+
+
+# ---------------------------------------------------------------------------
+# The one external anchor: their 56-qubit run, decomposed against this model.
+
+EXPERIMENT = {
+    "m": 28.0, "t": 2.0, "u_over_j": 0.0,
+    "two_qubit_gates": 2415.0,       # their compiled circuit
+    "trotter_steps": 4.0,            # r = 4 tau at tau = 2, their step density
+    "lambda_observed": 0.200,        # raw vs exact (FLO is exact at U = 0)
+    "p_two_qubit": 1.0e-3,           # their quoted figure
+    "source": "arXiv:2510.26300 / Zenodo 17799843",
+}
+
+
+def experiment_decomposition(cfg: Config = DEFAULT) -> dict:
+    """Why this model prices their circuit differently -- computed, not typed.
+
+    An earlier version of this table was written down by hand and went stale the
+    moment the Trotter calibration was refitted: it claimed 417 steps against
+    their 4, a 104x factor, where the model now charges 11.4. It is generated
+    here so that cannot happen again, and a selftest asserts the numbers in
+    METHODS still match.
+
+    Note which quantity is which. The per-gate ratio below is the attenuation
+    per gate IN THE WHOLE CIRCUIT, so the cone fraction is already inside it.
+    Quoting the cone-free per-gate rate as "what the cone model predicts" is an
+    overcharge by 1/frac, and the prose used to do exactly that.
+    """
+    from . import hubbard
+    e = EXPERIMENT
+    c = cfg.but(encoding="jw", tmax_mode="const", tmax_const=e["t"],
+                U_over_J=e["u_over_j"])
+    cc = hubbard.counts(e["m"], c)
+    lam = lambda_of(e["m"], c)
+    pg_model = lam / cc["g_total"]
+    pg_their = e["lambda_observed"] / e["two_qubit_gates"]
+    gps_model = cc["g_total"] / cc["steps"]
+    gps_their = e["two_qubit_gates"] / e["trotter_steps"]
+    return {
+        "steps_model": cc["steps"], "steps_their": e["trotter_steps"],
+        "steps_ratio": cc["steps"] / e["trotter_steps"],
+        "gates_per_step_model": gps_model, "gates_per_step_their": gps_their,
+        "gates_per_step_ratio": gps_model / gps_their,
+        "per_gate_model": pg_model, "per_gate_their": pg_their,
+        "per_gate_ratio": pg_model / pg_their,
+        "damp_frac": cc["damp_frac"],
+        "lambda_model": lam,
+        "lambda_model_on_their_circuit": pg_model * e["two_qubit_gates"],
+        "lambda_observed": e["lambda_observed"],
+        "overcharge": pg_model * e["two_qubit_gates"] / e["lambda_observed"],
+        "net_overestimate": lam / e["lambda_observed"],
+        "c_g_theirs": gps_their / e["m"],
+        "c_g_model": cfg.c_g,
+    }

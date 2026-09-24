@@ -66,18 +66,54 @@ of a small compiled Hubbard circuit would settle it.
 *Raised while working #4. Partially supersedes review #9.*
 
 Measured on the Phasecraft/Quantinuum circuit (2415 two-qubit gates, their quoted
-`p = 1e-3`): observed attenuation `Lambda = 0.20`, against **2.58** from the cone
-model — a **12.9x overcharge**. The mechanism was checked on their own data by a
+`p = 1e-3`): observed attenuation `Lambda = 0.20`, against **1.76** from the cone
+model — an **8.8x overcharge**. (It read 2.58 and 12.9x until the decomposition
+was generated rather than typed: that figure left the cone fraction out, i.e.
+charged every gate in the circuit, which is not what the cone model does.)
+The mechanism was checked on their own data by a
 weight test: `Lambda(ZZ)/Lambda(Z) = 1.91`, where damping proportional to operator
 weight predicts 2 and uniform-per-gate predicts 1. So a depolarizing error damps
 the observable only where the Heisenberg-evolved operator has support.
 
 `damping_model = "support"` implements this and reproduces the measurement to 8%
 (0.184 vs 0.200). **It is not the default**, because the single measurement
-constrains the *value* at one operating point but not the *scaling*:
-`support_growth = 0` is a one-point fit and cannot be right at long times, when
-the operator must eventually fill the lattice. Adopting it by default would be
-extrapolating an unvalidated law in the direction that flatters the results.
+constrained the *value* at one operating point but not the *scaling*.
+
+**The scaling is now measured, and the obvious repair is excluded.** At `U = 0`
+"the operator must eventually fill the lattice" is a calculation, not a worry,
+and `calibration/support_growth.py` performs it on the same 7x4 instance the
+attenuation was measured on -- the effective support being the inverse
+participation ratio of the Heisenberg-evolved operator's single-particle weight,
+which is exactly 4 at `t = 0` and so is the same quantity as `w_obs0`:
+
+| t | 0.1 | 0.25 | 0.5 | 1.0 | 1.5 | 2.0 |
+|---|---|---|---|---|---|---|
+| effective support, of 56 modes | 4.25 | 5.76 | 14.3 | 31.3 | 43.8 | 21.0 |
+
+It reaches half the register by `t = 0.7` and averages **25.7 of 56** over their
+window. So the support does fill the lattice -- and putting that into the damping
+model makes it *worse*, not better:
+
+| damping fraction from | fraction | predicted Lambda | vs measured 0.200 |
+|---|---|---|---|
+| cone, time-averaged | 0.683 | 1.76 | **8.8x** |
+| measured Heisenberg support | 0.459 | 1.18 | **5.9x** |
+| bare observable weight, `w = 4` | 0.071 | 0.184 | **0.9x** |
+
+Damping does not track the support even though the support spreads. Their weight
+test says the same from the other side: `Lambda(ZZ)/Lambda(Z) = 1.91` tracks the
+*bare* weights 2 and 1, which an operator spread over 26 modes could not do.
+
+So `support_growth = 0` is no longer an unconstrained fit -- it is the only one
+of the three candidates that survives their measurement, and the stated reason
+for distrusting it has been tested and does not hold. **The default still stays
+`cone`**, so no headline moves; what this removes is the hole, not the caveat.
+
+What is still unmeasured is the same statement at `U > 0`, where the operator
+spreads faster and no polynomial reference exists. The `U = 0` support is a lower
+bound on the spreading, and the measurement above says even the lower bound
+already over-predicts the damping, so a faster-spreading operator does not rescue
+the support law.
 
 Effect where it does apply: the discount goes as `w_obs/q ~ 1/m`, so it is large
 for a small observable in a big register (their case, 13x) and modest at the m

@@ -392,8 +392,50 @@ def main() -> int:
     check("support model reproduces the MEASURED attenuation",
           abs(lam_their - 0.20) < 0.05,
           f"predicts {lam_their:.3f} on their 2415-gate circuit, observed 0.200")
-    check("the cone model overcharges that circuit ~13x",
-          abs(1.067e-3 * 2415 / 0.20 - 12.9) < 0.5)
+    # this used to be abs(1.067e-3 * 2415 / 0.20 - 12.9) < 0.5 -- three typed
+    # constants divided by each other, which is arithmetic, not a check on the
+    # model. It also left the cone fraction out, so it certified a wrong number.
+    _dec = nisq.experiment_decomposition()
+    check("the cone model overcharges that circuit ~9x",
+          8.0 < _dec["overcharge"] < 10.0,
+          f"cone predicts {_dec['lambda_model_on_their_circuit']:.2f} on their "
+          f"{nisq.EXPERIMENT['two_qubit_gates']:.0f}-gate circuit against "
+          f"{_dec['lambda_observed']:.2f} observed, "
+          f"{_dec['overcharge']:.1f}x -- cone fraction {_dec['damp_frac']:.3f} "
+          f"INCLUDED, which the old hand-typed 12.9x left out")
+    check("and the documented decomposition still matches the model",
+          abs(_dec["steps_ratio"] - 2.8) < 0.2
+          and abs(_dec["gates_per_step_ratio"] - 0.70) < 0.05
+          and abs(_dec["net_overestimate"] - 17.4) < 1.0,
+          f"steps {_dec['steps_ratio']:.1f}x, gates/step "
+          f"{_dec['gates_per_step_ratio']:.2f}x, per-gate "
+          f"{_dec['per_gate_ratio']:.1f}x, net "
+          f"{_dec['net_overestimate']:.1f}x -- METHODS quotes these")
+    check("their compiled circuit is the external check on c_g",
+          1.0 < _dec["c_g_theirs"] / _dec["c_g_model"] < 2.0,
+          f"{_dec['c_g_theirs']:.1f} two-qubit gates per site per step against "
+          f"c_g = {_dec['c_g_model']:.0f}: ours is "
+          f"{1 - _dec['c_g_model'] / _dec['c_g_theirs']:.0%} optimistic")
+    # ---- and the support does spread, which is why the model does not use it --
+    _sg = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "support_growth.json"
+    if _sg.exists():
+        import json as _js
+        _S = _js.loads(_sg.read_text())
+        _c = {r["model"].split(",")[0].split(" (")[0]: r for r in _S["candidates"]}
+        check("the Heisenberg support DOES fill the lattice -- O5's worry is right",
+              _S["deposit"]["w_mean"] > 4 * 4.0
+              and max(_S["deposit"]["w"]) > 0.5 * _S["deposit"]["modes"],
+              f"effective support averages {_S['deposit']['w_mean']:.1f} of "
+              f"{_S['deposit']['modes']} modes over their window and peaks at "
+              f"{max(_S['deposit']['w']):.0f}; it is exactly "
+              f"{_S['deposit']['w'][0]:.0f} at t = 0, i.e. w_obs0")
+        check("...but feeding it in over-predicts their measurement, and w = 4 does not",
+              _c["free-fermion Heisenberg support"]["ratio"] > 3.0
+              and abs(_c["bare observable weight"]["ratio"] - 1.0) < 0.2,
+              "predicted Lambda: " + ", ".join(
+                  f"{r['model'].split(' (')[0]} {r['lambda']:.2f} "
+                  f"({r['ratio']:.1f}x)" for r in _S["candidates"])
+              + " -- damping tracks the BARE weight, not the support")
     check("switching damping model leaves the PEC convention alone",
           nisq.log_gamma_sq(8.0, DEFAULT.but(damping_model="support"))
           / hubbard.counts(8.0, DEFAULT.but(damping_model="support"))["g_cone"]
