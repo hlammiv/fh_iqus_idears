@@ -90,6 +90,21 @@ def claims():
         ("OPEN_ITEMS.md", "overshoot of the uncapped ideal line",
          r"a \*\*(\d+)×\*\* overshoot", 333333.0 / _cap1, 0.02),
     ]
+    _mpf = DEFAULT.but(trotter_order_k=curves.MPF_ORDER)
+    _na = DEFAULT.but(platform="neutral_atom", p=5e-3, encoding="jw",
+                      use_platform_clock=True)
+    out += [
+        ("METHODS.md", "multiproduct reach at n = 1e6",
+         r"reaches ([\d.]+) at `n = 10\u2076` against 26",
+         nisq.max_m(1e6, _mpf, "pec"), 0.02),
+        ("METHODS.md", "mitigated NISQ at n = 1e3",
+         r"\*\*m = ([\d.]+) at n = 10\u00b3", nisq.max_m(1e3, DEFAULT, "pec"), 0.02),
+        ("METHODS.md", "mitigated NISQ at n = 1e8",
+         r"\u2192 ([\d.]+) at n = 10\u2078\.\*\*", nisq.max_m(1e8, DEFAULT, "pec"), 0.02),
+        ("METHODS.md", "neutral-atom STAR reach at n = 1e6",
+         r"reaches \*\*m = ([\d.]+)\*\* at `n = 10\u2076`",
+         ftqc.max_m_star(1e6, _na), 0.02),
+    ]
     sg = _cal("support_growth.json")
     if sg:
         w = sg["deposit"]["w_mean"]

@@ -119,7 +119,7 @@ at `m = 256` it is `t = 1.6`, not `t_max = 8`.
 | 10⁸ | 17.6 → 14.9 | 39.1 → 32.6 | 222 → 125 | 305 → 204 |
 
 Multiproduct NISQ no longer clears the ED frontier at any `n` below 10¹⁰: it
-reaches 19.7 at `n = 10⁶` against 26.
+reaches 22.0 at `n = 10⁶` against 26.
 
 **Two things this overturned.** The surface arm's large drop at `n = 10⁶` is a
 *factory-ladder edge*, not an architectural result — it sits at
@@ -175,8 +175,8 @@ prove the sampling overhead is exponential in Λ for **any** mitigation strategy
 so this ceiling is not an artifact of PEC. The user's constraint — any mitigation
 is allowed, but the run must fit in a week — is exactly what makes it bind.
 
-Measured result: **m = 6.7 at n = 10³ → 8.5 at n = 10⁸.** Ten decades of qubits
-buy ~1.3× in lattice size. The *unmitigated* device does not reach m = 4 at any n.
+Measured result: **m = 9.6 at n = 10³ → 14.1 at n = 10⁸.** Five decades of qubits
+buy ~1.5× in lattice size. The *unmitigated* device does not reach m = 4 at any n.
 
 ### What the lower-bound literature actually gives (review #4)
 
@@ -284,8 +284,11 @@ is diagonal; `D^-1 D = 1` was checked numerically):
   `gamma = |a| + 15|b| = (15+14p)/(15-16p)`. The PEC coefficient is
   `2 ln(gamma)/p = 4.000268` — a factor **3.748** larger than the attenuation.
 
-Conflating them made PEC **1.875x too cheap in the exponent**. Correcting it moves
-mitigated NISQ at `n = 10^6` from 8.76 to **6.89**. The attenuation — and with it
+Conflating them made PEC **1.875x too cheap in the exponent**. Correcting it moved
+mitigated NISQ at `n = 10^6` from 8.76 to 6.89 *at the time of that correction* —
+a historical before/after, not a current reading; every arm has moved since, and
+`pec_model` no longer distinguishes the two conventions numerically. The
+attenuation — and with it
 the unmitigated bias and every ZNE bias ceiling — is unchanged, as it must be: a
 costing convention cannot move a physical damping rate. `selftest` now asserts
 that invariance directly.
@@ -406,8 +409,10 @@ rather than passing silently.
 **A logical failure biases by twice its probability.** A failure flips a +-1
 outcome, so the distance-selection rule carries a factor 2 it did not have.
 
-Effect at n = 10^6: surface FT falls from 49.2 to **35.1**; at n = 10^8, from 531
-to **297**. The curve also acquires genuine steps where the factory protocol
+Effect at n = 10^6: surface FT fell from 49.2 to 35.1; at n = 10^8, from 531 to
+297 — *measured when that factor was added*, and quoted here as the size of that
+one change, not as a current value. The curve also acquires genuine steps where
+the factory protocol
 changes, so its slope is no longer a clean 4/9.
 
 ### The magic plant is published operating points, not a formula (review #4)
@@ -495,7 +500,9 @@ L = 8 point and got the structure wrong in two ways, both now corrected:
 The earlier explanation that the residual L-dependence came from cheaper
 idle-memory blocks was simply wrong; there is no memory in their calculation.
 
-**Effect of the correction** (n = 10^6): Pinnacle falls from 195 to **61**.
+**Effect of the correction** (n = 10^6): Pinnacle fell from 195 to 61 *at the
+time*. Later corrections moved it much further — `crossovers.md` carries the
+current value, and this pair records the size of this change alone.
 
 | n | Pinnacle | surface FT |
 |---|---|---|
@@ -732,8 +739,11 @@ to 50× speed-up … with no increase in space footprint".
 
 `platform.se_rounds` now returns 1 on a transversal-capable machine and `d`
 otherwise. At `d = 21` that is a **19× reduction** in rounds, and it changes the
-answer: neutral atoms get a STAR arm at `n = 10⁶` (m = 12.8, up from 7.0) and a
-surface arm from `n ≈ 10⁷`.
+answer: neutral atoms get a STAR arm at all, where lattice surgery gave them
+none. It reaches **m = 4.4** at `n = 10⁶` — it was 12.8 before `c_rot` was
+measured against their compiled circuit (O1), which is the single largest
+downward revision on this page — and the surface arm does not appear at any
+plotted `n`.
 
 ### So why do they still lose here? Three different reasons
 
