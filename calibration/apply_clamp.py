@@ -36,9 +36,26 @@ AGREE_TOL = 1.5          # max/min across lattice sizes, at every tau
 
 
 def load():
-    if not CLAMP.exists():
+    """Merge every clamp_probe*.json: the base run plus any single-size reruns.
+
+    A third lattice size can only make the spread test HARDER to pass, never
+    easier, so adding one is not a second bite at a rule that already returned
+    DISAGREE. The rule itself is unchanged.
+    """
+    files = sorted((HERE / "data").glob("clamp_probe*.json"))
+    if not files:
         sys.exit(f"no clamp data yet at {CLAMP}")
-    return json.loads(CLAMP.read_text())
+    base = json.loads(files[0].read_text())
+    meta, seen = [], set()
+    for f in files:
+        for m in json.loads(f.read_text())["meta"]:
+            k = (m["patch"], m["tau"])
+            if k not in seen:
+                seen.add(k)
+                meta.append(m)
+    base["meta"] = meta
+    base["sources"] = [f.name for f in files]
+    return base
 
 
 def verdict(C):

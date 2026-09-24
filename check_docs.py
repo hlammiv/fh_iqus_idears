@@ -137,6 +137,12 @@ def claims():
             ("OPEN_ITEMS.md", "TDVP overestimate of the residual",
              r"([\d.]+). the exact residual\*\*", _lrj["tdvp_over"], 0.03),
         ]
+    _cs = _cal("tdvp_chi_7x4.json")
+    if _cs:
+        _R = sorted(_cs["scan"], key=lambda r: r["chi"])
+        out += [("OPEN_ITEMS.md", "our chi = 1024 error at t = 0.1",
+                 r"\| 1\.17e-2 \| \*\*([\d.]+)e-3\*\* \|",
+                 _R[-1]["mean_abs_err"] * 1e3, 0.02)]
     tc = _cal("tdvp_check.json")
     if tc:
         d = tc["dimer"]

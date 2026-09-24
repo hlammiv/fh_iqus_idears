@@ -404,8 +404,12 @@ def main():
         sys.argv = [a for a in sys.argv if a != "--fine"]
     if "--clamp" in sys.argv:
         args = [a for a in sys.argv[1:] if not a.startswith("-")]
+        # a partial run writes its OWN file, exactly as --trajectory does, so a
+        # third lattice size cannot clobber the two that are already measured
+        out = (f"data/clamp_probe_{'_'.join(args)}.json" if args
+               else "data/clamp_probe.json")
         return clamp_probe(tuple(args) if args else
-                           ("rectangle3x4", "rectangle2x7"))
+                           ("rectangle3x4", "rectangle2x7"), out=out)
     if "--trajectory" in sys.argv:
         args = [a for a in sys.argv[1:] if not a.startswith("-")]
         # a partial run writes its OWN file; domain_check merges them, so a

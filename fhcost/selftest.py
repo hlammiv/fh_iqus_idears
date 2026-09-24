@@ -1402,6 +1402,20 @@ def main() -> int:
                   f"chi = 2048 averages {_lr['tdvp_mean']:.4f}, "
                   f"{_lr['tdvp_over']:.1f}x exact, and rises MONOTONICALLY where "
                   f"the exact answer decays and revives -- it manufactures signal")
+        _cj = pathlib.Path(__file__).resolve().parent.parent / "calibration" / "data" / "tdvp_chi_7x4.json"
+        if _cj.exists():
+            import json as _j3, numpy as _np
+            _R = sorted(_j3.loads(_cj.read_text())["scan"], key=lambda r: r["chi"])
+            _c = _np.array([r["chi"] for r in _R], float)
+            _e = _np.array([r["mean_abs_err"] for r in _R])
+            _sl = float(_np.polyfit(_np.log(_c), _np.log(_e), 1)[0])
+            check("our own TeNPy run at t = 0.1 is truncation-limited, theirs is not",
+                  _sl < -0.15 and _T["0.1"]["slope"] > -0.10,
+                  f"ours falls at {_sl:+.2f} over chi = 128..1024 at fixed dt "
+                  f"({_e[0]:.2e} -> {_e[-1]:.2e}); theirs is flat at "
+                  f"{_T['0.1']['slope']:+.2f} and already at {_T['0.1']['256']:.2e} "
+                  f"by chi = 256. We reach that only near chi = 1024 -- their MPS "
+                  f"ordering is better, so this is NOT a replica of their run")
         check("at late times the published error EXCEEDS the signal",
               all(_T[f"{t}"][str(2048)] > _T[f"{t}"]["signal"]
                   for t in (1.5, 2.0)),

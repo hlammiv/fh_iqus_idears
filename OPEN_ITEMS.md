@@ -557,13 +557,49 @@ job. lenore's ceiling is chi ~ 4800, only 2x the published value, which would
 test the measured slope over one more factor of two and predict 0.077 -> 0.072:
 too weak to settle anything.
 
-**The decisive cheap test is not more chi at all.** Hold chi fixed and vary the
-TDVP time step. The deposit varies chi over an 8x range and **never varies dt**,
-so it structurally cannot say what the t = 0.1 floor is made of. If the error
-moves with dt at fixed chi, that floor is integration error, the
-chi-extrapolation is void in both directions, and no bond dimension settles the
-question. If it does not move, the floor is real and the band is on firmer
-ground. Either outcome is decisive, and it runs at chi ~ 2048.
+**The dt axis has now been run, and it answers most of the question.**
+`calibration/tdvp_dt.py` varies the one axis the deposit never varies, on the
+same instance, in the same library. Three results, in order of how firmly they
+hold:
+
+**1. The integrator is not the problem — settled.** At 3 × 4 with χ = 128, where
+the bond dimension is ample, the error falls **cleanly to zero** with the time
+step: `2.79e-2 → 2.25e-3` over 16× in dt, with the halving ratio climbing to 2.
+Two-site TDVP in TeNPy has no intrinsic dt floor on this problem, so no floor of
+the published size can be blamed on the integrator.
+
+**2. At 28 sites, at fixed χ, what is left is bond dimension — not dt.** Fitting
+`err = a + b·dt^p` at χ = 256 gives a dt-converged residual of **`a = 1.11e-2`**
+(p ≈ 0.9), and holding dt at its finest and raising χ *does* move it:
+
+| χ | 128 | 256 | 512 | 1024 |
+|---|---|---|---|---|
+| err at dt = 0.00625 | 1.81e-2 | 1.36e-2 | 1.17e-2 | **9.65e-3** |
+| discarded weight | 6.6e-4 | 7.0e-5 | 1.5e-4 | 1.1e-4 |
+
+slope **−0.25** from χ = 256 to 1024. So *our* run at t = 0.1 is
+truncation-limited, and converging it in dt alone does not remove the error.
+
+**3. Which is exactly why we cannot claim to have reproduced their floor.** Their
+run at the same χ = 256 has a *smaller* error (7.94e-3 against our 1.36e-2) and
+is already **flat** in χ (slope −0.03) where ours still falls at −0.25. We reach
+their χ = 256 number only near χ = 1024. The likely difference is the **MPS
+ordering**: ours is row-major on the torus, theirs is the Jordan-Wigner snake
+matched to their swap network, and a better ordering means less entanglement
+across the MPS cuts. That is a property of their compilation, not of TDVP.
+
+So the narrow question — *is their* `t = 0.1` *floor the time step?* — is not
+closed by this, and saying otherwise would be over-reading a run that is not a
+faithful replica. What **is** closed is that the integrator cannot be the
+explanation, which was the alternative that would have voided the
+chi-extrapolation in both directions.
+
+**And a sharper statement arrived from a different direction** (see O2): at
+χ = 2048 their run's |C^zz| rises *monotonically* across `t ∈ [1, 2]`, 2.9× the
+exact residual, where the exact answer decays to a minimum at `t = 1.6` and
+revives. It does not merely carry an error at late times, it produces the wrong
+shape. That settles "not a converged tensor-network calculation" without needing
+the dt question at all.
 
 *What exists already, checked before writing anything.* The collaboration's own
 runs are **TeNPy** -- their metadata literally reads `Tenpy $\chi=512$` -- and
