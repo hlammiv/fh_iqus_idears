@@ -543,6 +543,33 @@ def main() -> int:
     check("Pinnacle and the surface code stay within a small factor",
           0.5 < ftqc.max_m_pinnacle(1e8, PIN) / ftqc.max_m_surface(1e8, fow) < 2.5,
           f"ratio {ftqc.max_m_pinnacle(1e8, PIN)/ftqc.max_m_surface(1e8, fow):.2f} at n=1e8, Pinnacle on the two-coupler-layer chip it requires")
+    # ---- #9's integration geometry: the cone integral, checked -------------
+    # hubbard.mean_cone_fraction's docstring says the closed form is "checked
+    # against numerical integration in selftest". It said that before the check
+    # existed. The closed form is 2/3 + 1/(2 sqrt m) - 1/(6 m^(3/2)), which is
+    # the time-average of a cone that grows until it hits the lattice and then
+    # stops -- the correction review #9 asked for, 2/3 rather than the 1/3 of an
+    # UNCAPPED cone.
+    _cone = []
+    for _m in (4.0, 9.0, 16.0, 36.0, 64.0, 256.0, 4096.0):
+        _cf = hubbard.mean_cone_fraction(_m, DEFAULT)
+        _t = hubbard.t_max(_m, DEFAULT)
+        _N = 4001
+        _num = sum(hubbard.cone_sites(_m, _t * (i + 0.5) / _N, DEFAULT)
+                   for i in range(_N)) / _N / _m
+        _cone.append(abs(_cf - _num))
+    check("the cone-fraction closed form IS the integral it claims to be",
+          max(_cone) < 1e-6,
+          f"worst |closed - numerical| = {max(_cone):.1e} over m = 4..4096; the "
+          f"docstring promised this check and it did not exist")
+    check("...and it tends to 2/3, not the 1/3 of an uncapped cone",
+          abs(hubbard.mean_cone_fraction(1e8, DEFAULT) - 2 / 3) < 1e-4
+          and hubbard.mean_cone_fraction(4.0, DEFAULT) > 0.85,
+          f"m = 4: {hubbard.mean_cone_fraction(4.0, DEFAULT):.3f}, "
+          f"m = 1e8: {hubbard.mean_cone_fraction(1e8, DEFAULT):.4f} -- the cap "
+          f"is what makes the average 2/3, and review #9 was right that 1/3 was "
+          f"the wrong constant")
+
     # ---- O7: the ideal curve is capped by its own convergence ceiling -------
     _c1 = DEFAULT.but(tmax_mode="const", tmax_const=1.0)
     _cap1 = nisq.converged_cap(_c1)

@@ -290,7 +290,22 @@ than exponential: a single `xi` is a bound, not a fit, and the model should keep
 treating it as one.
 
 Measured at `U = 0`; neither the butterfly velocity nor the tail shape at `U = 4`
-is constrained by this. What remains of #9 is the integration geometry.
+is constrained by this.
+
+**The integration geometry is the last piece, and it is now actually checked.**
+`hubbard.mean_cone_fraction`'s docstring said its closed form
+`2/3 + 1/(2√m) − 1/(6 m^{3/2})` "is checked against numerical integration in
+selftest". It said that before the check existed. It does now, and the closed
+form reproduces the integral to **1.8e-8** over `m = 4…4096`, tending to `2/3` at
+large `m` and rising to `0.896` at `m = 4`. Review #9 was right that `1/3` — the
+average of an *uncapped* cone — was the wrong constant; what makes it `2/3` is
+the cone hitting the lattice and stopping.
+
+**So #9 is closed.** Which gates damp: measured, and the support law that would
+have repaired the cone model excluded (O5). Velocity taxonomy: measured, three
+questions, correctly ordered. Cluster buffer: measured, `ξ = 1` conservative by
+2.5–3.3×. Integration geometry: the promised check exists. The one thing not
+settled is that all of it is at `U = 0`.
 
 ### O6. The demonstrated-mitigation arm reaches nothing at our step count
 `strategy = "expcal"` costs TFLO+GPR at its measured effective overhead (0.08 —
@@ -776,7 +791,7 @@ Nothing here fixes tau > 2 or m > 12; that is O9.
 | 6 | Pinnacle calibration needs reconstruction | **fixed** — footprint reproduced with no free parameter; single-engine T supply corrected; connectivity flagged as O11 |
 | 7 | FT resource and error accounting incomplete | **fixed** — HWP workspace charged, magic-state error budgeted with per-point factory selection, failure-to-bias factor 2 |
 | 8 | classical band is heuristic, not a ceiling | **partial** — relabelled as capacity, entropy bound fixed, TDVP measured; a validated TN estimate is still missing (O10) |
-| 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **partial** — which-gates-damp measured, and the support growth that would have repaired it excluded (O5); the velocity taxonomy measured at U = 0 and confirmed in order (1.61 bulk, 2.12 front, 3.40 tail against v = 2, v_corr = 4, v_lr = 20); the cluster buffer measured, ξ = 0.30–0.40 against the default 1, so 2.5–3.3× conservative; integration geometry still open |
+| 9 | light-cone geometry inconsistent (1/3 vs 2/3) | **fixed** — which-gates-damp measured and the support law that would have repaired it excluded (O5); velocity taxonomy measured (1.61 bulk, 2.12 front, 3.40 tail, correctly bracketed by v = 2, v_corr = 4, v_lr = 20); cluster buffer measured, ξ = 0.30–0.40 against the default 1 so 2.5–3.3× conservative; cone integral now actually checked against numerical integration (1.8e-8). All at U = 0 |
 | 10 | error components do not combine to the tolerance | open |
 | 11 | implementation and reporting issues | **fixed** — all eleven; headlines now generated from one record |
 
