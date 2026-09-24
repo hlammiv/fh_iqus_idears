@@ -90,6 +90,16 @@ def claims():
         ("OPEN_ITEMS.md", "overshoot of the uncapped ideal line",
          r"a \*\*(\d+)×\*\* overshoot", 333333.0 / _cap1, 0.02),
     ]
+    _conf = DEFAULT.but(pec_model="linear", pec_coeff=2.0 * DEFAULT.depol_factor)
+    out += [
+        ("METHODS.md", "PEC conflation, exponent ratio",
+         r"comes back as \*\*([\d.]+)\*\*",
+         nisq.log_gamma_sq(16.0, DEFAULT) / nisq.log_gamma_sq(16.0, _conf), 0.01),
+        ("METHODS.md", "PEC conflation, reach before",
+         r"from \*\*([\d.]+) to [\d.]+\*\*", nisq.max_m(1e6, _conf, "pec"), 0.02),
+        ("METHODS.md", "PEC conflation, reach after",
+         r"from \*\*[\d.]+ to ([\d.]+)\*\*", nisq.max_m(1e6, DEFAULT, "pec"), 0.02),
+    ]
     _mpf = DEFAULT.but(trotter_order_k=curves.MPF_ORDER)
     _na = DEFAULT.but(platform="neutral_atom", p=5e-3, encoding="jw",
                       use_platform_clock=True)

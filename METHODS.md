@@ -284,11 +284,16 @@ is diagonal; `D^-1 D = 1` was checked numerically):
   `gamma = |a| + 15|b| = (15+14p)/(15-16p)`. The PEC coefficient is
   `2 ln(gamma)/p = 4.000268` — a factor **3.748** larger than the attenuation.
 
-Conflating them made PEC **1.875x too cheap in the exponent**. Correcting it moved
-mitigated NISQ at `n = 10^6` from 8.76 to 6.89 *at the time of that correction* —
-a historical before/after, not a current reading; every arm has moved since, and
-`pec_model` no longer distinguishes the two conventions numerically. The
-attenuation — and with it
+Conflating them makes PEC **1.875x too cheap in the exponent** — a live number,
+not a historical one: setting `pec_model = "linear"` with
+`pec_coeff = 2 × 1.0667 = 2.1333` restores the conflated convention and the
+exponent ratio comes back as **1.8751**. At today's model that moves mitigated
+NISQ at `n = 10^6` from **18.1 to 12.4**; when the correction was first made the
+same pair read 8.76 → 6.89, and both arms have moved since for other reasons.
+(Note that `pec_model` *alone* barely matters: the default `pec_coeff = 4.0` was
+chosen to match the exact 4.000268, so linear and exact agree to 7×10⁻⁵. The
+conflation was with the **attenuation** coefficient, 1.067.) The attenuation —
+and with it
 the unmitigated bias and every ZNE bias ceiling — is unchanged, as it must be: a
 costing convention cannot move a physical damping rate. `selftest` now asserts
 that invariance directly.
